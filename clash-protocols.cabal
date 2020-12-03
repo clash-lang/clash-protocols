@@ -1,0 +1,154 @@
+cabal-version:       3.0
+name:                clash-protocols
+synopsis:            a battery-included library for performant dataflow protocols
+Homepage:            https://gitlab.com/martijnbastiaan/clash-protocols
+version:             0.1
+category:            Hardware
+license:             BSD-2-Clause
+license-file:        LICENSE
+author:              Martijn Bastiaan, QBayLogic B.V.
+maintainer:          Martijn Bastiaan <martijn@hmbastiaan.nl>
+description:
+  Suggested reading order:
+  .
+  * 'Protocols'
+  * 'Protocols.Df.Simple'
+  * 'Protocols.DfLike'
+  * 'Protocols.Plugin'
+  * 'Protocols.Hedgehog'
+
+flag ci
+    Description: Running on CI? Used to set fail-on-warning flag.
+    Manual: True
+    Default: False
+
+common common-options
+  default-extensions:
+    BangPatterns
+    BinaryLiterals
+    ConstraintKinds
+    DataKinds
+    DefaultSignatures
+    DeriveAnyClass
+    DeriveDataTypeable
+    DeriveFoldable
+    DeriveFunctor
+    DeriveGeneric
+    DeriveLift
+    DeriveTraversable
+    DerivingStrategies
+    InstanceSigs
+    KindSignatures
+    LambdaCase
+    NoStarIsType
+    PolyKinds
+    RankNTypes
+    ScopedTypeVariables
+    StandaloneDeriving
+    TupleSections
+    TypeApplications
+    TypeFamilies
+    TypeOperators
+    ViewPatterns
+
+    -- TemplateHaskell is used to support convenience functions such as
+    -- 'listToVecTH' and 'bLit'.
+    TemplateHaskell
+    QuasiQuotes
+
+    -- Prelude isn't imported by default as Clash offers Clash.Prelude
+    -- NoImplicitPrelude
+  ghc-options:
+    -Wall -Wcompat
+
+    -- Plugins to support type-level constraint solving on naturals
+    -fplugin GHC.TypeLits.Extra.Solver
+    -fplugin GHC.TypeLits.Normalise
+    -fplugin GHC.TypeLits.KnownNat.Solver
+
+    -- Clash needs access to the source code in compiled modules
+    -fexpose-all-unfoldings
+
+    -- Worker wrappers introduce unstable names for functions that might have
+    -- blackboxes attached for them. You can disable this, but be sure to add
+    -- a no-specialize pragma to every function with a blackbox.
+    -fno-worker-wrapper
+
+  if flag(ci)
+    ghc-options: -Werror
+
+  default-language: Haskell2010
+  build-depends:
+    -- GHC >= 8.8
+    base >= 4.13.0.0,
+    Cabal,
+
+    -- clash-prelude will set suitable version bounds for the plugins
+    clash-prelude >= 1.2.2 && < 1.4,
+    ghc-typelits-natnormalise,
+    ghc-typelits-extra,
+    ghc-typelits-knownnat
+
+library inline-circuit-notation
+  visibility: private
+  hs-source-dirs: deps/circuit-notation/src
+  build-depends:
+    , base
+    , clash-prelude >= 1.0
+    , containers
+    , data-default
+    , ghc >=8.6
+    , syb
+    , lens
+    , mtl
+    , pretty
+    , parsec
+    , pretty-show
+    , template-haskell
+  exposed-modules:
+    CircuitNotation
+  default-language: Haskell2010
+
+library
+  import: common-options
+  hs-source-dirs: src
+  build-depends:
+      inline-circuit-notation
+    , extra
+    , data-default
+    , hedgehog >= 1.0.3
+    , ghc >= 8.10
+    , pretty-show
+
+  exposed-modules:
+    Protocols
+    Protocols.Df
+    Protocols.DfLike
+    Protocols.Df.Simple
+    Protocols.Hedgehog
+    Protocols.Plugin
+
+  default-language: Haskell2010
+
+test-suite test-library
+  import: common-options
+  hs-source-dirs: tests
+  type: exitcode-stdio-1.0
+  ghc-options: -threaded -with-rtsopts=-N
+  main-is: tests.hs
+  other-modules:
+    Tests.Protocols
+    Tests.Protocols.Df
+    Tests.Protocols.Df.Simple
+    Tests.Protocols.Plugin
+
+    Test.Tasty.Hedgehog.Extra
+  build-depends:
+    clash-protocols,
+    data-default,
+    deepseq,
+    extra,
+    hedgehog,
+    tasty >= 1.2 && < 1.3,
+    tasty-hedgehog,
+    tasty-th

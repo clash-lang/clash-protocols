@@ -1,0 +1,47 @@
+.common:
+  image: docker.pkg.github.com/clash-lang/stack-templates/focal-ghc-cabal-stack:2020-11-28
+  timeout: 1 hour
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - stuck_or_timeout_failure
+  cache:
+    key: $CI_JOB_NAME
+    paths:
+      - cache.tar.zstd
+  tags:
+    - local
+  before_script:
+    - export THREADS=$(nproc)
+    - export CABAL_JOBS=$(nproc)
+    - tar -xf cache.tar.zstd -C / || true
+    - .ci/setup.sh
+    - export
+  after_script:
+    - tar -cf - $(ls -d /root/.cabal /root/.stack /nix || true) | zstd -T0 -3 > cache.tar.zstd
+
+.common-810:
+  extends: .common
+  variables:
+    GHC_VERSION: "8.10.2"
+    CABAL_VERSION: "3.2.0.0"
+
+haddock:
+  extends: .common-810
+  artifacts:
+    paths:
+      - docs/*
+    expire_in: 1 month
+  script:
+    - .ci/build_docs.sh
+
+cabal-8.10.2:
+  extends: .common-810
+  script:
+    - .ci/test_cabal.sh
+
+stack:
+  extends: .common
+  script:
+    - .ci/test_stack.sh
