@@ -50,6 +50,7 @@ import           Control.Applicative (Const(..))
 import           Data.Coerce (coerce)
 import           Data.Default (Default(def))
 import           Data.Kind (Type)
+import           Data.Tuple (swap)
 import           GHC.Generics (Generic)
 
 -- | A /protocol/, in its most general form, corresponds to a component with two
@@ -85,7 +86,7 @@ import           GHC.Generics (Generic)
 --
 -- @
 --   newtype Circuit a b =
---     Circuit ( (Fwd a, Bwd b) -> (Fwd b, Bwd a) )
+--     Circuit ( (Fwd a, Bwd b) -> (Bwd a, Fwd b) )
 -- @
 --
 -- Note that the type parameters /a/ and /b/ don't directly correspond to the
@@ -147,11 +148,11 @@ import           GHC.Generics (Generic)
 --
 -- @
 --                            +-----------+
---    Signal dom (Data a)  |           |  Signal dom (Data b)
+--       Signal dom (Data a)  |           |  Signal dom (Data b)
 --  +------------------------>+           +------------------------->
 --                            |           |
 --                            |           |
---    Signal dom (Ack a)   |           |  Signal dom (Ack b)
+--       Signal dom (Ack a)   |           |  Signal dom (Ack b)
 --  <-------------------------+           +<------------------------+
 --                            |           |
 --                            +-----------+
@@ -174,7 +175,7 @@ import           GHC.Generics (Generic)
 --    hand side too.
 --
 newtype Circuit a b =
-  Circuit ( (Fwd a, Bwd b) -> (Fwd b, Bwd a) )
+  Circuit ( (Fwd a, Bwd b) -> (Bwd a, Fwd b) )
 
 -- | Protocol-agnostic acknowledgement
 newtype Ack = Ack Bool
@@ -244,10 +245,10 @@ infixr 1 |>
 (|>) :: Circuit a b -> Circuit b c -> Circuit a c
 (Circuit fab) |> (Circuit fbc) = Circuit $ \(s2rAc, r2sAc) ->
   let
-    ~(s2rAb, r2sAb) = fab (s2rAc, r2sBc)
-    ~(s2rBc, r2sBc) = fbc (s2rAb, r2sAc)
+    ~(r2sAb, s2rAb) = fab (s2rAc, r2sBc)
+    ~(r2sBc, s2rBc) = fbc (s2rAb, r2sAc)
   in
-    (s2rBc, r2sAb)
+    (r2sAb, s2rBc)
 
 -- | Flipped protocol combinator
 --
@@ -274,23 +275,35 @@ infixr 1 <|
 (<|) = flip (|>)
 
 -- | View Circuit as its internal representation.
-toSignals :: Circuit a b -> ((Fwd a, Bwd b) -> (Fwd b, Bwd a))
+toSignals :: Circuit a b -> ((Fwd a, Bwd b) -> (Bwd a, Fwd b))
 toSignals = coerce
 
 -- | View signals as a Circuit
-fromSignals :: ((Fwd a, Bwd b) -> (Fwd b, Bwd a)) -> Circuit a b
+fromSignals :: ((Fwd a, Bwd b) -> (Bwd a, Fwd b)) -> Circuit a b
 fromSignals = coerce
 
 -- | Circuit equivalent of 'id'. Useful for explicitly assigning a type to
--- another protocol. Example:
+-- another protocol, or to return a result when using the circuit-notation
+-- plugin.
+--
+-- Examples:
 --
 -- @
 -- idC \@(Df dom a) <| somePolymorphicProtocol
 -- @
+--
+-- @
+-- swap :: Circuit (Dfs dom a, Dfs dom b) (Dfs dom b, Dfs dom a)
+-- swap = circuit $ \(a, b) -> do
+--   idC -< (b, a)
+-- @
+--
 idC :: forall a. Circuit a a
-idC = Circuit id
+idC = Circuit swap
 
--- | Copy a protocol /n/ times
+-- | Copy a protocol /n/ times. Note that this will copy hardware. If you are
+-- looking for a circuit that turns a single channel into multiple, check out
+-- 'Protocols.Df.fanout' or 'Protocols.Df.Simple.fanout'.
 repeatC ::
   forall n a b.
   Circuit a b ->
@@ -393,12 +406,12 @@ instance (Simulate a, Simulate b) => Simulate (a, b) where
 
   driveC conf (fwd1, fwd2) =
     let (Circuit f1, Circuit f2) = (driveC conf fwd1, driveC conf fwd2) in
-    Circuit (\(_, (bwd1, bwd2)) -> ((fst (f1 ((), bwd1)), fst (f2 ((), bwd2))), ()))
+    Circuit (\(_, (bwd1, bwd2)) -> ((), (snd (f1 ((), bwd1)), snd (f2 ((), bwd2)))))
 
   sampleC conf (Circuit f) =
-    let ((fwd1, fwd2), _) = f ((), (def, def)) in
-    ( sampleC conf (Circuit $ \_ -> (fwd1, ()))
-    , sampleC conf (Circuit $ \_ -> (fwd2, ())) )
+    let (_, (fwd1, fwd2)) = f ((), (def, def)) in
+    ( sampleC conf (Circuit $ \_ -> ((), fwd1))
+    , sampleC conf (Circuit $ \_ -> ((), fwd2)) )
 
   stallC conf stalls =
     let
@@ -423,11 +436,11 @@ instance (C.KnownNat n, Simulate a) => Simulate (C.Vec n a) where
 
   driveC conf fwds =
     let protocols = C.map (($ ()) . curry . toSignals . driveC conf) fwds in
-    Circuit (\(_, bwds) -> (C.map fst (C.zipWith ($) protocols bwds), ()))
+    Circuit (\(_, bwds) -> ((), C.map snd (C.zipWith ($) protocols bwds)))
 
   sampleC conf (Circuit f) =
-    let (fwds, _) = f ((), (C.repeat def)) in
-    C.map (\fwd -> sampleC conf (Circuit $ \_ -> (fwd, ()))) fwds
+    let (_, fwds) = f ((), (C.repeat def)) in
+    C.map (\fwd -> sampleC conf (Circuit $ \_ -> ((), fwd))) fwds
 
   stallC conf stalls0 =
     let
@@ -446,10 +459,10 @@ instance (C.NFDataX a, C.ShowX a, Show a) => Simulate (CSignal dom a) where
   driveC _conf [] = error "CSignal.driveC: Can't drive with empty list"
   driveC SimulationConfig{resetCycles} fwd0@(f:_) =
     let fwd1 = C.fromList_lazy (replicate resetCycles f <> fwd0 <> repeat f) in
-    Circuit ( \_ -> (CSignal fwd1, ()) )
+    Circuit ( \_ -> ((), CSignal fwd1) )
 
   sampleC SimulationConfig{resetCycles} (Circuit f) =
-    drop resetCycles (CE.sample_lazy ((\(CSignal s) -> s) (fst (f ((), def)))))
+    drop resetCycles (CE.sample_lazy ((\(CSignal s) -> s) (snd (f ((), def)))))
 
   stallC _ _ = idC
 

@@ -318,7 +318,7 @@ mealy ::
   -- | Transition function
   ( s ->
     (Maybe (Meta a, Payload a), Protocols.Ack) ->
-    (s, (Maybe (Meta b, Payload b), Protocols.Ack)) ) ->
+    (s, (Protocols.Ack, Maybe (Meta b, Payload b))) ) ->
   -- | Initial state
   s ->
   -- | Circuit analogous to mealy machine
