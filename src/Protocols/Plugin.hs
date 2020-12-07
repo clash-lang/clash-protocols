@@ -19,14 +19,14 @@ import qualified CircuitNotation as CN
 import qualified GhcPlugins as GHC
 
 -- | Type inference helper used by circuit-notation plugin
-type ProtocolT a b = (Fwd a, Bwd b) -> (Fwd b, Bwd a)
+type CircuitT a b = (Fwd a, Bwd b) -> (Bwd a, Fwd b)
 
 -- | 'circuit-notation' plugin repurposed for 'Protocols.protocols'.
 plugin :: GHC.Plugin
 plugin = CN.mkPlugin $ CN.ExternalNames
   { CN.circuitCon = CN.thName 'Circuit
   , CN.circuitTyCon = CN.thName ''Circuit
-  , CN.circuitTTyCon = CN.thName ''ProtocolT
-  , CN.runCircuitName = CN.thName 'fromSignals
+  , CN.circuitTTyCon = CN.thName ''CircuitT
+  , CN.runCircuitName = CN.thName 'toSignals
   , CN.fwdBwdCon = CN.thName '(,)
   }

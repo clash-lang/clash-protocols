@@ -1,4 +1,4 @@
-cabal-version:       3.0
+cabal-version:       2.4
 name:                clash-protocols
 synopsis:            a battery-included library for performant dataflow protocols
 Homepage:            https://gitlab.com/martijnbastiaan/clash-protocols
@@ -79,12 +79,12 @@ common common-options
 
   default-language: Haskell2010
   build-depends:
-    -- GHC >= 8.8
-    base >= 4.13.0.0,
+    -- GHC >= 8.6
+    base >= 4.12.0.0,
     Cabal,
 
     -- clash-prelude will set suitable version bounds for the plugins
-    clash-prelude >= 1.2.2 && < 1.4,
+    clash-prelude >= 1.2.5 && < 1.4,
     ghc-typelits-natnormalise,
     ghc-typelits-extra,
     ghc-typelits-knownnat
@@ -117,7 +117,7 @@ library
     , extra
     , data-default
     , hedgehog >= 1.0.3
-    , ghc >= 8.10
+    , ghc >= 8.6
     , pretty-show
 
   exposed-modules:
@@ -127,6 +127,9 @@ library
     Protocols.Df.Simple
     Protocols.Hedgehog
     Protocols.Plugin
+
+  other-modules:
+    Data.Bifunctor.Extra
 
   default-language: Haskell2010
 

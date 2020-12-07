@@ -15,7 +15,7 @@ module Protocols.Df.Simple where
 
 import           Prelude
 
-import           Data.Bifunctor (Bifunctor(bimap))
+import qualified Data.Bifunctor.Extra as Bifunctor
 import           Data.Coerce (coerce)
 import           Data.Default (Default)
 import           Data.Kind (Type)
@@ -86,22 +86,22 @@ instance DfLike dom (Dfs dom a) where
 
   fromDf =
     let go = \case {Df.Data () a -> Data a; Df.NoData -> NoData} in
-    Df.mapInternal (bimap go coerce)
+    Df.mapInternal (Bifunctor.swapMap go coerce)
 
   toDf =
     let go = \case {Data a -> Df.Data () a; NoData -> Df.NoData} in
-    Df.mapInternal (bimap go coerce)
+    Df.mapInternal (Bifunctor.swapMap go coerce)
 
 -- | Interpret simple dataflow carrying a tuple as 'Df' with /meta/ and /payload/
 asDf :: Circuit (Dfs dom (meta, payload)) (Df dom meta payload)
-asDf = Df.mapInternal (bimap go coerce)
+asDf = Df.mapInternal (Bifunctor.swapMap go coerce)
  where
   go (Data (meta, a)) = Df.Data meta a
   go NoData = Df.NoData
 
 -- | Interpret 'Df' as simple dataflow carrying a tuple of /meta/ and /payload/
 asDfs :: Circuit (Df dom meta payload) (Dfs dom (meta, payload))
-asDfs = Df.mapInternal (bimap go coerce)
+asDfs = Df.mapInternal (Bifunctor.swapMap go coerce)
  where
   go (Df.Data meta a) = Data (meta, a)
   go Df.NoData = NoData
@@ -161,7 +161,7 @@ mealy ::
   -- | Transition function
   ( s ->
     (Maybe i, Protocols.Ack) ->
-    (s, (Maybe o, Protocols.Ack)) ) ->
+    (s, (Protocols.Ack, Maybe o)) ) ->
   -- | Initial state
   s ->
   -- | Circuit analogous to mealy machine
@@ -170,7 +170,7 @@ mealy f = DfLike.mealy f'
  where
   f' s =
       -- Add "metadata" (empty tuple)
-      T.second (T.first (fmap ((),)))
+      T.second (T.second (fmap ((),)))
       -- Feed to function not taking metadata
     . f s
       -- Strip "metadata" (empty tuple)

@@ -1,7 +1,15 @@
 #!/bin/bash
 set -xeou pipefail
 
-cabal haddock --enable-documentation clash-protocols |& tee haddock_log
+# circuit-notation currently _compiles on 8.10, but isn't usable. The only
+# other GHC version it supports is 8.6.5, but this GHC bundles a Haddock that
+# cannot generate documentation for clash-prelude. Hence, we build docs with
+# 8.10 and relax circuit-notation's ghc bounds
+cabal haddock \
+  --enable-documentation \
+  --allow-newer=circuit-notation:ghc \
+  clash-protocols \
+  |& tee haddock_log
 
 set +e
 if grep -q "Missing documentation" haddock_log; then
