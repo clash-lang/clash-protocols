@@ -409,6 +409,8 @@ instance (Simulate a, Simulate b) => Simulate (a, b) where
     Circuit (\(_, (bwd1, bwd2)) -> ((), (snd (f1 ((), bwd1)), snd (f2 ((), bwd2)))))
 
   sampleC conf (Circuit f) =
+    -- FIXME: This drives this circuit with 'Ack True' constantly. It should
+    --        take the reset into account though.
     let (_, (fwd1, fwd2)) = f ((), (def, def)) in
     ( sampleC conf (Circuit $ \_ -> ((), fwd1))
     , sampleC conf (Circuit $ \_ -> ((), fwd2)) )
@@ -439,6 +441,8 @@ instance (C.KnownNat n, Simulate a) => Simulate (C.Vec n a) where
     Circuit (\(_, bwds) -> ((), C.map snd (C.zipWith ($) protocols bwds)))
 
   sampleC conf (Circuit f) =
+    -- FIXME: This drives this circuit with 'Ack True' constantly. It should
+    --        take the reset into account though.
     let (_, fwds) = f ((), (C.repeat def)) in
     C.map (\fwd -> sampleC conf (Circuit $ \_ -> ((), fwd))) fwds
 

@@ -29,6 +29,9 @@ module Protocols.DfLike
   , fanout
   , registerFwd
   , registerBwd
+
+    -- * Internals
+  , forceAckLow
   ) where
 
 import           Protocols hiding (Ack(..))
@@ -384,3 +387,13 @@ registerBwd =
       toDf
   |> Df.registerBwd
   |> fromDf
+
+-- | Force a /nack/ on the backward channel and /no data/ on the forward
+-- channel if reset is asserted.
+forceAckLow ::
+  ( DfLike dom a
+  , DfLike dom a
+  , C.HiddenClockResetEnable dom
+  ) =>
+  Circuit a a
+forceAckLow = withDf Df.forceAckLow

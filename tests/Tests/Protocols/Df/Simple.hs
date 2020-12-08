@@ -1,7 +1,7 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE MonomorphismRestriction #-}
 
-module Tests.Protocols.Df.Simple (tests, main) where
+module Tests.Protocols.Df.Simple where
 
 -- base
 import Data.Maybe (catMaybes)
@@ -10,6 +10,10 @@ import Prelude
 
 -- clash-prelude
 import qualified Clash.Prelude as C
+import Clash.Prelude (type (<=))
+
+-- extra
+import Data.List (transpose)
 
 -- hedgehog
 import Hedgehog
@@ -27,6 +31,9 @@ import Protocols
 import Protocols.Df.Simple (Dfs)
 import qualified Protocols.Df.Simple as Dfs
 import Protocols.Hedgehog
+
+-- tests
+import Util (chunksOf, genVec)
 
 genMaybe :: Gen a -> Gen (Maybe a)
 genMaybe genA = Gen.choice [Gen.constant Nothing, Just <$> genA]
@@ -134,6 +141,37 @@ prop_fanout7 =
     (genData genSmallInt)
     (C.exposeClockResetEnable C.repeat)
     (C.exposeClockResetEnable @C.System (Dfs.fanout @7))
+
+prop_roundrobin :: Property
+prop_roundrobin =
+  idWithModelSingleDomain
+    @C.System
+    defExpectOptions
+    (genData genSmallInt)
+    (C.exposeClockResetEnable chunksOf)
+    (C.exposeClockResetEnable @C.System (Dfs.roundrobin @3))
+
+prop_roundrobinCollectNoSkip :: Property
+prop_roundrobinCollectNoSkip =
+  idWithModelSingleDomain
+    @C.System
+    defExpectOptions
+    (genVecData genSmallInt)
+    (C.exposeClockResetEnable (concat . transpose . C.toList))
+    (C.exposeClockResetEnable @C.System (Dfs.roundrobinCollect @3 Dfs.NoSkip))
+ where
+  genVecData :: (C.KnownNat n, 1 <= n) => Gen a -> Gen (C.Vec n [a], Int)
+  genVecData genA = do
+    n <- genSmallInt
+    dat <- genVec (Gen.list (Range.singleton n) genA)
+    pure (dat, n)
+
+-- TODO:
+--   We can't currently test the /Skip/ and /Parallel/ modes of
+--   'roundRobinCollect', as its output is unstable due to unpredictable
+--   stalling on both sides of the circuit. We need to generalize
+--   'idWithModelSingleDomain' in order to test for arbitrary properties.
+--
 
 tests :: TestTree
 tests =

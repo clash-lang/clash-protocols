@@ -50,6 +50,7 @@ module Protocols.Df
     -- * Internals
   , mapInternal
   , resetGen
+  , forceAckLow
   ) where
 
 import           Protocols hiding (Ack(..))

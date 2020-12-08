@@ -146,6 +146,8 @@ test-suite test-library
     Tests.Protocols.Plugin
 
     Test.Tasty.Hedgehog.Extra
+
+    Util
   build-depends:
     clash-protocols,
     data-default,
