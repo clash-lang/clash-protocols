@@ -103,6 +103,9 @@ instance Protocol (Df dom meta a) where
   -- | Backward part of base dataflow: @Signal dom (Ack meta a)@
   type Bwd (Df dom meta a) = Signal dom (Ack meta a)
 
+instance Backpressure (Df dom meta a) where
+  boolsToBwd = C.fromList_lazy . coerce
+
 instance ( C.KnownDomain dom
          , C.NFDataX meta, C.ShowX meta, Show meta
          , C.NFDataX a, C.ShowX a, Show a ) => Simulate (Df dom meta a) where
@@ -342,7 +345,7 @@ fanout ::
   forall n dom a meta .
   (C.KnownNat n, C.HiddenClockResetEnable dom, 1 <= n) =>
   Circuit (Df dom meta a) (C.Vec n (Df dom meta a))
-fanout = forceAckLow |> goC
+fanout = goC
  where
   goC =
     Circuit $ \(s2r, r2s) ->

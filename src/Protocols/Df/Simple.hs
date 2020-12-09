@@ -52,6 +52,9 @@ instance Protocol (Dfs dom a) where
   -- | Backward part of simple dataflow: @Signal dom (Ack meta a)@
   type Bwd (Dfs dom a) = Signal dom (Ack a)
 
+instance Backpressure (Dfs dom a) where
+  boolsToBwd = C.fromList_lazy . coerce
+
 -- | Data sent over forward channel of 'Dfs'. Note that this data type is strict
 -- on its data field. If you need lazy behavior, check out
 -- "Protocols.Df.Simple.Lazy".
@@ -82,7 +85,7 @@ dataToMaybe (Data a) = Just a
 -- | Like 'Protocols.Df.Ack', but carrying phantom type variables to satisfy
 -- 'Bwd's injectivity requirement.
 newtype Ack a = Ack Bool
-  deriving ()
+  deriving (Show)
 
 instance Default (Ack a) where
   def = Ack True
@@ -212,11 +215,7 @@ roundrobin ::
   (C.KnownNat n, C.HiddenClockResetEnable dom, 1 <= n) =>
   Circuit (Dfs dom a) (C.Vec n (Dfs dom a))
 roundrobin =
-  -- FIXME: We need 'forceAckLow' here because the 'sampleC' of the Vec instance
-  --        drives this circuit with 'Ack True' constantly. It should take the
-  --        reset into account though.
-     DfLike.forceAckLow
-  |> Circuit (T.second C.unbundle . C.mealyB go minBound . T.second C.bundle)
+  Circuit (T.second C.unbundle . C.mealyB go minBound . T.second C.bundle)
  where
   go :: C.Index n -> (Data a, C.Vec n (Ack a)) -> (C.Index n, (Ack a, C.Vec n (Data a)))
   go i (NoData, _) = (i, (Ack False, C.repeat NoData))
