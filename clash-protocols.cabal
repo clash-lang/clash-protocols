@@ -126,6 +126,7 @@ library
     Protocols.DfLike
     Protocols.Df.Simple
     Protocols.Hedgehog
+    Protocols.Hedgehog.Internal
     Protocols.Plugin
 
   other-modules:
@@ -151,8 +152,10 @@ test-suite test-library
   build-depends:
     clash-protocols,
     data-default,
+    unordered-containers,
     deepseq,
     extra,
+    hashable,
     hedgehog,
     tasty >= 1.2 && < 1.3,
     tasty-hedgehog,

@@ -4,6 +4,13 @@ module Util where
 import Data.List.Extra (transpose)
 import Unsafe.Coerce (unsafeCoerce)
 
+-- unordered-containers
+import qualified Data.HashMap.Strict as HashMap
+import Data.HashMap.Strict (HashMap)
+
+-- hashable
+import Data.Hashable (Hashable)
+
 -- clash-prelude
 import qualified Clash.Prelude as C
 import Clash.Prelude (type (<=))
@@ -22,3 +29,7 @@ vecFromList as = C.takeI (unsafeCoerce (as <> repeat mempty))
 
 genVec :: (C.KnownNat n, 1 <= n) => H.Gen a -> H.Gen (C.Vec n a)
 genVec gen = sequence (C.repeat gen)
+
+-- | Count the number of times an element occurs in a list
+tally :: (Hashable a, Eq a) => [a] -> HashMap a Int
+tally xs = HashMap.fromListWith (+) (zip xs (repeat 1))

@@ -33,7 +33,7 @@ import qualified Protocols.Df.Simple as Dfs
 import Protocols.Hedgehog
 
 -- tests
-import Util (chunksOf, genVec)
+import Util (chunksOf, genVec, tally)
 
 genMaybe :: Gen a -> Gen (Maybe a)
 genMaybe genA = Gen.choice [Gen.constant Nothing, Just <$> genA]
@@ -44,11 +44,17 @@ smallInt = Range.linear 0 10
 genSmallInt :: Gen Int
 genSmallInt = Gen.integral smallInt
 
-genData :: Gen a -> Gen ([a], Int)
+genData :: Gen a -> Gen [a]
 genData genA = do
   n <- genSmallInt
   dat <- Gen.list (Range.singleton n) genA
-  pure (dat, n)
+  pure dat
+
+genVecData :: (C.KnownNat n, 1 <= n) => Gen a -> Gen (C.Vec n [a])
+genVecData genA = do
+  n <- genSmallInt
+  dat <- genVec (Gen.list (Range.singleton n) genA)
+  pure dat
 
 -- Same as 'idWithModel', but specialized on 'Df'
 idWithModelDfs ::
@@ -60,7 +66,7 @@ idWithModelDfs ::
   -- cycles. If an input consists of multiple input channels where the number
   -- of valid cycles differs, this should return the _maximum_ number of valid
   -- cycles of all channels.
-  Gen ([a], Int) ->
+  Gen [a] ->
   -- | Model
   ([a] -> [b]) ->
   -- | Implementation
@@ -159,19 +165,32 @@ prop_roundrobinCollectNoSkip =
     (genVecData genSmallInt)
     (C.exposeClockResetEnable (concat . transpose . C.toList))
     (C.exposeClockResetEnable @C.System (Dfs.roundrobinCollect @3 Dfs.NoSkip))
- where
-  genVecData :: (C.KnownNat n, 1 <= n) => Gen a -> Gen (C.Vec n [a], Int)
-  genVecData genA = do
-    n <- genSmallInt
-    dat <- genVec (Gen.list (Range.singleton n) genA)
-    pure (dat, n)
 
--- TODO:
---   We can't currently test the /Skip/ and /Parallel/ modes of
---   'roundRobinCollect', as its output is unstable due to unpredictable
---   stalling on both sides of the circuit. We need to generalize
---   'idWithModelSingleDomain' in order to test for arbitrary properties.
---
+prop_roundrobinCollectSkip :: Property
+prop_roundrobinCollectSkip =
+  propWithModelSingleDomain
+    @C.System
+    defExpectOptions
+    (genVecData genSmallInt)
+    (C.exposeClockResetEnable (concat . transpose . C.toList))
+    (C.exposeClockResetEnable @C.System (Dfs.roundrobinCollect @3 Dfs.Skip))
+    prop
+ where
+  prop :: [Int] -> [Int] -> PropertyT IO ()
+  prop expected actual = tally expected === tally actual
+
+prop_roundrobinCollectParallel :: Property
+prop_roundrobinCollectParallel =
+  propWithModelSingleDomain
+    @C.System
+    defExpectOptions
+    (genVecData genSmallInt)
+    (C.exposeClockResetEnable (concat . transpose . C.toList))
+    (C.exposeClockResetEnable @C.System (Dfs.roundrobinCollect @3 Dfs.Parallel))
+    prop
+ where
+  prop :: [Int] -> [Int] -> PropertyT IO ()
+  prop expected actual = tally expected === tally actual
 
 tests :: TestTree
 tests =
