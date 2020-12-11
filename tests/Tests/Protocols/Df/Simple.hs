@@ -4,6 +4,8 @@
 module Tests.Protocols.Df.Simple where
 
 -- base
+import Data.Coerce (coerce)
+import Data.Foldable (fold)
 import Data.Maybe (catMaybes)
 import GHC.Stack (HasCallStack)
 import Prelude
@@ -14,6 +16,9 @@ import Clash.Prelude (type (<=))
 
 -- extra
 import Data.List (transpose)
+
+-- deepseq
+import Control.DeepSeq (NFData)
 
 -- hedgehog
 import Hedgehog
@@ -33,7 +38,16 @@ import qualified Protocols.Df.Simple as Dfs
 import Protocols.Hedgehog
 
 -- tests
-import Util (chunksOf, genVec, tally)
+import Util
+
+newtype PlusInt = PlusInt Int
+  deriving (NFData, C.Generic, C.NFDataX, C.ShowX, Show, Eq)
+
+instance Semigroup PlusInt where
+  PlusInt i <> PlusInt j = PlusInt (i + j)
+
+instance Monoid PlusInt where
+  mempty = PlusInt 0
 
 genMaybe :: Gen a -> Gen (Maybe a)
 genMaybe genA = Gen.choice [Gen.constant Nothing, Just <$> genA]
@@ -43,6 +57,9 @@ smallInt = Range.linear 0 10
 
 genSmallInt :: Gen Int
 genSmallInt = Gen.integral smallInt
+
+genSmallPlusInt :: Gen PlusInt
+genSmallPlusInt = coerce <$> genSmallInt
 
 genData :: Gen a -> Gen [a]
 genData genA = do
@@ -191,6 +208,33 @@ prop_roundrobinCollectParallel =
  where
   prop :: [Int] -> [Int] -> PropertyT IO ()
   prop expected actual = tally expected === tally actual
+
+prop_unbundleVec :: Property
+prop_unbundleVec =
+  idWithModelSingleDomain
+    @C.System
+    defExpectOptions
+    (fmap C.repeat <$> genData genSmallInt)
+    (C.exposeClockResetEnable (vecFromList . transpose . map C.toList))
+    (C.exposeClockResetEnable (Dfs.unbundleVec @3 @C.System @Int))
+
+prop_bundleVec :: Property
+prop_bundleVec =
+  idWithModelSingleDomain
+    @C.System
+    defExpectOptions
+    (C.repeat <$> genData genSmallPlusInt)
+    (C.exposeClockResetEnable (map vecFromList . transpose . C.toList))
+    (C.exposeClockResetEnable (Dfs.bundleVec @3 @C.System @PlusInt))
+
+prop_fanin :: Property
+prop_fanin =
+  idWithModelSingleDomain
+    @C.System
+    defExpectOptions
+    (genVecData genSmallPlusInt)
+    (C.exposeClockResetEnable (map fold . transpose . C.toList))
+    (C.exposeClockResetEnable (Dfs.fanin @3 @C.System @PlusInt))
 
 tests :: TestTree
 tests =

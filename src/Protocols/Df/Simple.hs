@@ -1,4 +1,5 @@
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-|
 Defines data structures and operators to create a Dataflow protocol that only
 carries data, no metadata. For documentation see:
@@ -13,10 +14,11 @@ carries data, no metadata. For documentation see:
 
 module Protocols.Df.Simple where
 
-import           Prelude hiding ((!!))
+import           Prelude hiding ((!!), map)
 
 import           Control.Applicative (Alternative((<|>)), Applicative(liftA2))
 import qualified Data.Bifunctor.Extra as Bifunctor
+import           Data.Bool (bool)
 import           Data.Coerce (coerce)
 import           Data.Default (Default)
 import           Data.Kind (Type)
@@ -77,10 +79,24 @@ instance Alternative Data where
   Data a <|> _ = Data a
   _      <|> b = b
 
+instance Monad Data where
+  (>>=) :: Data a -> (a -> Data b) -> Data b
+  NoData >>= _f = NoData
+  Data a >>=  f = f a
+
 -- | Convert 'Data' to 'Maybe'. Produces 'Just' on 'Data', 'Nothing' on 'NoData'.
 dataToMaybe :: Data a -> Maybe a
 dataToMaybe NoData = Nothing
 dataToMaybe (Data a) = Just a
+
+-- | Constructed with 'Data'?
+isData :: Data a -> Bool
+isData (Data _) = True
+isData NoData = False
+
+-- | Constructed with 'NoData'?
+isNoData :: Data a -> Bool
+isNoData = not . isData
 
 -- | Like 'Protocols.Df.Ack', but carrying phantom type variables to satisfy
 -- 'Bwd's injectivity requirement.
@@ -206,6 +222,55 @@ fanout ::
   (C.KnownNat n, C.HiddenClockResetEnable dom, 1 <= n) =>
   Circuit (Dfs dom a) (C.Vec n (Dfs dom a))
 fanout = DfLike.fanout
+
+-- | Merge data of multiple 'Dfs' streams using Monoid's '<>'.
+fanin ::
+  forall n dom a .
+  (C.KnownNat n, C.HiddenClockResetEnable dom, Monoid a, 1 <= n) =>
+  Circuit (C.Vec n (Dfs dom a)) (Dfs dom a)
+fanin = bundleVec |> map (C.fold @_ @(n-1) (<>))
+
+-- | Bundle a vector of 'Dfs' streams into one.
+bundleVec ::
+  forall n dom a .
+  (C.KnownNat n, C.HiddenClockResetEnable dom, 1 <= n) =>
+  Circuit (C.Vec n (Dfs dom a)) (Dfs dom (C.Vec n a))
+bundleVec =
+  Circuit (T.first C.unbundle . C.unbundle . fmap go . C.bundle . T.first C.bundle)
+ where
+  go (iDats, ack) = (acks, dat)
+   where
+    acks = C.repeat (bool (Ack False) (coerce ack) (isData dat))
+    dat = sequence iDats
+
+-- | Split up a 'Dfs' stream of a vector into multiple independent 'Dfs' streams.
+unbundleVec ::
+  forall n dom a .
+  (C.KnownNat n, C.NFDataX a, C.HiddenClockResetEnable dom, 1 <= n) =>
+  Circuit (Dfs dom (C.Vec n a)) (C.Vec n (Dfs dom a))
+unbundleVec =
+  Circuit (T.second C.unbundle . C.mealyB go initState . T.second C.bundle)
+ where
+  initState :: C.Vec n Bool
+  initState = C.repeat False
+
+  go ::
+    C.Vec n Bool ->
+    (Data (C.Vec n a), C.Vec n (Ack a)) ->
+    (C.Vec n Bool, (Ack (C.Vec n a), C.Vec n (Data a)))
+  go _acked (NoData, _) = (initState, (Ack False, C.repeat NoData))
+  go acked (Data dataVec, acks) =
+    let
+      -- Send data to "clients" that have not acked yet
+      valids_ = C.map not acked
+      dats = C.zipWith (\d -> bool NoData (Data d)) dataVec valids_
+
+      -- Store new acks, send ack if all "clients" have acked
+      acked1 = C.zipWith (||) acked (coerce acks)
+      ack = C.fold @_ @(n-1) (&&) acked1
+    in
+      ( if ack then initState else acked1
+      , (coerce ack, dats) )
 
 -- | Distribute data across multiple components on the RHS. Useful if you want
 -- to parallelize a workload across multiple (slow) workers. For optimal

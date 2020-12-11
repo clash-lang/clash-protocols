@@ -116,6 +116,7 @@ library
       inline-circuit-notation
     , extra
     , data-default
+    , deepseq
     , hedgehog >= 1.0.3
     , ghc >= 8.6
     , pretty-show

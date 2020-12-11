@@ -125,6 +125,9 @@ propWithModel eOpts genData model prot prop = H.property $ do
   -- expectN errors if circuit does not produce enough data
   trimmed <- expectN (Proxy @b) eOpts lengths sampled
 
+  _ <- H.evalNF trimmed
+  _ <- H.evalNF expected
+
   prop expected trimmed
 
 -- | Test a protocol against a pure model implementation. Circuit under test will

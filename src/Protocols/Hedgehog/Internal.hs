@@ -25,6 +25,9 @@ import Protocols.Df.Simple (Dfs)
 import qualified Clash.Prelude as C
 import Clash.Prelude (type (<=), type (*))
 
+-- deepseq
+import Control.DeepSeq
+
 -- hedgehog
 import qualified Hedgehog as H
 import qualified Hedgehog.Internal.Show as H
@@ -61,8 +64,8 @@ defExpectOptions = ExpectOptions
   }
 
 -- | Superclass class to reduce syntactical noise.
-class (C.NFDataX a, C.ShowX a, C.Show a, Eq a) => TestType a
-instance (C.NFDataX a, C.ShowX a, C.Show a, Eq a) => TestType a
+class (NFData a, C.NFDataX a, C.ShowX a, C.Show a, Eq a) => TestType a
+instance (NFData a, C.NFDataX a, C.ShowX a, C.Show a, Eq a) => TestType a
 
 -- | Provides a way of comparing expected data with data produced by a
 -- protocol component.
@@ -163,7 +166,8 @@ instance (TestType a, C.KnownDomain dom) => Test (Dfs dom a) where
     go timeout n _ | timeout <= 0 =
       H.failWith Nothing $ concat
         [ "Circuit did not produce enough output. Expected "
-        , show n, " more values.", ppShow (take (nExpected - n) sampled) ]
+        , show n, " more values. Sampled only " <> show (nExpected - n) <> ":\n\n"
+        , ppShow (take (nExpected - n) (catMaybes sampled)) ]
 
     go timeout n (Nothing:as) = do
       -- Circuit did not output valid cycle, just continue
