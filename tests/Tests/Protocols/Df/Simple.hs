@@ -1,15 +1,24 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE MonomorphismRestriction #-}
 
-module Tests.Protocols.Df.Simple (tests, main) where
+module Tests.Protocols.Df.Simple where
 
 -- base
+import Data.Coerce (coerce)
+import Data.Foldable (fold)
 import Data.Maybe (catMaybes)
 import GHC.Stack (HasCallStack)
 import Prelude
 
 -- clash-prelude
 import qualified Clash.Prelude as C
+import Clash.Prelude (type (<=))
+
+-- extra
+import Data.List (transpose)
+
+-- deepseq
+import Control.DeepSeq (NFData)
 
 -- hedgehog
 import Hedgehog
@@ -28,6 +37,18 @@ import Protocols.Df.Simple (Dfs)
 import qualified Protocols.Df.Simple as Dfs
 import Protocols.Hedgehog
 
+-- tests
+import Util
+
+newtype PlusInt = PlusInt Int
+  deriving (NFData, C.Generic, C.NFDataX, C.ShowX, Show, Eq)
+
+instance Semigroup PlusInt where
+  PlusInt i <> PlusInt j = PlusInt (i + j)
+
+instance Monoid PlusInt where
+  mempty = PlusInt 0
+
 genMaybe :: Gen a -> Gen (Maybe a)
 genMaybe genA = Gen.choice [Gen.constant Nothing, Just <$> genA]
 
@@ -37,11 +58,20 @@ smallInt = Range.linear 0 10
 genSmallInt :: Gen Int
 genSmallInt = Gen.integral smallInt
 
-genData :: Gen a -> Gen ([a], Int)
+genSmallPlusInt :: Gen PlusInt
+genSmallPlusInt = coerce <$> genSmallInt
+
+genData :: Gen a -> Gen [a]
 genData genA = do
   n <- genSmallInt
   dat <- Gen.list (Range.singleton n) genA
-  pure (dat, n)
+  pure dat
+
+genVecData :: (C.KnownNat n, 1 <= n) => Gen a -> Gen (C.Vec n [a])
+genVecData genA = do
+  n <- genSmallInt
+  dat <- genVec (Gen.list (Range.singleton n) genA)
+  pure dat
 
 -- Same as 'idWithModel', but specialized on 'Df'
 idWithModelDfs ::
@@ -53,7 +83,7 @@ idWithModelDfs ::
   -- cycles. If an input consists of multiple input channels where the number
   -- of valid cycles differs, this should return the _maximum_ number of valid
   -- cycles of all channels.
-  Gen ([a], Int) ->
+  Gen [a] ->
   -- | Model
   ([a] -> [b]) ->
   -- | Implementation
@@ -134,6 +164,77 @@ prop_fanout7 =
     (genData genSmallInt)
     (C.exposeClockResetEnable C.repeat)
     (C.exposeClockResetEnable @C.System (Dfs.fanout @7))
+
+prop_roundrobin :: Property
+prop_roundrobin =
+  idWithModelSingleDomain
+    @C.System
+    defExpectOptions
+    (genData genSmallInt)
+    (C.exposeClockResetEnable chunksOf)
+    (C.exposeClockResetEnable @C.System (Dfs.roundrobin @3))
+
+prop_roundrobinCollectNoSkip :: Property
+prop_roundrobinCollectNoSkip =
+  idWithModelSingleDomain
+    @C.System
+    defExpectOptions
+    (genVecData genSmallInt)
+    (C.exposeClockResetEnable (concat . transpose . C.toList))
+    (C.exposeClockResetEnable @C.System (Dfs.roundrobinCollect @3 Dfs.NoSkip))
+
+prop_roundrobinCollectSkip :: Property
+prop_roundrobinCollectSkip =
+  propWithModelSingleDomain
+    @C.System
+    defExpectOptions
+    (genVecData genSmallInt)
+    (C.exposeClockResetEnable (concat . transpose . C.toList))
+    (C.exposeClockResetEnable @C.System (Dfs.roundrobinCollect @3 Dfs.Skip))
+    prop
+ where
+  prop :: [Int] -> [Int] -> PropertyT IO ()
+  prop expected actual = tally expected === tally actual
+
+prop_roundrobinCollectParallel :: Property
+prop_roundrobinCollectParallel =
+  propWithModelSingleDomain
+    @C.System
+    defExpectOptions
+    (genVecData genSmallInt)
+    (C.exposeClockResetEnable (concat . transpose . C.toList))
+    (C.exposeClockResetEnable @C.System (Dfs.roundrobinCollect @3 Dfs.Parallel))
+    prop
+ where
+  prop :: [Int] -> [Int] -> PropertyT IO ()
+  prop expected actual = tally expected === tally actual
+
+prop_unbundleVec :: Property
+prop_unbundleVec =
+  idWithModelSingleDomain
+    @C.System
+    defExpectOptions
+    (fmap C.repeat <$> genData genSmallInt)
+    (C.exposeClockResetEnable (vecFromList . transpose . map C.toList))
+    (C.exposeClockResetEnable (Dfs.unbundleVec @3 @C.System @Int))
+
+prop_bundleVec :: Property
+prop_bundleVec =
+  idWithModelSingleDomain
+    @C.System
+    defExpectOptions
+    (C.repeat <$> genData genSmallPlusInt)
+    (C.exposeClockResetEnable (map vecFromList . transpose . C.toList))
+    (C.exposeClockResetEnable (Dfs.bundleVec @3 @C.System @PlusInt))
+
+prop_fanin :: Property
+prop_fanin =
+  idWithModelSingleDomain
+    @C.System
+    defExpectOptions
+    (genVecData genSmallPlusInt)
+    (C.exposeClockResetEnable (map fold . transpose . C.toList))
+    (C.exposeClockResetEnable (Dfs.fanin @3 @C.System @PlusInt))
 
 tests :: TestTree
 tests =

@@ -116,6 +116,7 @@ library
       inline-circuit-notation
     , extra
     , data-default
+    , deepseq
     , hedgehog >= 1.0.3
     , ghc >= 8.6
     , pretty-show
@@ -126,6 +127,7 @@ library
     Protocols.DfLike
     Protocols.Df.Simple
     Protocols.Hedgehog
+    Protocols.Hedgehog.Internal
     Protocols.Plugin
 
   other-modules:
@@ -146,11 +148,15 @@ test-suite test-library
     Tests.Protocols.Plugin
 
     Test.Tasty.Hedgehog.Extra
+
+    Util
   build-depends:
     clash-protocols,
     data-default,
+    unordered-containers,
     deepseq,
     extra,
+    hashable,
     hedgehog,
     tasty >= 1.2 && < 1.3,
     tasty-hedgehog,

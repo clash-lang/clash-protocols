@@ -40,11 +40,11 @@ smallInt = Range.linear 0 10
 genSmallInt :: Gen Int
 genSmallInt = Gen.integral smallInt
 
-genData :: Gen a -> Gen ([(Int, a)], Int)
+genData :: Gen a -> Gen [(Int, a)]
 genData genA = do
   n <- genSmallInt
   dat <- Gen.list (Range.singleton n) ((,) <$> genSmallInt <*> genA)
-  pure (dat, n)
+  pure dat
 
 -- Same as 'idWithModel', but specialized on 'Df'
 idWithModelDf ::
@@ -56,7 +56,7 @@ idWithModelDf ::
   -- cycles. If an input consists of multiple input channels where the number
   -- of valid cycles differs, this should return the _maximum_ number of valid
   -- cycles of all channels.
-  Gen ([(Int, a)], Int) ->
+  Gen [(Int, a)] ->
   -- | Model
   ([(Int, a)] -> [(Int, b)]) ->
   -- | Implementation

@@ -19,6 +19,7 @@ module Protocols
   ( -- * Circuit definition
     Circuit(Circuit)
   , Protocol(Fwd, Bwd)
+  , Backpressure(boolsToBwd)
   , Ack(..)
 
     -- * Combinators & functions
@@ -212,7 +213,7 @@ instance Protocol (a, b, c, d) where
   type Fwd (a, b, c, d) = (Fwd a, Fwd b, Fwd c, Fwd d)
   type Bwd (a, b, c, d) = (Bwd a, Bwd b, Bwd c, Bwd d)
 
-instance Protocol (C.Vec n a) where
+instance C.KnownNat n => Protocol (C.Vec n a) where
   type Fwd (C.Vec n a) = C.Vec n (Fwd a)
   type Bwd (C.Vec n a) = C.Vec n (Bwd a)
 
@@ -249,6 +250,27 @@ infixr 1 |>
     ~(r2sBc, s2rBc) = fbc (s2rAb, r2sAc)
   in
     (r2sAb, s2rBc)
+
+-- | Conversion from booleans to protocol specific acknowledgement values.
+class Protocol a => Backpressure a where
+  -- | Interpret list of booleans as a list of acknowledgements at every cycle.
+  -- Implementations don't have to account for finite lists.
+  boolsToBwd :: [Bool] -> Bwd a
+
+instance Backpressure () where
+  boolsToBwd _ = ()
+
+instance (Backpressure a, Backpressure b) => Backpressure (a, b) where
+  boolsToBwd bs = (boolsToBwd bs, boolsToBwd bs)
+
+instance (Backpressure a, Backpressure b, Backpressure c) => Backpressure (a, b, c) where
+  boolsToBwd bs = (boolsToBwd bs, boolsToBwd bs, boolsToBwd bs)
+
+instance (C.KnownNat n, Backpressure a) => Backpressure (C.Vec n a) where
+  boolsToBwd bs = C.repeat (boolsToBwd bs)
+
+instance Backpressure (CSignal dom a) where
+  boolsToBwd _ = CSignal (pure (Const ()))
 
 -- | Flipped protocol combinator
 --
@@ -347,7 +369,7 @@ data StallAck
 
 -- | Class that defines how to /drive/, /sample/, and /stall/ a "Circuit" of
  -- some shape.
-class (C.KnownNat (SimulateChannels a), Default (Bwd a)) => Simulate a where
+class (C.KnownNat (SimulateChannels a), Backpressure a) => Simulate a where
   -- Type a /Circuit/ driver needs or sampler yields. For example:
   --
   -- >>> :kind! (forall dom a. SimulateType (Dfs dom a))
@@ -409,9 +431,12 @@ instance (Simulate a, Simulate b) => Simulate (a, b) where
     Circuit (\(_, (bwd1, bwd2)) -> ((), (snd (f1 ((), bwd1)), snd (f2 ((), bwd2)))))
 
   sampleC conf (Circuit f) =
-    let (_, (fwd1, fwd2)) = f ((), (def, def)) in
-    ( sampleC conf (Circuit $ \_ -> ((), fwd1))
-    , sampleC conf (Circuit $ \_ -> ((), fwd2)) )
+    let
+      bools = replicate (resetCycles conf) False <> repeat True
+      (_, (fwd1, fwd2)) = f ((), (boolsToBwd bools, boolsToBwd bools))
+    in
+      ( sampleC conf (Circuit $ \_ -> ((), fwd1))
+      , sampleC conf (Circuit $ \_ -> ((), fwd2)) )
 
   stallC conf stalls =
     let
@@ -439,8 +464,11 @@ instance (C.KnownNat n, Simulate a) => Simulate (C.Vec n a) where
     Circuit (\(_, bwds) -> ((), C.map snd (C.zipWith ($) protocols bwds)))
 
   sampleC conf (Circuit f) =
-    let (_, fwds) = f ((), (C.repeat def)) in
-    C.map (\fwd -> sampleC conf (Circuit $ \_ -> ((), fwd))) fwds
+    let
+      bools = replicate (resetCycles conf) False <> repeat True
+      (_, fwds) = f ((), (C.repeat (boolsToBwd bools)))
+    in
+      C.map (\fwd -> sampleC conf (Circuit $ \_ -> ((), fwd))) fwds
 
   stallC conf stalls0 =
     let
