@@ -1,5 +1,3 @@
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-|
 Defines data structures and operators to create a Dataflow protocol that only
 carries data, no metadata. For documentation see:
@@ -11,13 +9,18 @@ carries data, no metadata. For documentation see:
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# OPTIONS_GHC -fpedantic-bottoms -feager-blackholing #-}
 
 module Protocols.Df.Simple where
 
-import           Prelude hiding ((!!), map)
+import Clash.Signal.Internal (Signal(..))
+
+import           Prelude hiding ((!!), map, zip, zipWith)
 
 import           Control.Applicative (Alternative((<|>)), Applicative(liftA2))
-import qualified Data.Bifunctor.Extra as Bifunctor
+import qualified Data.Bifunctor as B
+import qualified Data.Bifunctor.Extra as B
 import           Data.Bool (bool)
 import           Data.Coerce (coerce)
 import           Data.Default (Default)
@@ -27,7 +30,8 @@ import qualified Data.List.NonEmpty
 import           Data.Maybe (fromMaybe)
 import qualified Prelude as P
 
-import           Clash.Prelude (Domain, Signal, type (<=), type (-), (!!))
+import           Clash.Prelude
+  (Domain, type (<=), type (-), type (+), (!!))
 import qualified Clash.Prelude as C
 import qualified Clash.Explicit.Prelude as CE
 
@@ -125,25 +129,30 @@ instance DfLike dom (Dfs dom a) where
 
   fromDf =
     let go = \case {Df.Data () a -> Data a; Df.NoData -> NoData} in
-    Df.mapInternal (Bifunctor.swapMap go coerce)
+    Df.mapInternal (B.swapMap go coerce)
 
   toDf =
     let go = \case {Data a -> Df.Data () a; NoData -> Df.NoData} in
-    Df.mapInternal (Bifunctor.swapMap go coerce)
+    Df.mapInternal (B.swapMap go coerce)
 
 -- | Interpret simple dataflow carrying a tuple as 'Df' with /meta/ and /payload/
 asDf :: Circuit (Dfs dom (meta, payload)) (Df dom meta payload)
-asDf = Df.mapInternal (Bifunctor.swapMap go coerce)
+asDf = Df.mapInternal (B.swapMap go coerce)
  where
   go (Data (meta, a)) = Df.Data meta a
   go NoData = Df.NoData
 
 -- | Interpret 'Df' as simple dataflow carrying a tuple of /meta/ and /payload/
 asDfs :: Circuit (Df dom meta payload) (Dfs dom (meta, payload))
-asDfs = Df.mapInternal (Bifunctor.swapMap go coerce)
+asDfs = Df.mapInternal (B.swapMap go coerce)
  where
   go (Df.Data meta a) = Data (meta, a)
   go Df.NoData = NoData
+
+-- | Force a /nack/ on the backward channel and /no data/ on the forward
+-- channel if reset is asserted.
+forceAckLow :: C.HiddenClockResetEnable dom => Circuit (Dfs dom a) (Dfs dom a)
+forceAckLow = DfLike.forceAckLow
 
 -- | Like 'P.map', but over payload (/a/) of a Dfs stream.
 map :: (a -> b) -> Circuit (Dfs dom a) (Dfs dom b)
@@ -189,9 +198,117 @@ mapLeft = DfLike.mapLeft
 mapRight :: (b -> c) -> Circuit (Dfs dom (Either a b)) (Dfs dom (Either a c))
 mapRight = DfLike.mapRight
 
--- | Like 'Data.Either.either', but over payload of a 'Dfs' stream.
+-- | Like 'Data.Either.either', but over a 'Dfs' stream.
 either :: (a -> c) -> (b -> c) -> Circuit (Dfs dom (Either a b)) (Dfs dom c)
 either f g = DfLike.map (P.either f g)
+
+-- | Like 'P.zipWith', but over two 'Dfs' streams.
+zipWith ::
+  forall a b c dom.
+  (a -> b -> c) ->
+  Circuit
+    (Dfs dom a, Dfs dom b)
+    (Dfs dom c)
+zipWith f =
+  Circuit (B.first C.unbundle . C.unbundle . fmap go . C.bundle . B.first C.bundle)
+ where
+  go ((Data a, Data b), Ack ack) = ((Ack ack, Ack ack), Data (f a b))
+  go _ = ((Ack False, Ack False), NoData)
+
+-- | Like 'P.zip', but over two 'Dfs' streams.
+zip :: forall a b dom. Circuit (Dfs dom a, Dfs dom b) (Dfs dom (a, b))
+zip = zipWith (,)
+
+-- | Like 'P.partition', but over 'Dfs' streams
+partition :: (a -> Bool) -> Circuit (Dfs dom a) (Dfs dom a, Dfs dom a)
+partition f =
+  Circuit (B.second C.unbundle . C.unbundle . fmap go . C.bundle . B.second C.bundle)
+ where
+  go (Data a, (ackT, ackF))
+    | f a       = (ackT, (Data a, NoData))
+    | otherwise = (ackF, (NoData, Data a))
+  go _ = (Ack False, (NoData, NoData))
+
+-- | Route a 'Dfs' stream to another corresponding to the index
+route ::
+  forall n a dom. C.KnownNat n =>
+  Circuit (Dfs dom (C.Index n, a)) (C.Vec n (Dfs dom a))
+route =
+  Circuit (B.second C.unbundle . C.unbundle . fmap go . C.bundle . B.second C.bundle)
+ where
+  go :: (Data (C.Index n, a), C.Vec n (Ack a)) -> (Ack (C.Index n, a), C.Vec n (Data a))
+  go (Data (i, a), acks) = (coerce (acks C.!! i), C.replace i (Data a) (C.repeat NoData))
+  go _ = (Ack False, C.repeat NoData)
+
+-- | Select data from the channel indicated by the 'Dfs' stream carrying
+-- @Index n@.
+select ::
+  forall n a dom.
+  C.KnownNat n =>
+  Circuit (C.Vec n (Dfs dom a), Dfs dom (C.Index n)) (Dfs dom a)
+select = selectUntil (P.const True)
+
+-- | Select /selectN/ samples from channel /n/.
+selectN ::
+  forall n selectN a dom.
+  ( C.HiddenClockResetEnable dom
+  , C.KnownNat selectN
+  , C.KnownNat n
+  ) =>
+  Circuit
+    (C.Vec n (Dfs dom a), Dfs dom (C.Index n, C.Index selectN))
+    (Dfs dom a)
+selectN = Circuit $
+    B.first (B.first C.unbundle . C.unbundle)
+  . C.mealyB go (0 :: C.Index (selectN + 1))
+  . B.first (C.bundle . B.first C.bundle)
+ where
+  go c0 ((dats, dat), Ack iAck)
+    -- Select zero samples: don't send any data to RHS, acknowledge index stream
+    -- but no data stream.
+    | Data (_, 0) <- dat
+    = (c0, ((nacks, Ack True), NoData))
+
+    -- Acknowledge data if RHS acknowledges ours. Acknowledge index stream if
+    -- we're done.
+    | Data (streamI, nSelect) <- dat
+    , Data d <- dats C.!! streamI
+    = let
+        c1 = if iAck then succ c0 else c0
+        oAckIndex = c1 == C.extend nSelect
+        c2 = if oAckIndex then 0 else c1
+        datAcks = C.replace streamI (Ack iAck) nacks
+      in
+        (c2, ((datAcks, Ack oAckIndex), Data d))
+
+    -- No index from LHS, nothing to do
+    | otherwise
+    = (c0, ((nacks, Ack False), NoData))
+   where
+    nacks = C.repeat (Ack False)
+
+-- | Selects samples from channel /n/ until the predicate holds. The cycle in
+-- which the predicate turns true is included.
+selectUntil ::
+  forall n a dom.
+  C.KnownNat n =>
+  (a -> Bool) ->
+  Circuit
+    (C.Vec n (Dfs dom a), Dfs dom (C.Index n))
+    (Dfs dom a)
+selectUntil f = Circuit $
+    B.first (B.first C.unbundle . C.unbundle) . C.unbundle
+  . fmap go
+  . C.bundle . B.first (C.bundle . B.first C.bundle)
+ where
+  nacks = C.repeat (Ack False)
+
+  go ((dats, dat), ack)
+    | Data i <- dat
+    , Data d <- dats C.!! i
+    = ((C.replace i ack nacks, if f d then coerce ack else Ack False), Data d)
+    | otherwise
+    = ((nacks, Ack False), NoData)
 
 -- | Mealy machine acting on raw Dfs stream
 mealy ::
@@ -226,14 +343,14 @@ fanout = DfLike.fanout
 -- | Merge data of multiple 'Dfs' streams using Monoid's '<>'.
 fanin ::
   forall n dom a .
-  (C.KnownNat n, C.HiddenClockResetEnable dom, Monoid a, 1 <= n) =>
+  (C.KnownNat n, Monoid a, 1 <= n) =>
   Circuit (C.Vec n (Dfs dom a)) (Dfs dom a)
 fanin = bundleVec |> map (C.fold @_ @(n-1) (<>))
 
 -- | Bundle a vector of 'Dfs' streams into one.
 bundleVec ::
   forall n dom a .
-  (C.KnownNat n, C.HiddenClockResetEnable dom, 1 <= n) =>
+  (C.KnownNat n, 1 <= n) =>
   Circuit (C.Vec n (Dfs dom a)) (Dfs dom (C.Vec n a))
 bundleVec =
   Circuit (T.first C.unbundle . C.unbundle . fmap go . C.bundle . T.first C.bundle)

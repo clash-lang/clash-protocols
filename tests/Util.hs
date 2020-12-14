@@ -32,4 +32,7 @@ genVec gen = sequence (C.repeat gen)
 
 -- | Count the number of times an element occurs in a list
 tally :: (Hashable a, Eq a) => [a] -> HashMap a Int
-tally xs = HashMap.fromListWith (+) (zip xs (repeat 1))
+tally = tallyOn id (const 1)
+
+tallyOn :: (Hashable b, Eq b) => (a -> b) -> (a -> Int) -> [a] -> HashMap b Int
+tallyOn f g xs = HashMap.fromListWith (+) (zip (map f xs) (map g xs))

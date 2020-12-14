@@ -26,9 +26,14 @@ module Protocols
   , (|>), (<|)
   , fromSignals, toSignals
 
-    -- * Basic protocols
+    -- * Protocol types
+  , Df
+  , Dfs
+
+    -- * Basic circuits
   , idC
   , repeatC
+  , prod2C
 
     -- * Simulation
   , Simulate(SimulateType, SimulateChannels, driveC, sampleC, stallC)
@@ -53,6 +58,9 @@ import           Data.Default (Default(def))
 import           Data.Kind (Type)
 import           Data.Tuple (swap)
 import           GHC.Generics (Generic)
+
+import {-# SOURCE #-} Protocols.Df (Df)
+import {-# SOURCE #-} Protocols.Df.Simple (Dfs)
 
 -- | A /protocol/, in its most general form, corresponds to a component with two
 -- pairs of an input and output. As a diagram:
@@ -323,7 +331,7 @@ fromSignals = coerce
 idC :: forall a. Circuit a a
 idC = Circuit swap
 
--- | Copy a protocol /n/ times. Note that this will copy hardware. If you are
+-- | Copy a circuit /n/ times. Note that this will copy hardware. If you are
 -- looking for a circuit that turns a single channel into multiple, check out
 -- 'Protocols.Df.fanout' or 'Protocols.Df.Simple.fanout'.
 repeatC ::
@@ -332,6 +340,22 @@ repeatC ::
   Circuit (C.Vec n a) (C.Vec n b)
 repeatC (Circuit f) =
   Circuit (C.unzip . C.map f . uncurry C.zip)
+
+-- | Combine two separate circuits into one. If you are looking to combine
+-- multiple streams into a single stream, checkout 'Protocols.Df.fanin' or
+-- 'Protocols.Df.zip'.
+prod2C ::
+  forall a c b d.
+  Circuit a b ->
+  Circuit c d ->
+  Circuit (a, c) (b, d)
+prod2C (Circuit a) (Circuit c) =
+  Circuit (\((aFwd, cFwd), (bBwd, dBwd)) ->
+    let
+      (aBwd, bFwd) = a (aFwd, bBwd)
+      (cBwd, dFwd) = c (cFwd, dBwd)
+    in
+      ((aBwd, cBwd), (bFwd, dFwd)))
 
 --------------------------------- SIMULATION -----------------------------------
 -- | Specifies option for simulation functions. Don't use this constructor
@@ -428,7 +452,7 @@ instance (Simulate a, Simulate b) => Simulate (a, b) where
 
   driveC conf (fwd1, fwd2) =
     let (Circuit f1, Circuit f2) = (driveC conf fwd1, driveC conf fwd2) in
-    Circuit (\(_, (bwd1, bwd2)) -> ((), (snd (f1 ((), bwd1)), snd (f2 ((), bwd2)))))
+    Circuit (\(_, ~(bwd1, bwd2)) -> ((), (snd (f1 ((), bwd1)), snd (f2 ((), bwd2)))))
 
   sampleC conf (Circuit f) =
     let

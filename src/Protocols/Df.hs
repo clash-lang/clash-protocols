@@ -518,7 +518,7 @@ stall rst stallAck stalls = Circuit $
       -- the data. As long as RHS does not acknowledge the data, we keep sending
       -- the same data.
       (f1, b1, s1) = case compare 0 s of
-        LT -> (NoData, Ack False, pred s:ss)        -- s > 0
+        LT -> (NoData, Ack False, pred s:ss)                  -- s > 0
         EQ -> (f0, b0, if coerce b0 then ss else s:ss)        -- s ~ 0
         GT -> error ("Unexpected negative stall: " <> show s) -- s < 0
     in
