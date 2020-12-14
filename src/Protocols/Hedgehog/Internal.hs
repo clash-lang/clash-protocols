@@ -18,8 +18,8 @@ import Data.Proxy (Proxy(Proxy))
 
 -- clash-protocols
 import Protocols
-import Protocols.Df (Df)
-import Protocols.Df.Simple (Dfs)
+import Protocols.Df ()
+import Protocols.Df.Simple ()
 
 -- clash-prelude
 import qualified Clash.Prelude as C

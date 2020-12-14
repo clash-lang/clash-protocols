@@ -34,8 +34,8 @@ module Protocols.DfLike
   , forceAckLow
   ) where
 
-import           Protocols hiding (Ack(..))
-import qualified Protocols
+import           Protocols.Internal hiding (Ack(..))
+import qualified Protocols.Internal as Protocols
 import qualified Protocols.Df as Df
 import           Protocols.Df (Df)
 

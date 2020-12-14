@@ -1,6 +1,12 @@
 #!/bin/bash
 set -xeou pipefail
 
+# Build dependencies first, so they don't end up in logs
+cabal build \
+  --enable-documentation \
+  --allow-newer=circuit-notation:ghc \
+  clash-protocols
+
 # circuit-notation currently _compiles on 8.10, but isn't usable. The only
 # other GHC version it supports is 8.6.5, but this GHC bundles a Haddock that
 # cannot generate documentation for clash-prelude. Hence, we build docs with

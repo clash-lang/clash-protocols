@@ -7,7 +7,7 @@ module Tests.Protocols.Df.Simple where
 -- base
 import Data.Coerce (coerce)
 import Data.Foldable (fold)
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, fromMaybe)
 import Data.List (mapAccumL)
 import GHC.Stack (HasCallStack)
 import Prelude
@@ -41,7 +41,6 @@ import Test.Tasty.TH (testGroupGenerator)
 
 -- clash-protocols (me!)
 import Protocols
-import Protocols.Df.Simple (Dfs)
 import qualified Protocols.Df.Simple as Dfs
 import Protocols.Hedgehog
 
@@ -299,7 +298,7 @@ prop_select =
   goGen = do
     n <- genSmallInt
     ixs <- Gen.list (Range.singleton n) Gen.enumBounded
-    let tall i = HashMap.findWithDefault 0 i (tally ixs)
+    let tall i = fromMaybe 0 (HashMap.lookup i (tally ixs))
     dats <- mapM (\i -> Gen.list (Range.singleton (tall i)) genSmallInt) C.indicesI
     pure (dats, ixs)
 
@@ -324,7 +323,7 @@ prop_selectN =
     lenghts <- Gen.list (Range.singleton n) Gen.enumBounded
     let
       tallied = tallyOn fst (fromIntegral . snd) (zip ixs lenghts)
-      tall i = HashMap.findWithDefault 0 i tallied
+      tall i = fromMaybe 0 (HashMap.lookup i tallied)
     dats <- mapM (\i -> Gen.list (Range.singleton (tall i)) genSmallInt) C.indicesI
     pure (dats, zip ixs lenghts)
 

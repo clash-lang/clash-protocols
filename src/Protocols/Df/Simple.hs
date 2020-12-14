@@ -6,11 +6,13 @@ carries data, no metadata. For documentation see:
   * 'Protocols.Df.Simple.Dfs'
 
 -}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
-{-# OPTIONS_GHC -fpedantic-bottoms -feager-blackholing #-}
+
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Protocols.Df.Simple where
 
@@ -30,13 +32,12 @@ import qualified Data.List.NonEmpty
 import           Data.Maybe (fromMaybe)
 import qualified Prelude as P
 
-import           Clash.Prelude
-  (Domain, type (<=), type (-), type (+), (!!))
+import           Clash.Prelude (type (<=), type (-), type (+), (!!))
 import qualified Clash.Prelude as C
 import qualified Clash.Explicit.Prelude as CE
 
-import           Protocols hiding (Ack(..))
-import qualified Protocols
+import           Protocols.Internal hiding (Ack(..))
+import qualified Protocols.Internal as Protocols
 import qualified Protocols.Df as Df
 import           Protocols.Df (Df)
 import qualified Protocols.DfLike as DfLike
@@ -44,12 +45,13 @@ import           Protocols.DfLike (DfLike)
 
 import           GHC.Stack (HasCallStack)
 
--- | Like 'Protocols.Df.Df', but without metadata.
+
+-- | Like 'Protocols.Df', but without metadata.
 --
--- __N.B.__: For performance reasons 'Data' is strict on its data field. That
--- is, if 'Data' is evaluated to WHNF, its fields will be evaluated to WHNF
--- too. If you need lazy behavior, check out "Protocols.Df.Simple.Lazy".
-data Dfs (dom :: Domain) (a :: Type)
+-- __N.B.__: For performance reasons 'Protocols.Df.Simple.Data' is strict on
+-- its data field. That is, if 'Protocols.Df.Simple.Data' is evaluated to WHNF,
+-- its fields will be evaluated to WHNF too.
+data Dfs (dom :: C.Domain) (a :: Type)
 
 instance Protocol (Dfs dom a) where
   -- | Forward part of simple dataflow: @Signal dom (Data meta a)@

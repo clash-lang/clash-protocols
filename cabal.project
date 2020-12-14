@@ -7,3 +7,9 @@ package clash-prelude
   -- Clash, and triggers Template Haskell bugs on Windows. Hence, we disable
   -- it by default. This will be the default for Clash >=1.4.
   flags: -large-tuples
+
+source-repository-package
+    type: git
+    location: https://github.com/martijnbastiaan/haskell-hedgehog.git
+    tag: f7d25b0a1927b7c06d69535d5dcfcade560ec624
+    subdir: hedgehog

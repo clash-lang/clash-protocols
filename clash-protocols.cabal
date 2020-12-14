@@ -17,6 +17,10 @@ description:
   * 'Protocols.Plugin'
   * 'Protocols.Hedgehog'
 
+data-files:
+    src/Protocols/Hedgehog.hs
+    src/Protocols/Hedgehog/*.hs
+
 flag ci
     Description: Running on CI? Used to set fail-on-warning flag.
     Manual: True
@@ -117,12 +121,12 @@ library
     , extra
     , data-default
     , deepseq
-    , hedgehog >= 1.0.3
+    , hedgehog >= 1.0.2
     , ghc >= 8.6
     , pretty-show
 
       -- To be removed; we need 'Test.Tasty.Hedgehog.Extra' to fix upstream issues
-    , tasty >= 1.2 && < 1.3
+    , tasty >= 1.2 && < 1.5
     , tasty-hedgehog
 
   exposed-modules:
@@ -132,14 +136,18 @@ library
     Protocols.Df.Simple
     Protocols.Hedgehog
     Protocols.Hedgehog.Internal
+    Protocols.Internal
     Protocols.Plugin
 
     -- 'testProperty' is broken upstream, it reports wrong test names
     -- TODO: test / upstream ^
     Test.Tasty.Hedgehog.Extra
 
+  autogen-modules:    Paths_clash_protocols
+
   other-modules:
     Data.Bifunctor.Extra
+    Paths_clash_protocols
 
   default-language: Haskell2010
 
@@ -164,6 +172,6 @@ test-suite unittests
     extra,
     hashable,
     hedgehog,
-    tasty >= 1.2 && < 1.3,
+    tasty >= 1.2 && < 1.5,
     tasty-hedgehog,
     tasty-th
