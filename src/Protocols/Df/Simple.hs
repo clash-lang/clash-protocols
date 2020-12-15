@@ -43,6 +43,8 @@ import           Protocols.Df (Df)
 import qualified Protocols.DfLike as DfLike
 import           Protocols.DfLike (DfLike)
 
+import           Control.DeepSeq (NFData)
+import           GHC.Generics (Generic)
 import           GHC.Stack (HasCallStack)
 
 
@@ -71,7 +73,7 @@ data Data a
   = NoData
   -- | Send /a/
   | Data !a
-  deriving (Functor)
+  deriving (Functor, Generic, C.NFDataX, C.ShowX, Eq, NFData, Show)
 
 instance Applicative Data where
   pure = Data
@@ -113,7 +115,7 @@ instance Default (Ack a) where
   def = Ack True
 
 instance (C.KnownDomain dom, C.NFDataX a, C.ShowX a, Show a) => Simulate (Dfs dom a) where
-  type SimulateType (Dfs dom a) = [Maybe a]
+  type SimulateType (Dfs dom a) = [Data a]
   type SimulateChannels (Dfs dom a) = 1
 
   driveC SimulationConfig{resetCycles} inp =
@@ -479,10 +481,14 @@ drive ::
   forall dom a.
   C.KnownDomain dom =>
   CE.Reset dom ->
-  [Maybe a] ->
+  [Data a] ->
   Circuit () (Dfs dom a)
 drive rst s0 =
-  Df.drive rst (P.map (fmap ((),)) s0) |> DfLike.fromDf
+  Df.drive rst (P.map toDfData s0) |> DfLike.fromDf
+ where
+  toDfData :: Data a -> Df.Data () a
+  toDfData NoData = Df.NoData
+  toDfData (Data a) = Df.Data () a
 
 -- | Sample protocol to a list of values. Drops values while reset is asserted.
 -- Not synthesizable.
@@ -494,9 +500,13 @@ sample ::
   CE.Reset dom ->
   Int ->
   Circuit () (Dfs dom b) ->
-  [Maybe b]
+  [Data b]
 sample rst timeoutAfter c =
-  P.map (fmap P.snd) (Df.sample rst timeoutAfter (c |> DfLike.toDf))
+  P.map fromDfData (Df.sample rst timeoutAfter (c |> DfLike.toDf))
+ where
+  fromDfData :: Df.Data () b -> Data b
+  fromDfData Df.NoData = NoData
+  fromDfData (Df.Data _ a) = Data a
 
 -- | Stall every valid Dfs packet with a given number of cycles. If there are
 -- more valid packets than given numbers, passthrough all valid packets without
@@ -531,12 +541,20 @@ simulate ::
     C.Enable dom ->
     Circuit (Dfs dom a) (Dfs dom b) ) ->
   -- | Inputs
-  [Maybe a] ->
+  [Data a] ->
   -- | Outputs
-  [Maybe b]
+  [Data b]
 simulate conf circ inputs =
-    P.map (fmap P.snd)
+    P.map fromDfData
   $ Df.simulate conf circDf
-  $ P.map (fmap ((),)) inputs
+  $ P.map toDfData inputs
  where
   circDf clk rst ena = DfLike.fromDf |> circ clk rst ena |> DfLike.toDf
+
+  toDfData :: Data a -> Df.Data () a
+  toDfData NoData = Df.NoData
+  toDfData (Data a) = Df.Data () a
+
+  fromDfData :: Df.Data () b -> Data b
+  fromDfData Df.NoData = NoData
+  fromDfData (Df.Data _ a) = Data a

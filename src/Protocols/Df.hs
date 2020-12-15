@@ -71,6 +71,8 @@ import           Data.List ((\\))
 import           Data.Kind (Type)
 import qualified Data.Maybe as Maybe
 import qualified Data.Tuple.Extra as T
+
+import           Control.DeepSeq (NFData)
 import           GHC.Stack (HasCallStack)
 import           GHC.Generics (Generic)
 
@@ -110,7 +112,7 @@ instance Backpressure (Df dom meta a) where
 instance ( C.KnownDomain dom
          , C.NFDataX meta, C.ShowX meta, Show meta
          , C.NFDataX a, C.ShowX a, Show a ) => Simulate (Df dom meta a) where
-  type SimulateType (Df dom meta a) = [Maybe (meta, a)]
+  type SimulateType (Df dom meta a) = [Data meta a]
   type SimulateChannels (Df dom meta a) = 1
 
   driveC SimulationConfig{resetCycles} inp =
@@ -129,7 +131,7 @@ data Data meta a
   = NoData
   -- | Send /meta/ and /a/
   | Data !meta !a
-  deriving (Functor, Generic, C.NFDataX)
+  deriving (Functor, Generic, C.NFDataX, C.ShowX, Eq, NFData, Show)
 
 instance Bifunctor Data where
   bimap _fab _fcd NoData = NoData
@@ -428,7 +430,7 @@ drive ::
   forall dom meta a.
   C.KnownDomain dom =>
   CE.Reset dom ->
-  [Maybe (meta, a)] ->
+  [Data meta a] ->
   Circuit () (Df dom meta a)
 drive rst s0 = Circuit $
     ((),)
@@ -437,12 +439,12 @@ drive rst s0 = Circuit $
   . CE.sample_lazy
   . P.snd
  where
-  go _                    []             _           = error "Unexpected end of reset"
-  go _                    (True:resets)  ~(ack:acks) = NoData : (ack `C.seqX` go s0 resets acks)
-  go []                   (_:resets)     ~(ack:acks) = NoData : (ack `C.seqX` go [] resets acks)
-  go (Nothing:is)         (_:resets)     ~(ack:acks) = NoData : (ack `C.seqX` go is resets acks)
-  go (Just (meta,dat):is) (_:resets)     ~(ack:acks) =
-    Data meta dat : go (if coerce ack then is else Just (meta,dat):is) resets acks
+  go _                  []             _           = error "Unexpected end of reset"
+  go _                  (True:resets)  ~(ack:acks) = NoData : (ack `C.seqX` go s0 resets acks)
+  go []                 (_:resets)     ~(ack:acks) = NoData : (ack `C.seqX` go [] resets acks)
+  go (NoData:is)        (_:resets)     ~(ack:acks) = NoData : (ack `C.seqX` go is resets acks)
+  go (Data meta dat:is) (_:resets)     ~(ack:acks) =
+    Data meta dat : go (if coerce ack then is else Data meta dat:is) resets acks
 
 -- | Sample protocol to a list of values. Drops values while reset is asserted.
 -- Not synthesizable.
@@ -454,10 +456,9 @@ sample ::
   CE.Reset dom ->
   Int ->
   Circuit () (Df dom meta b) ->
-  [Maybe (meta, b)]
+  [Data meta b]
 sample rst timeoutAfter c =
-    P.map (\case {Data meta a -> Just (meta, a); NoData -> Nothing})
-  $ P.take timeoutAfter
+    P.take timeoutAfter
   $ CE.sample_lazy
   $ ignoreWhileInReset
   $ P.snd
@@ -539,9 +540,9 @@ simulate ::
     C.Enable dom ->
     Circuit (Df dom meta a) (Df dom meta b) ) ->
   -- | Inputs
-  [Maybe (meta, a)] ->
+  [Data meta a] ->
   -- | Outputs
-  [Maybe (meta, b)]
+  [Data meta b]
 simulate SimulationConfig{..} circ inputs =
   sample rst timeoutAfter (drive rst inputs |> circ clk rst ena)
  where
