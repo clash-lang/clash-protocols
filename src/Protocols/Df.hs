@@ -15,6 +15,8 @@ This module is designed to be imported using qualified, i.e.:
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 module Protocols.Df
   ( -- * Type definitions
     Df
@@ -53,8 +55,8 @@ module Protocols.Df
   , forceAckLow
   ) where
 
-import           Protocols hiding (Ack(..))
-import qualified Protocols
+import           Protocols.Internal hiding (Ack(..))
+import qualified Protocols.Internal as Protocols
 
 import qualified Prelude as P
 import           Prelude hiding (map, const, fst, snd, pure, either, filter)
@@ -65,14 +67,14 @@ import qualified Data.Bifunctor.Extra as Bifunctor
 import qualified Data.Bifunctor as Bifunctor
 import           Data.Bifunctor (Bifunctor)
 import           Data.Coerce (coerce)
-import           Data.Kind (Type)
 import           Data.List ((\\))
+import           Data.Kind (Type)
 import qualified Data.Maybe as Maybe
 import qualified Data.Tuple.Extra as T
 import           GHC.Stack (HasCallStack)
 import           GHC.Generics (Generic)
 
-import           Clash.Prelude (Signal, Domain, type (<=), type (-))
+import           Clash.Prelude (Signal, type (<=), type (-))
 import qualified Clash.Prelude as C
 import qualified Clash.Explicit.Prelude as CE
 import           Clash.Signal.Internal (Signal((:-)))
@@ -90,12 +92,11 @@ import           Clash.Signal.Internal (Signal((:-)))
 --   2. The data channel should remain stable (i.e., not change) until the
 --      receiver has sent an acknowledgement.
 --
--- __N.B.__: For performance reasons 'Data' is strict on its fields. That is,
--- if it is evaluated to WHNF, its fields will also be evaluated to WHNF. If you
--- need lazy behavior, check out "Protocols.Df.Lazy".
+-- __N.B.__: For performance reasons 'Protocols.Df.Data' is strict on its
+-- fields. That is, if it is evaluated to WHNF, its fields will also be
+-- evaluated to WHNF.
 --
-data Df (dom :: Domain) (meta :: Type) (a :: Type)
-
+data Df (dom :: C.Domain) (meta :: Type) (a :: Type)
 instance Protocol (Df dom meta a) where
   -- | Forward part of base dataflow: @Signal dom (Data meta a)@
   type Fwd (Df dom meta a) = Signal dom (Data meta a)
@@ -518,7 +519,7 @@ stall rst stallAck stalls = Circuit $
       -- the data. As long as RHS does not acknowledge the data, we keep sending
       -- the same data.
       (f1, b1, s1) = case compare 0 s of
-        LT -> (NoData, Ack False, pred s:ss)        -- s > 0
+        LT -> (NoData, Ack False, pred s:ss)                  -- s > 0
         EQ -> (f0, b0, if coerce b0 then ss else s:ss)        -- s ~ 0
         GT -> error ("Unexpected negative stall: " <> show s) -- s < 0
     in

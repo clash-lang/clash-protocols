@@ -3,7 +3,7 @@ cradle:
     - path: "./src"
       config: {cradle: {cabal: {component: "lib:clash-protocols"}}}
     - path: "./tests"
-      config: {cradle: {cabal: {component: "test-suite:test-library"}}}
+      config: {cradle: {cabal: {component: "test-suite:unittests"}}}
     - path: "./bin/Clash.hs"
       config: {cradle: {cabal: {component: "clash"}}}
     - path: "./bin/Clashi.hs"

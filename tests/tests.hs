@@ -1,3 +1,6 @@
+
+module Main where
+
 import Prelude
 import Test.Tasty
 import Control.Concurrent (setNumCapabilities)

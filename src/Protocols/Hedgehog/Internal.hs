@@ -18,12 +18,12 @@ import Data.Proxy (Proxy(Proxy))
 
 -- clash-protocols
 import Protocols
-import Protocols.Df (Df)
-import Protocols.Df.Simple (Dfs)
+import Protocols.Df ()
+import Protocols.Df.Simple ()
 
 -- clash-prelude
 import qualified Clash.Prelude as C
-import Clash.Prelude (type (<=), type (*))
+import Clash.Prelude (type (<=), type (*), type (+))
 
 -- deepseq
 import Control.DeepSeq
@@ -211,6 +211,43 @@ instance
     forM
       (C.zip (C.unconcatI nExpecteds) sampled)
       (uncurry (expectN (Proxy @a) opts))
+
+instance
+  ( Test a, Test b
+  , 1 <= (SimulateChannels a + SimulateChannels b) ) => Test (a, b) where
+  type ExpectType (a, b) = (ExpectType a, ExpectType b)
+
+  expectToSimulateType ::
+    Proxy (a, b) ->
+    (ExpectType a, ExpectType b) ->
+    (SimulateType a, SimulateType b)
+  expectToSimulateType Proxy (t1, t2) =
+    ( expectToSimulateType (Proxy @a) t1
+    , expectToSimulateType (Proxy @b) t2 )
+
+  expectToLengths ::
+    Proxy (a, b) ->
+    (ExpectType a, ExpectType b) ->
+    C.Vec (SimulateChannels a + SimulateChannels b) Int
+  expectToLengths Proxy (t1, t2) =
+    expectToLengths (Proxy @a) t1 C.++ expectToLengths (Proxy @b) t2
+
+  expectN ::
+    forall m.
+    (HasCallStack, H.MonadTest m) =>
+    Proxy (a, b) ->
+    ExpectOptions ->
+    C.Vec (SimulateChannels a + SimulateChannels b) Int ->
+    (SimulateType a, SimulateType b) ->
+    m (ExpectType a, ExpectType b)
+  expectN Proxy opts nExpecteds (sampledA, sampledB) = do
+    -- TODO: This creates some pretty terrible error messages, as one
+    -- TODO: simulate channel is checked at a time.
+    trimmedA <- expectN (Proxy @a) opts nExpectedsA sampledA
+    trimmedB <- expectN (Proxy @b) opts nExpectedsB sampledB
+    pure (trimmedA, trimmedB)
+   where
+    (nExpectedsA, nExpectedsB) = C.splitAtI nExpecteds
 
 -- | Fails with an error that shows the difference between two values.
 failDiffWith ::
