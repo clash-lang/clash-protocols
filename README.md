@@ -585,7 +585,7 @@ No formal guidelines yet, but feel free to open a PR!
 - [x] Decide what to do with `Protocols.Ack`
 - [ ] Check dead doc links on CI
 - [x] Upstream all changes to `circuit-notation` (where possible)
-- [ ] Add examples on how to use DSL plugin
+- [x] Add examples on how to use DSL plugin
 - [ ] Port and upstream examples `circuit-notation`
 - [ ] Blogpost introducing explaining the _why_ of `clash-protocols`
 
