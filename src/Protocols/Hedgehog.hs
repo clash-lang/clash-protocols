@@ -13,7 +13,7 @@ module Protocols.Hedgehog
    ExpectOptions(..)
  , defExpectOptions
  , StallMode(..)
- , Test(ExpectType)
+ , Test(..)
  , TestType
 
    -- * Test functions
@@ -39,9 +39,6 @@ import Protocols.Hedgehog.Internal
 
 -- clash-prelude
 import qualified Clash.Prelude as C
-
--- data-default
-import Data.Default (Default(def))
 
 -- hedgehog
 import qualified Hedgehog as H
@@ -115,7 +112,7 @@ propWithModel eOpts genData model prot prop = H.property $ do
     lhsStallC = stallC simConfig lhsStalls
     rhsStallC = stallC simConfig rhsStalls
     stalledProtocol =
-         driveC simDriveConfig (expectToSimulateType (Proxy @a) dat)
+         driveC simDriveConfig (toSimulateType (Proxy @a) dat)
       |> lhsStallC
       |> prot
       |> rhsStallC

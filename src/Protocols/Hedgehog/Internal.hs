@@ -12,14 +12,13 @@ module Protocols.Hedgehog.Internal where
 import Prelude
 import GHC.Stack (withFrozenCallStack, HasCallStack)
 import Control.Monad (forM)
-import Data.Maybe (catMaybes, fromMaybe)
-import Data.Kind (Type)
+import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy(Proxy))
 
 -- clash-protocols
 import Protocols
-import Protocols.Df ()
-import Protocols.Df.Simple ()
+import qualified Protocols.Df as Df
+import qualified Protocols.Df.Simple as Dfs
 
 -- clash-prelude
 import qualified Clash.Prelude as C
@@ -76,18 +75,6 @@ class ( Simulate a
       -- Foldable requirement on Vec :(
       , 1 <= SimulateChannels a
       ) => Test a where
-  type ExpectType a :: Type
-
-  -- | Convert a /ExpectType a/, a type representing data without backpressure,
-  -- into a type that does, /SimulateType a/.
-  expectToSimulateType ::
-    -- | Type witness
-    Proxy a ->
-    -- | Expect type: input for a protocol /without/ stall information
-    ExpectType a ->
-    -- | Expect type: input for a protocol /with/ stall information
-    SimulateType a
-
   -- | Get the number of expected valid data cycles for each data channel,
   -- given a list of expected data.
   expectToLengths ::
@@ -120,16 +107,57 @@ class ( Simulate a
     m (ExpectType a)
 
 instance (TestType meta, TestType a, C.KnownDomain dom) => Test (Df dom meta a) where
-  type ExpectType (Df dom meta a) = [(meta, a)]
-
-  expectToSimulateType Proxy = map Just
   expectToLengths Proxy = pure . length
-  expectN Proxy = expectN (Proxy @(Dfs dom (meta, a)))
+
+  expectN ::
+    forall m.
+    (HasCallStack, H.MonadTest m) =>
+    Proxy (Df dom meta a) ->
+    ExpectOptions ->
+    C.Vec 1 Int ->
+    [Df.Data meta a] ->
+    m [(meta, a)]
+  expectN Proxy (ExpectOptions{eoEmptyTail, eoTimeout}) (C.head -> nExpected) sampled = do
+    go (fromMaybe maxBound eoTimeout) nExpected sampled
+   where
+    catDatas [] = []
+    catDatas (Df.NoData:xs) = catDatas xs
+    catDatas (Df.Data meta x:xs) = (meta,x):catDatas xs
+
+    go ::
+      HasCallStack =>
+      -- Timeout counter. If it reaches zero we time out.
+      Int ->
+      -- Expected number of values
+      Int ->
+      -- Sampled data
+      [Df.Data meta a] ->
+      -- Results
+      m [(meta, a)]
+    go _timeout _n [] =
+      -- This really should not happen, protocols should produce data indefinitely
+      error "unexpected end of signal"
+    go _timeout 0 rest = do
+      -- Check for superfluous output from protocol
+      case catDatas (take eoEmptyTail rest) of
+        [] -> pure (take nExpected (catDatas sampled))
+        superfluous ->
+          let err = "Circuit produced more output than expected:" in
+          H.failWith Nothing (err <> "\n\n" <> ppShow superfluous)
+    go timeout n _ | timeout <= 0 =
+      H.failWith Nothing $ concat
+        [ "Circuit did not produce enough output. Expected "
+        , show n, " more values. Sampled only " <> show (nExpected - n) <> ":\n\n"
+        , ppShow (take (nExpected - n) (catDatas sampled)) ]
+
+    go timeout n (Df.NoData:as) = do
+      -- Circuit did not output valid cycle, just continue
+      go (pred timeout) n as
+    go _ n (Df.Data _ _:as) =
+      -- Circuit produced a valid cycle, reset timeout
+      go (fromMaybe maxBound eoTimeout) (pred n) as
 
 instance (TestType a, C.KnownDomain dom) => Test (Dfs dom a) where
-  type ExpectType (Dfs dom a) = [a]
-
-  expectToSimulateType Proxy = map Just
   expectToLengths Proxy = pure . length
 
   expectN ::
@@ -138,19 +166,23 @@ instance (TestType a, C.KnownDomain dom) => Test (Dfs dom a) where
     Proxy (Dfs dom a) ->
     ExpectOptions ->
     C.Vec 1 Int ->
-    [Maybe a] ->
+    [Dfs.Data a] ->
     m [a]
   expectN Proxy (ExpectOptions{eoEmptyTail, eoTimeout}) (C.head -> nExpected) sampled = do
     go (fromMaybe maxBound eoTimeout) nExpected sampled
    where
+    catDatas [] = []
+    catDatas (Dfs.NoData:xs) = catDatas xs
+    catDatas (Dfs.Data x:xs) = x:catDatas xs
+
     go ::
-      (HasCallStack, Eq v, Show v) =>
+      HasCallStack =>
       -- Timeout counter. If it reaches zero we time out.
       Int ->
       -- Expected number of values
       Int ->
       -- Sampled data
-      [Maybe v] ->
+      [Dfs.Data a] ->
       -- Results
       m [a]
     go _timeout _n [] =
@@ -158,8 +190,8 @@ instance (TestType a, C.KnownDomain dom) => Test (Dfs dom a) where
       error "unexpected end of signal"
     go _timeout 0 rest = do
       -- Check for superfluous output from protocol
-      case catMaybes (take eoEmptyTail rest) of
-        [] -> pure (take nExpected (catMaybes sampled))
+      case catDatas (take eoEmptyTail rest) of
+        [] -> pure (take nExpected (catDatas sampled))
         superfluous ->
           let err = "Circuit produced more output than expected:" in
           H.failWith Nothing (err <> "\n\n" <> ppShow superfluous)
@@ -167,12 +199,12 @@ instance (TestType a, C.KnownDomain dom) => Test (Dfs dom a) where
       H.failWith Nothing $ concat
         [ "Circuit did not produce enough output. Expected "
         , show n, " more values. Sampled only " <> show (nExpected - n) <> ":\n\n"
-        , ppShow (take (nExpected - n) (catMaybes sampled)) ]
+        , ppShow (take (nExpected - n) (catDatas sampled)) ]
 
-    go timeout n (Nothing:as) = do
+    go timeout n (Dfs.NoData:as) = do
       -- Circuit did not output valid cycle, just continue
       go (pred timeout) n as
-    go _ n (Just _:as) =
+    go _ n (Dfs.Data _:as) =
       -- Circuit produced a valid cycle, reset timeout
       go (fromMaybe maxBound eoTimeout) (pred n) as
 
@@ -181,15 +213,6 @@ instance
   , C.KnownNat n
   , 1 <= (n * SimulateChannels a)
   , 1 <= n ) => Test (C.Vec n a) where
-  type ExpectType (C.Vec n a) = C.Vec n (ExpectType a)
-
-  expectToSimulateType ::
-    Proxy (C.Vec n a) ->
-    C.Vec n (ExpectType a) ->
-    C.Vec n (SimulateType a)
-  expectToSimulateType Proxy =
-    C.map (expectToSimulateType (Proxy @a))
-
   expectToLengths ::
     Proxy (C.Vec n a) ->
     ExpectType (C.Vec n a) ->
@@ -215,16 +238,6 @@ instance
 instance
   ( Test a, Test b
   , 1 <= (SimulateChannels a + SimulateChannels b) ) => Test (a, b) where
-  type ExpectType (a, b) = (ExpectType a, ExpectType b)
-
-  expectToSimulateType ::
-    Proxy (a, b) ->
-    (ExpectType a, ExpectType b) ->
-    (SimulateType a, SimulateType b)
-  expectToSimulateType Proxy (t1, t2) =
-    ( expectToSimulateType (Proxy @a) t1
-    , expectToSimulateType (Proxy @b) t2 )
-
   expectToLengths ::
     Proxy (a, b) ->
     (ExpectType a, ExpectType b) ->

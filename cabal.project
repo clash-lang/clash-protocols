@@ -1,5 +1,6 @@
 packages:
   clash-protocols.cabal
+  deps/circuit-notation/circuit-notation.cabal
 
 package clash-prelude
   -- 'large-tuples' generates tuple instances for various classes up to the

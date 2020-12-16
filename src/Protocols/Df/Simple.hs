@@ -18,7 +18,7 @@ module Protocols.Df.Simple where
 
 import Clash.Signal.Internal (Signal(..))
 
-import           Prelude hiding ((!!), map, zip, zipWith)
+import           Prelude hiding ((!!), map, zip, zipWith, filter)
 
 import           Control.Applicative (Alternative((<|>)), Applicative(liftA2))
 import qualified Data.Bifunctor as B
@@ -29,12 +29,12 @@ import           Data.Default (Default)
 import           Data.Kind (Type)
 import qualified Data.Tuple.Extra as T
 import qualified Data.List.NonEmpty
-import           Data.Maybe (fromMaybe)
+import           Data.Maybe (mapMaybe, fromMaybe)
+import           Data.Proxy
 import qualified Prelude as P
 
 import           Clash.Prelude (type (<=), type (-), type (+), (!!))
 import qualified Clash.Prelude as C
-import qualified Clash.Explicit.Prelude as CE
 
 import           Protocols.Internal hiding (Ack(..))
 import qualified Protocols.Internal as Protocols
@@ -43,8 +43,14 @@ import           Protocols.Df (Df)
 import qualified Protocols.DfLike as DfLike
 import           Protocols.DfLike (DfLike)
 
+import           Control.DeepSeq (NFData)
+import           GHC.Generics (Generic)
 import           GHC.Stack (HasCallStack)
 
+-- $setup
+-- >>> import Protocols
+-- >>> import Clash.Prelude (Vec(..))
+-- >>> import qualified Prelude as P
 
 -- | Like 'Protocols.Df', but without metadata.
 --
@@ -71,7 +77,7 @@ data Data a
   = NoData
   -- | Send /a/
   | Data !a
-  deriving (Functor)
+  deriving (Functor, Generic, C.NFDataX, C.ShowX, Eq, NFData, Show)
 
 instance Applicative Data where
   pure = Data
@@ -113,17 +119,16 @@ instance Default (Ack a) where
   def = Ack True
 
 instance (C.KnownDomain dom, C.NFDataX a, C.ShowX a, Show a) => Simulate (Dfs dom a) where
-  type SimulateType (Dfs dom a) = [Maybe a]
+  type SimulateType (Dfs dom a) = [Data a]
+  type ExpectType (Dfs dom a) = [a]
   type SimulateChannels (Dfs dom a) = 1
 
-  driveC SimulationConfig{resetCycles} inp =
-    drive (Df.resetGen resetCycles) inp
+  toSimulateType Proxy = P.map Data
+  fromSimulateType Proxy = mapMaybe dataToMaybe
 
-  sampleC SimulationConfig{resetCycles} =
-    sample (Df.resetGen resetCycles) maxBound
-
-  stallC SimulationConfig{resetCycles} (C.head -> (stallAck, stalls)) =
-    stall (Df.resetGen resetCycles) stallAck stalls
+  driveC = drive
+  sampleC = sample
+  stallC conf (C.head -> (stallAck, stalls)) = stall conf stallAck stalls
 
 instance DfLike dom (Dfs dom a) where
   type Payload (Dfs dom a)  = a
@@ -184,12 +189,24 @@ const = DfLike.const ()
 pure :: a -> Circuit () (Dfs dom a)
 pure = DfLike.pure ()
 
--- | Like 'Data.Maybe.catMaybes', but over payload (/a/) of a Df stream.
+-- | Like 'Data.Maybe.catMaybes', but over a Dfs stream.
+--
+-- Example:
+--
+-- >>> take 2 (simulateCS (catMaybes @C.System @Int) [Nothing, Just 1, Nothing, Just 3])
+-- [1,3]
+--
 catMaybes :: Circuit (Dfs dom (Maybe a)) (Dfs dom a)
 catMaybes = DfLike.catMaybes
 
--- | Like 'P.filter', but over payload (/a/) of a 'Dfs' stream.
-filter :: (a -> Bool) -> Circuit (Dfs dom a) (Dfs dom a)
+-- | Like 'P.filter', but over a 'Dfs' stream.
+--
+-- Example:
+--
+-- >>> take 3 (simulateCS (filter @C.System @Int (>5)) [1, 5, 7, 10, 3, 11])
+-- [7,10,11]
+--
+filter :: forall dom a. (a -> Bool) -> Circuit (Dfs dom a) (Dfs dom a)
 filter = DfLike.filter
 
 -- | Like 'Data.Either.Combinators.mapLeft', but over payload of a 'Dfs' stream.
@@ -205,8 +222,14 @@ either :: (a -> c) -> (b -> c) -> Circuit (Dfs dom (Either a b)) (Dfs dom c)
 either f g = DfLike.map (P.either f g)
 
 -- | Like 'P.zipWith', but over two 'Dfs' streams.
+--
+-- Example:
+--
+-- >>> take 3 (simulateCS (zipWith @C.System @Int (+)) ([1, 3, 5], [2, 4, 7]))
+-- [3,7,12]
+--
 zipWith ::
-  forall a b c dom.
+  forall dom a b c.
   (a -> b -> c) ->
   Circuit
     (Dfs dom a, Dfs dom b)
@@ -222,7 +245,15 @@ zip :: forall a b dom. Circuit (Dfs dom a, Dfs dom b) (Dfs dom (a, b))
 zip = zipWith (,)
 
 -- | Like 'P.partition', but over 'Dfs' streams
-partition :: (a -> Bool) -> Circuit (Dfs dom a) (Dfs dom a, Dfs dom a)
+--
+-- Example:
+--
+-- >>> let input = [1, 3, 5, 7, 9, 2, 11]
+-- >>> let output = simulateCS (partition @C.System @Int (>5)) input
+-- >>> B.bimap (take 3) (take 4) output
+-- ([7,9,11],[1,3,5,2])
+--
+partition :: forall dom a. (a -> Bool) -> Circuit (Dfs dom a) (Dfs dom a, Dfs dom a)
 partition f =
   Circuit (B.second C.unbundle . C.unbundle . fmap go . C.bundle . B.second C.bundle)
  where
@@ -232,8 +263,16 @@ partition f =
   go _ = (Ack False, (NoData, NoData))
 
 -- | Route a 'Dfs' stream to another corresponding to the index
+--
+-- Example:
+--
+-- >>> let input = [(0, 3), (0, 5), (1, 7), (2, 13), (1, 11), (2, 1)]
+-- >>> let output = simulateCS (route @3 @C.System @Int) input
+-- >>> fmap (take 2) output
+-- <[3,5],[7,11],[13,1]>
+--
 route ::
-  forall n a dom. C.KnownNat n =>
+  forall n dom a. C.KnownNat n =>
   Circuit (Dfs dom (C.Index n, a)) (C.Vec n (Dfs dom a))
 route =
   Circuit (B.second C.unbundle . C.unbundle . fmap go . C.bundle . B.second C.bundle)
@@ -244,15 +283,33 @@ route =
 
 -- | Select data from the channel indicated by the 'Dfs' stream carrying
 -- @Index n@.
+--
+-- Example:
+--
+-- >>> let indices = [1, 1, 2, 0, 2]
+-- >>> let dats = [8] :> [5, 7] :> [9, 1] :> Nil
+-- >>> let output = simulateCS (select @3 @C.System @Int) (dats, indices)
+-- >>> take 5 output
+-- [5,7,9,8,1]
+--
 select ::
-  forall n a dom.
+  forall n dom a.
   C.KnownNat n =>
   Circuit (C.Vec n (Dfs dom a), Dfs dom (C.Index n)) (Dfs dom a)
 select = selectUntil (P.const True)
 
 -- | Select /selectN/ samples from channel /n/.
+--
+-- Example:
+--
+-- >>> let indices = [(0, 2), (1, 3), (0, 2)]
+-- >>> let dats = [10, 20, 30, 40] :> [11, 22, 33] :> Nil
+-- >>> let circuit = C.exposeClockResetEnable (selectN @2 @10 @C.System @Int)
+-- >>> take 7 (simulateCSE circuit (dats, indices))
+-- [10,20,11,22,33,30,40]
+--
 selectN ::
-  forall n selectN a dom.
+  forall n selectN dom a.
   ( C.HiddenClockResetEnable dom
   , C.KnownNat selectN
   , C.KnownNat n
@@ -291,8 +348,19 @@ selectN = Circuit $
 
 -- | Selects samples from channel /n/ until the predicate holds. The cycle in
 -- which the predicate turns true is included.
+--
+-- Example:
+--
+-- >>> let indices = [0, 0, 1, 2]
+-- >>> let channel1 = [(10, False), (20, False), (30, True), (40, True)]
+-- >>> let channel2 = [(11, False), (21, True)]
+-- >>> let channel3 = [(12, False), (22, False), (32, False), (42, True)]
+-- >>> let dats = channel1 :> channel2 :> channel3 :> Nil
+-- >>> take 10 (simulateCS (selectUntil @3 @C.System @(Int, Bool) P.snd) (dats, indices))
+-- [(10,False),(20,False),(30,True),(40,True),(11,False),(21,True),(12,False),(22,False),(32,False),(42,True)]
+--
 selectUntil ::
-  forall n a dom.
+  forall n dom a.
   C.KnownNat n =>
   (a -> Bool) ->
   Circuit
@@ -342,12 +410,20 @@ fanout ::
   Circuit (Dfs dom a) (C.Vec n (Dfs dom a))
 fanout = DfLike.fanout
 
--- | Merge data of multiple 'Dfs' streams using Monoid's '<>'.
+-- | Merge data of multiple 'Dfs' streams using a user supplied function
 fanin ::
+  forall n dom a .
+  (C.KnownNat n, 1 <= n) =>
+  (a -> a -> a) ->
+  Circuit (C.Vec n (Dfs dom a)) (Dfs dom a)
+fanin f = bundleVec |> map (C.fold @_ @(n-1) f)
+
+-- | Merge data of multiple 'Dfs' streams using Monoid's '<>'.
+mfanin ::
   forall n dom a .
   (C.KnownNat n, Monoid a, 1 <= n) =>
   Circuit (C.Vec n (Dfs dom a)) (Dfs dom a)
-fanin = bundleVec |> map (C.fold @_ @(n-1) (<>))
+mfanin = fanin (<>)
 
 -- | Bundle a vector of 'Dfs' streams into one.
 bundleVec ::
@@ -478,11 +554,15 @@ registerBwd = DfLike.registerBwd
 drive ::
   forall dom a.
   C.KnownDomain dom =>
-  CE.Reset dom ->
-  [Maybe a] ->
+  SimulationConfig ->
+  [Data a] ->
   Circuit () (Dfs dom a)
-drive rst s0 =
-  Df.drive rst (P.map (fmap ((),)) s0) |> DfLike.fromDf
+drive conf s0 =
+  Df.drive conf (P.map toDfData s0) |> DfLike.fromDf
+ where
+  toDfData :: Data a -> Df.Data () a
+  toDfData NoData = Df.NoData
+  toDfData (Data a) = Df.Data () a
 
 -- | Sample protocol to a list of values. Drops values while reset is asserted.
 -- Not synthesizable.
@@ -491,12 +571,15 @@ drive rst s0 =
 sample ::
   forall dom b.
   C.KnownDomain dom =>
-  CE.Reset dom ->
-  Int ->
+  SimulationConfig ->
   Circuit () (Dfs dom b) ->
-  [Maybe b]
-sample rst timeoutAfter c =
-  P.map (fmap P.snd) (Df.sample rst timeoutAfter (c |> DfLike.toDf))
+  [Data b]
+sample conf c =
+  P.map fromDfData (Df.sample conf (c |> DfLike.toDf))
+ where
+  fromDfData :: Df.Data () b -> Data b
+  fromDfData Df.NoData = NoData
+  fromDfData (Df.Data _ a) = Data a
 
 -- | Stall every valid Dfs packet with a given number of cycles. If there are
 -- more valid packets than given numbers, passthrough all valid packets without
@@ -507,15 +590,15 @@ stall ::
   forall dom a.
   ( C.KnownDomain dom
   , HasCallStack ) =>
-  CE.Reset dom ->
+  SimulationConfig ->
   -- | Acknowledgement to send when LHS does not send data. Stall will act
   -- transparently when reset is asserted.
   StallAck ->
   -- Number of cycles to stall for every valid Df packet
   [Int] ->
   Circuit (Dfs dom a) (Dfs dom a)
-stall rst stallAck stalls =
-  DfLike.toDf |> Df.stall rst stallAck stalls |> DfLike.fromDf
+stall conf stallAck stalls =
+  DfLike.toDf |> Df.stall conf stallAck stalls |> DfLike.fromDf
 
 -- | Simulate a single domain protocol. Not synthesizable.
 --
@@ -531,12 +614,20 @@ simulate ::
     C.Enable dom ->
     Circuit (Dfs dom a) (Dfs dom b) ) ->
   -- | Inputs
-  [Maybe a] ->
+  [Data a] ->
   -- | Outputs
-  [Maybe b]
+  [Data b]
 simulate conf circ inputs =
-    P.map (fmap P.snd)
+    P.map fromDfData
   $ Df.simulate conf circDf
-  $ P.map (fmap ((),)) inputs
+  $ P.map toDfData inputs
  where
   circDf clk rst ena = DfLike.fromDf |> circ clk rst ena |> DfLike.toDf
+
+  toDfData :: Data a -> Df.Data () a
+  toDfData NoData = Df.NoData
+  toDfData (Data a) = Df.Data () a
+
+  fromDfData :: Df.Data () b -> Data b
+  fromDfData Df.NoData = NoData
+  fromDfData (Df.Data _ a) = Data a

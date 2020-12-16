@@ -71,6 +71,9 @@ import           Data.List ((\\))
 import           Data.Kind (Type)
 import qualified Data.Maybe as Maybe
 import qualified Data.Tuple.Extra as T
+import           Data.Proxy
+
+import           Control.DeepSeq (NFData)
 import           GHC.Stack (HasCallStack)
 import           GHC.Generics (Generic)
 
@@ -110,17 +113,16 @@ instance Backpressure (Df dom meta a) where
 instance ( C.KnownDomain dom
          , C.NFDataX meta, C.ShowX meta, Show meta
          , C.NFDataX a, C.ShowX a, Show a ) => Simulate (Df dom meta a) where
-  type SimulateType (Df dom meta a) = [Maybe (meta, a)]
+  type SimulateType (Df dom meta a) = [Data meta a]
+  type ExpectType (Df dom meta a) = [(meta, a)]
   type SimulateChannels (Df dom meta a) = 1
 
-  driveC SimulationConfig{resetCycles} inp =
-    drive (resetGen resetCycles) inp
+  toSimulateType Proxy = P.map (uncurry Data)
+  fromSimulateType Proxy = Maybe.mapMaybe dataToMaybe
 
-  sampleC SimulationConfig{resetCycles} =
-    sample (resetGen resetCycles) maxBound
-
-  stallC SimulationConfig{resetCycles} (C.head -> (stallAck, stalls)) =
-    stall (resetGen resetCycles) stallAck stalls
+  driveC = drive
+  sampleC = sample
+  stallC conf (C.head -> (stallAck, stalls)) = stall conf stallAck stalls
 
 -- | Data sent over forward channel of 'Df'. Note that this data type is strict
 -- on its fields. If you need lazy behavior, check out "Protocols.Df.Lazy".
@@ -129,7 +131,11 @@ data Data meta a
   = NoData
   -- | Send /meta/ and /a/
   | Data !meta !a
-  deriving (Functor, Generic, C.NFDataX)
+  deriving (Functor, Generic, C.NFDataX, C.ShowX, Eq, NFData, Show)
+
+dataToMaybe :: Data meta a -> Maybe (meta, a)
+dataToMaybe (Data meta a) = Just (meta, a)
+dataToMaybe NoData = Nothing
 
 instance Bifunctor Data where
   bimap _fab _fcd NoData = NoData
@@ -427,22 +433,24 @@ registerBwd = mealy go (Nothing, Nothing)
 drive ::
   forall dom meta a.
   C.KnownDomain dom =>
-  CE.Reset dom ->
-  [Maybe (meta, a)] ->
+  SimulationConfig  ->
+  [Data meta a] ->
   Circuit () (Df dom meta a)
-drive rst s0 = Circuit $
+drive SimulationConfig{resetCycles} s0 = Circuit $
     ((),)
   . C.fromList_lazy
   . go s0 (CE.sample (C.unsafeToHighPolarity rst))
   . CE.sample_lazy
   . P.snd
  where
-  go _                    []             _           = error "Unexpected end of reset"
-  go _                    (True:resets)  ~(ack:acks) = NoData : (ack `C.seqX` go s0 resets acks)
-  go []                   (_:resets)     ~(ack:acks) = NoData : (ack `C.seqX` go [] resets acks)
-  go (Nothing:is)         (_:resets)     ~(ack:acks) = NoData : (ack `C.seqX` go is resets acks)
-  go (Just (meta,dat):is) (_:resets)     ~(ack:acks) =
-    Data meta dat : go (if coerce ack then is else Just (meta,dat):is) resets acks
+  go _                  []             _           = error "Unexpected end of reset"
+  go _                  (True:resets)  ~(ack:acks) = NoData : (ack `C.seqX` go s0 resets acks)
+  go []                 (_:resets)     ~(ack:acks) = NoData : (ack `C.seqX` go [] resets acks)
+  go (NoData:is)        (_:resets)     ~(ack:acks) = NoData : (ack `C.seqX` go is resets acks)
+  go (Data meta dat:is) (_:resets)     ~(ack:acks) =
+    Data meta dat : go (if coerce ack then is else Data meta dat:is) resets acks
+
+  rst = resetGen @dom resetCycles
 
 -- | Sample protocol to a list of values. Drops values while reset is asserted.
 -- Not synthesizable.
@@ -451,12 +459,11 @@ drive rst s0 = Circuit $
 sample ::
   forall dom meta b.
   C.KnownDomain dom =>
-  CE.Reset dom ->
-  Int ->
+  SimulationConfig  ->
   Circuit () (Df dom meta b) ->
-  [Maybe (meta, b)]
-sample rst timeoutAfter c =
-    P.map (\case {Data meta a -> Just (meta, a); NoData -> Nothing})
+  [Data meta b]
+sample SimulationConfig{resetCycles,ignoreReset,timeoutAfter} c =
+    (if ignoreReset then drop resetCycles else id)
   $ P.take timeoutAfter
   $ CE.sample_lazy
   $ ignoreWhileInReset
@@ -467,6 +474,8 @@ sample rst timeoutAfter c =
     (uncurry (B.bool NoData)) <$>
     C.bundle (s, C.unsafeToLowPolarity rst)
 
+  rst = resetGen @dom resetCycles
+
 -- | Stall every valid Df packet with a given number of cycles. If there are
 -- more valid packets than given numbers, passthrough all valid packets without
 -- stalling. Not synthesizable.
@@ -476,16 +485,18 @@ stall ::
   forall dom meta a.
   ( C.KnownDomain dom
   , HasCallStack ) =>
-  CE.Reset dom ->
+  SimulationConfig  ->
   -- | Acknowledgement to send when LHS does not send data. Stall will act
   -- transparently when reset is asserted.
   StallAck ->
   -- Number of cycles to stall for every valid Df packet
   [Int] ->
   Circuit (Df dom meta a) (Df dom meta a)
-stall rst stallAck stalls = Circuit $
+stall SimulationConfig{resetCycles} stallAck stalls = Circuit $
   uncurry (go stallAcks stalls (C.unsafeToHighPolarity rst))
  where
+  rst = resetGen @dom resetCycles
+
   stallAcks
     | stallAck == StallCycle = [minBound..maxBound] \\ [StallCycle]
     | otherwise = [stallAck]
@@ -539,10 +550,10 @@ simulate ::
     C.Enable dom ->
     Circuit (Df dom meta a) (Df dom meta b) ) ->
   -- | Inputs
-  [Maybe (meta, a)] ->
+  [Data meta a] ->
   -- | Outputs
-  [Maybe (meta, b)]
-simulate SimulationConfig{..} circ inputs =
-  sample rst timeoutAfter (drive rst inputs |> circ clk rst ena)
+  [Data meta b]
+simulate conf@SimulationConfig{..} circ inputs =
+  sample conf (drive conf inputs |> circ clk rst ena)
  where
   (clk, rst, ena) = (C.clockGen, resetGen resetCycles, C.enableGen)

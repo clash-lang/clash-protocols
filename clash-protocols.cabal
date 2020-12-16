@@ -93,31 +93,38 @@ common common-options
     ghc-typelits-extra,
     ghc-typelits-knownnat
 
-library inline-circuit-notation
-  visibility: private
-  hs-source-dirs: deps/circuit-notation/src
-  build-depends:
-    , base
-    , clash-prelude >= 1.0
-    , containers
-    , data-default
-    , ghc >=8.6
-    , syb
-    , lens
-    , mtl
-    , pretty
-    , parsec
-    , pretty-show
-    , template-haskell
-  exposed-modules:
-    CircuitNotation
-  default-language: Haskell2010
+custom-setup
+  setup-depends:
+    base          >= 4.11 && <5,
+    Cabal         >= 2.4,
+    cabal-doctest >= 1.0.1 && <1.1
+
+-- library inline-circuit-notation
+--   visibility: private
+--   hs-source-dirs: deps/circuit-notation/src
+--   build-depends:
+--     , base
+--     , clash-prelude >= 1.0
+--     , containers
+--     , data-default
+--     , ghc >=8.6
+--     , syb
+--     , lens
+--     , mtl
+--     , pretty
+--     , parsec
+--     , pretty-show
+--     , template-haskell
+--   exposed-modules:
+--     CircuitNotation
+--   default-language: Haskell2010
 
 library
   import: common-options
   hs-source-dirs: src
   build-depends:
-      inline-circuit-notation
+      -- inline-circuit-notation
+      circuit-notation
     , extra
     , data-default
     , deepseq
@@ -156,7 +163,7 @@ test-suite unittests
   hs-source-dirs: tests
   type: exitcode-stdio-1.0
   ghc-options: -threaded -with-rtsopts=-N
-  main-is: tests.hs
+  main-is: unittests.hs
   other-modules:
     Tests.Protocols
     Tests.Protocols.Df
@@ -175,3 +182,16 @@ test-suite unittests
     tasty >= 1.2 && < 1.5,
     tasty-hedgehog,
     tasty-th
+
+test-suite doctests
+  import:           common-options
+  type:             exitcode-stdio-1.0
+  default-language: Haskell2010
+  main-is:          doctests.hs
+  hs-source-dirs:   tests
+
+  build-depends:
+    base,
+    clash-protocols,
+    process,
+    doctest >= 0.17 && < 0.18

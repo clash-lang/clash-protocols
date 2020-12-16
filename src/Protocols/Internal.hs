@@ -9,6 +9,7 @@ Internal module to prevent hs-boot files (breaks Haddock)
 
 module Protocols.Internal where
 
+import           Data.Proxy
 import           GHC.Base (Any)
 import           Prelude hiding (map, const)
 
@@ -22,6 +23,10 @@ import           Data.Default (Default(def))
 import           Data.Kind (Type)
 import           Data.Tuple (swap)
 import           GHC.Generics (Generic)
+
+{- $setup
+>>> import Protocols
+-}
 
 -- | A /Circuit/, in its most general form, corresponds to a component with two
 -- pairs of an input and output. As a diagram:
@@ -326,17 +331,27 @@ prod2C (Circuit a) (Circuit c) =
 -- instead.
 data SimulationConfig = SimulationConfig
   { -- | Assert reset for a number of cycles before driving the protocol
+    --
+    -- Default: 100
     resetCycles :: Int
 
     -- | Timeout after /n/ cycles. Only affects sample functions.
+    --
+    -- Default: 'maxBound'
   , timeoutAfter :: Int
+
+    -- | Ignore cycles while in reset (sampleC)
+    --
+    -- Default: False
+  , ignoreReset :: Bool
   }
   deriving (Show)
 
 instance Default SimulationConfig where
   def = SimulationConfig
     { resetCycles = 100
-    , timeoutAfter = maxBound }
+    , timeoutAfter = maxBound
+    , ignoreReset = False }
 
 -- | Determines what kind of acknowledgement signal 'stallC' will send when its
 -- input component is not sending any data. Note that, in the Df protocol,
@@ -361,15 +376,48 @@ class (C.KnownNat (SimulateChannels a), Backpressure a) => Simulate a where
   --
   -- >>> :kind! (forall dom a. SimulateType (Dfs dom a))
   -- ...
-  -- = [Maybe (meta, a)]
+  -- = [Data a]
   --
-  -- This means sampling a @Circuit () (Dfs dom a)@ yields @[Maybe a]@.
+  -- This means sampling a @Circuit () (Dfs dom a)@ with 'sampleC' yields
+  -- @[Data a]@.
   type SimulateType a :: Type
+
+  -- | Similar to 'SimulateType', but without backpressure information. For
+  -- example:
+  --
+  -- >>> :kind! (forall dom a. ExpectType (Dfs dom a))
+  -- ...
+  -- = [a]
+  --
+  -- Useful in situations where you only care about the "pure functionality" of
+  -- a circuit, not its timing information. Leveraged by various functions
+  -- in "Protocols.Hedgehog" and 'simulateCS'.
+  type ExpectType a :: Type
 
   -- | The number of simulation channel this channel has after flattening it.
   -- For example, @(Dfs dom a, Dfs dom a)@ has 2, while
   -- @Vec 4 (Dfs dom a, Dfs dom a)@ has 8.
   type SimulateChannels a :: C.Nat
+
+  -- | Convert a /ExpectType a/, a type representing data without backpressure,
+  -- into a type that does, /SimulateType a/.
+  toSimulateType ::
+    -- | Type witness
+    Proxy a ->
+    -- | Expect type: input for a protocol /without/ stall information
+    ExpectType a ->
+    -- | Expect type: input for a protocol /with/ stall information
+    SimulateType a
+
+  -- | Convert a /ExpectType a/, a type representing data without backpressure,
+  -- into a type that does, /SimulateType a/.
+  fromSimulateType ::
+    -- | Type witness
+    Proxy a ->
+    -- | Expect type: input for a protocol /with/ stall information
+    SimulateType a ->
+    -- | Expect type: input for a protocol /without/ stall information
+    ExpectType a
 
   -- | Create a /driving/ circuit. Can be used in combination with 'sampleC'
   -- to simulate a circuit. Related: 'simulateC'.
@@ -403,7 +451,11 @@ class (C.KnownNat (SimulateChannels a), Backpressure a) => Simulate a where
 
 instance Simulate () where
   type SimulateType () = ()
+  type ExpectType () = ()
   type SimulateChannels () = 0
+
+  toSimulateType Proxy () = ()
+  fromSimulateType Proxy () = ()
 
   driveC _ _ = idC
   sampleC _  _ = ()
@@ -411,7 +463,16 @@ instance Simulate () where
 
 instance (Simulate a, Simulate b) => Simulate (a, b) where
   type SimulateType (a, b) = (SimulateType a, SimulateType b)
+  type ExpectType (a, b) = (ExpectType a, ExpectType b)
   type SimulateChannels (a, b) = SimulateChannels a + SimulateChannels b
+
+  toSimulateType Proxy (t1, t2) =
+    ( toSimulateType (Proxy @a) t1
+    , toSimulateType (Proxy @b) t2 )
+
+  fromSimulateType Proxy (t1, t2) =
+    ( fromSimulateType (Proxy @a) t1
+    , fromSimulateType (Proxy @b) t2 )
 
   driveC conf (fwd1, fwd2) =
     let (Circuit f1, Circuit f2) = (driveC conf fwd1, driveC conf fwd2) in
@@ -444,7 +505,11 @@ instance (Simulate a, Simulate b) => Simulate (a, b) where
 
 instance (C.KnownNat n, Simulate a) => Simulate (C.Vec n a) where
   type SimulateType (C.Vec n a) = C.Vec n (SimulateType a)
+  type ExpectType (C.Vec n a) = C.Vec n (ExpectType a)
   type SimulateChannels (C.Vec n a) = n * SimulateChannels a
+
+  toSimulateType Proxy = C.map (toSimulateType (Proxy @a))
+  fromSimulateType Proxy = C.map (fromSimulateType (Proxy @a))
 
   driveC conf fwds =
     let circuits = C.map (($ ()) . curry . toSignals . driveC conf) fwds in
@@ -469,30 +534,36 @@ instance Default (CSignal dom (Const () a)) where
 
 instance (C.NFDataX a, C.ShowX a, Show a) => Simulate (CSignal dom a) where
   type SimulateType (CSignal dom a) = [a]
+  type ExpectType (CSignal dom a) = [a]
   type SimulateChannels (CSignal dom a) = 1
+
+  toSimulateType Proxy = id
+  fromSimulateType Proxy = id
 
   driveC _conf [] = error "CSignal.driveC: Can't drive with empty list"
   driveC SimulationConfig{resetCycles} fwd0@(f:_) =
     let fwd1 = C.fromList_lazy (replicate resetCycles f <> fwd0 <> repeat f) in
     Circuit ( \_ -> ((), CSignal fwd1) )
 
-  sampleC SimulationConfig{resetCycles} (Circuit f) =
-    drop resetCycles (CE.sample_lazy ((\(CSignal s) -> s) (snd (f ((), def)))))
+  sampleC SimulationConfig{resetCycles, ignoreReset} (Circuit f) =
+    let sampled = CE.sample_lazy ((\(CSignal s) -> s) (snd (f ((), def)))) in
+    if ignoreReset then drop resetCycles sampled else sampled
 
   stallC _ _ = idC
 
--- | Simulate a circuit. Not synthesizable.
+-- | Simulate a circuit. Includes samples while reset is asserted.
+-- Not synthesizable.
 --
 -- To figure out what input you need to supply, either solve the type
 -- "SimulateType" manually, or let the repl do the work for you! Example:
 --
--- >>> :kind! (forall dom meta a. SimulateType (Df dom meta a))
+-- >>> :kind! (forall dom a. SimulateType (Dfs dom a))
 -- ...
--- = [Maybe (meta, a)]
+-- = [Protocols.Df.Simple.Data a]
 --
--- This would mean a @Circuit (Df dom meta a) (Df dom meta b)@ would need
--- @[(meta, a)]@ as the last argument of 'simulateC' and would result in
--- @[(meta, b)]@. Note that for this particular type you can neither supply
+-- This would mean a @Circuit (Dfs dom a) (Dfs dom b)@ would need
+-- @[Data a]@ as the last argument of 'simulateC' and would result in
+-- @[Data b]@. Note that for this particular type you can neither supply
 -- stalls nor introduce backpressure. If you want to to this use 'Df.stall'.
 simulateC ::
   forall a b.
@@ -508,6 +579,47 @@ simulateC ::
   SimulateType b
 simulateC c conf as =
   sampleC conf (driveC conf as |> c)
+
+-- | Like 'simulateC', but does not allow caller to control and observe
+-- backpressure. Furthermore, it ignores all data produced while the reset is
+-- asserted.
+--
+-- Example:
+--
+-- >>> import qualified Protocols.Df.Simple as Dfs
+-- >>> take 2 (simulateCS (Dfs.catMaybes @C.System @Int) [Nothing, Just 1, Nothing, Just 3])
+-- [1,3]
+simulateCS ::
+  forall a b.
+  (Simulate a, Simulate b) =>
+  -- | Circuit to simulate
+  Circuit a b ->
+  -- | Circuit input
+  ExpectType a ->
+  -- | Circuit output
+  ExpectType b
+simulateCS c =
+     fromSimulateType (Proxy @b)
+   . simulateC c def{ignoreReset=True}
+   . toSimulateType (Proxy @a)
+
+-- | Like 'simulateCS', but takes a circuit expecting a clock, reset, and enable.
+simulateCSE ::
+  forall dom a b.
+  (Simulate a, Simulate b, C.KnownDomain dom) =>
+  -- | Circuit to simulate
+  (C.Clock dom -> C.Reset dom -> C.Enable dom -> Circuit a b) ->
+  -- | Circuit input
+  ExpectType a ->
+  -- | Circuit output
+  ExpectType b
+simulateCSE c = simulateCS (c clk rst ena)
+ where
+  clk = C.clockGen
+  rst = resetGen (resetCycles def)
+  ena = C.enableGen
+
+  resetGen n = C.unsafeFromHighPolarity (C.fromList (replicate n True <> repeat False))
 
 -- | Picked up by "Protocols.Plugin" to process protocol DSL. See
 -- "Protocols.Plugin" for more information.

@@ -239,9 +239,17 @@ prop_fanin :: Property
 prop_fanin =
   idWithModel
     defExpectOptions
+    (genVecData genSmallInt)
+    (map sum . transpose . C.toList)
+    (Dfs.fanin @3 @C.System @Int (+))
+
+prop_mfanin :: Property
+prop_mfanin =
+  idWithModel
+    defExpectOptions
     (genVecData genSmallPlusInt)
     (map fold . transpose . C.toList)
-    (Dfs.fanin @3 @C.System @PlusInt)
+    (Dfs.mfanin @3 @C.System @PlusInt)
 
 prop_zipWith :: Property
 prop_zipWith =
@@ -253,7 +261,7 @@ prop_zipWith =
         let n = min (length as) (length bs)
         pure (take n as, take n bs) )
     (uncurry (zipWith (+)))
-    (Dfs.zipWith @Int @Int @_ @C.System (+))
+    (Dfs.zipWith @C.System @Int @Int (+))
 
 prop_zip :: Property
 prop_zip =
@@ -273,7 +281,7 @@ prop_partition =
     defExpectOptions
     (genData genSmallInt)
     (partition (>5))
-    (Dfs.partition @Int @C.System (>5))
+    (Dfs.partition @C.System @Int (>5))
 
 prop_route :: Property
 prop_route =
@@ -281,7 +289,7 @@ prop_route =
     defExpectOptions
     (zip <$> genData Gen.enumBounded <*> genData genSmallInt)
     (\inp -> C.map (\i -> map snd (filter ((==i) . fst) inp)) C.indicesI)
-    (Dfs.route @3 @Int @C.System)
+    (Dfs.route @3 @C.System @Int)
 
 prop_select :: Property
 prop_select =
@@ -289,7 +297,7 @@ prop_select =
     defExpectOptions
     goGen
     (snd . uncurry (mapAccumL goModel))
-    (Dfs.select @3 @Int @C.System)
+    (Dfs.select @3 @C.System @Int)
  where
   goModel :: C.Vec 3 [Int] -> C.Index 3 -> (C.Vec 3 [Int], Int)
   goModel vec ix = let (i:is) = vec C.!! ix in (C.replace ix is vec, i)
@@ -309,7 +317,7 @@ prop_selectN =
     defExpectOptions
     goGen
     (\_ _ _ -> concat . snd . uncurry (mapAccumL goModel))
-    (C.exposeClockResetEnable (Dfs.selectN @3 @10 @Int @C.System))
+    (C.exposeClockResetEnable (Dfs.selectN @3 @10 @C.System @Int))
  where
   goModel :: C.Vec 3 [Int] -> (C.Index 3, C.Index 10) -> (C.Vec 3 [Int], [Int])
   goModel vec (ix, len) =
@@ -333,7 +341,7 @@ prop_selectUntil =
     defExpectOptions
     goGen
     (concat . snd . uncurry (mapAccumL goModel))
-    (Dfs.selectUntil @3 @(Int, Bool) @C.System snd)
+    (Dfs.selectUntil @3 @C.System @(Int, Bool) snd)
  where
   goModel :: C.Vec 3 [(Int, Bool)] -> C.Index 3 -> (C.Vec 3 [(Int, Bool)], [(Int, Bool)])
   goModel vec ix =
