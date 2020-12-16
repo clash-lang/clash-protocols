@@ -13,7 +13,6 @@ import Prelude
 import GHC.Stack (withFrozenCallStack, HasCallStack)
 import Control.Monad (forM)
 import Data.Maybe (fromMaybe)
-import Data.Kind (Type)
 import Data.Proxy (Proxy(Proxy))
 
 -- clash-protocols
@@ -76,18 +75,6 @@ class ( Simulate a
       -- Foldable requirement on Vec :(
       , 1 <= SimulateChannels a
       ) => Test a where
-  type ExpectType a :: Type
-
-  -- | Convert a /ExpectType a/, a type representing data without backpressure,
-  -- into a type that does, /SimulateType a/.
-  expectToSimulateType ::
-    -- | Type witness
-    Proxy a ->
-    -- | Expect type: input for a protocol /without/ stall information
-    ExpectType a ->
-    -- | Expect type: input for a protocol /with/ stall information
-    SimulateType a
-
   -- | Get the number of expected valid data cycles for each data channel,
   -- given a list of expected data.
   expectToLengths ::
@@ -120,9 +107,6 @@ class ( Simulate a
     m (ExpectType a)
 
 instance (TestType meta, TestType a, C.KnownDomain dom) => Test (Df dom meta a) where
-  type ExpectType (Df dom meta a) = [(meta, a)]
-
-  expectToSimulateType Proxy = map (uncurry Df.Data)
   expectToLengths Proxy = pure . length
 
   expectN ::
@@ -174,9 +158,6 @@ instance (TestType meta, TestType a, C.KnownDomain dom) => Test (Df dom meta a) 
       go (fromMaybe maxBound eoTimeout) (pred n) as
 
 instance (TestType a, C.KnownDomain dom) => Test (Dfs dom a) where
-  type ExpectType (Dfs dom a) = [a]
-
-  expectToSimulateType Proxy = map Dfs.Data
   expectToLengths Proxy = pure . length
 
   expectN ::
@@ -232,15 +213,6 @@ instance
   , C.KnownNat n
   , 1 <= (n * SimulateChannels a)
   , 1 <= n ) => Test (C.Vec n a) where
-  type ExpectType (C.Vec n a) = C.Vec n (ExpectType a)
-
-  expectToSimulateType ::
-    Proxy (C.Vec n a) ->
-    C.Vec n (ExpectType a) ->
-    C.Vec n (SimulateType a)
-  expectToSimulateType Proxy =
-    C.map (expectToSimulateType (Proxy @a))
-
   expectToLengths ::
     Proxy (C.Vec n a) ->
     ExpectType (C.Vec n a) ->
@@ -266,16 +238,6 @@ instance
 instance
   ( Test a, Test b
   , 1 <= (SimulateChannels a + SimulateChannels b) ) => Test (a, b) where
-  type ExpectType (a, b) = (ExpectType a, ExpectType b)
-
-  expectToSimulateType ::
-    Proxy (a, b) ->
-    (ExpectType a, ExpectType b) ->
-    (SimulateType a, SimulateType b)
-  expectToSimulateType Proxy (t1, t2) =
-    ( expectToSimulateType (Proxy @a) t1
-    , expectToSimulateType (Proxy @b) t2 )
-
   expectToLengths ::
     Proxy (a, b) ->
     (ExpectType a, ExpectType b) ->

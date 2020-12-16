@@ -31,15 +31,27 @@ module Protocols
   , prod2C
 
     -- * Simulation
-  , Simulate(SimulateType, SimulateChannels, driveC, sampleC, stallC)
+  , Simulate
+     ( SimulateType
+     , ExpectType
+     , SimulateChannels
+     , toSimulateType
+     , fromSimulateType
+     , driveC
+     , sampleC
+     , stallC
+     )
   , SimulationConfig(..)
   , StallAck(..)
   , simulateC
+  , simulateCS
+  , def
 
     -- * Circuit notation plugin
   , circuit
   ) where
 
+import Data.Default (def)
 import Protocols.Internal
 import Protocols.Df (Df)
 import Protocols.Df.Simple (Dfs)

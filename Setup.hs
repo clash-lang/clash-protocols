@@ -1,5 +1,5 @@
 import Prelude
-import Distribution.Simple
+import Distribution.Extra.Doctest (defaultMainWithDoctests)
 
 main :: IO ()
-main = defaultMain
+main = defaultMainWithDoctests "doctests"
