@@ -1,18 +1,15 @@
-resolver: lts-14.27
+resolver: nightly-2020-12-14
 
 packages:
   - .
-  - deps/circuit-notation
 
 extra-deps:
-- ghc-typelits-extra-0.4@sha256:e1ba4ebf14cb7025dd940380dfb15db444f7e8bced7e30bdad6e1707f0af7622,4813
-- ghc-typelits-knownnat-0.7.2@sha256:63054c8108f21a4bc5ace477227476b72a4e3792f35f37f2d406eef262ae4346,4711
-- ghc-typelits-natnormalise-0.7.2@sha256:0fc48a3744aa25e5e53a054a8bb1fe6410752e497f446d75db9bd67bb258d05e,3495
-- clash-prelude-1.2.5@sha256:2ea4d0506adfccd0e817a67e47de132290a856535dd69bcc71e7fbce24ece3f2,15307
 - git: https://github.com/martijnbastiaan/haskell-hedgehog.git
   commit: 41e87d110d3b2b7b522d29d7c0500672f2640dcc
   subdirs:
     - hedgehog
+- git: https://github.com/cchalmers/circuit-notation.git
+  commit: 0fe897cb95bd1be87abed044f4072f104dec2f7d
 
 flags:
   clash-prelude:

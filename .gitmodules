@@ -1,3 +1,0 @@
-[submodule "deps/circuit-notation"]
-	path = deps/circuit-notation
-	url = https://github.com/martijnbastiaan/circuit-notation.git

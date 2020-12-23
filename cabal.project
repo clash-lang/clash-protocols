@@ -1,6 +1,5 @@
 packages:
   clash-protocols.cabal
-  deps/circuit-notation/circuit-notation.cabal
 
 package clash-prelude
   -- 'large-tuples' generates tuple instances for various classes up to the
@@ -8,6 +7,11 @@ package clash-prelude
   -- Clash, and triggers Template Haskell bugs on Windows. Hence, we disable
   -- it by default. This will be the default for Clash >=1.4.
   flags: -large-tuples
+
+source-repository-package
+    type: git
+    location: https://github.com/cchalmers/circuit-notation.git
+    tag: 0fe897cb95bd1be87abed044f4072f104dec2f7d
 
 source-repository-package
     type: git
