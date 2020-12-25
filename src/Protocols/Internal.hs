@@ -75,10 +75,10 @@ import           GHC.Generics (Generic)
 -- allowing the circuit to signal whether it processed the sent data or not. Similarly,
 -- we'd like the sender to be able to indicate that it doesn't have any data to
 -- send. These kind of protocols fall under the umbrella of "dataflow" protocols,
--- so lets call it /DataFlowSimple/ or /Dfs/ for short:
+-- so lets call it /DataFlowSimple/ or /Df/ for short:
 --
 -- @
---   data Dfs (dom :: Domain) (a :: Type)
+--   data Df (dom :: Domain) (a :: Type)
 -- @
 --
 -- We're only going to use it on the type level, so we won't need any
@@ -108,16 +108,16 @@ import           GHC.Generics (Generic)
 -- /Bwd/:
 --
 -- @
--- instance Protocol (Dfs dom a) where
---   type Fwd (Dfs dom a) = Signal dom (Data a)
---   type Bwd (Dfs dom a) = Signal dom (Ack a)
+-- instance Protocol (Df dom a) where
+--   type Fwd (Df dom a) = Signal dom (Data a)
+--   type Bwd (Df dom a) = Signal dom (Ack a)
 -- @
 --
 -- Having defined all this, we can take a look at /Circuit/ once more: now
 -- instantiated with our types. The following:
 --
 -- @
---   f :: Circuit (Dfs dom a) (Dfs dom b)
+--   f :: Circuit (Df dom a) (Df dom b)
 -- @
 --
 -- ..now corresponds to the following protocol:
@@ -291,7 +291,7 @@ fromSignals = coerce
 -- @
 --
 -- @
--- swap :: Circuit (Dfs dom a, Dfs dom b) (Dfs dom b, Dfs dom a)
+-- swap :: Circuit (Df dom a, Df dom b) (Df dom b, Df dom a)
 -- swap = circuit $ \(a, b) -> do
 --   idC -< (b, a)
 -- @
@@ -301,7 +301,7 @@ idC = Circuit swap
 
 -- | Copy a circuit /n/ times. Note that this will copy hardware. If you are
 -- looking for a circuit that turns a single channel into multiple, check out
--- 'Protocols.Df.fanout' or 'Protocols.Df.Simple.fanout'.
+-- 'Protocols.Df.fanout'.
 repeatC ::
   forall n a b.
   Circuit a b ->
@@ -310,8 +310,7 @@ repeatC (Circuit f) =
   Circuit (C.unzip . C.map f . uncurry C.zip)
 
 -- | Combine two separate circuits into one. If you are looking to combine
--- multiple streams into a single stream, checkout 'Protocols.Df.fanin' or
--- 'Protocols.Df.zip'.
+-- multiple streams into a single stream, checkout 'Protocols.Df.fanin'.
 prod2C ::
   forall a c b d.
   Circuit a b ->
@@ -374,18 +373,18 @@ data StallAck
 class (C.KnownNat (SimulateChannels a), Backpressure a) => Simulate a where
   -- Type a /Circuit/ driver needs or sampler yields. For example:
   --
-  -- >>> :kind! (forall dom a. SimulateType (Dfs dom a))
+  -- >>> :kind! (forall dom a. SimulateType (Df dom a))
   -- ...
   -- = [Data a]
   --
-  -- This means sampling a @Circuit () (Dfs dom a)@ with 'sampleC' yields
+  -- This means sampling a @Circuit () (Df dom a)@ with 'sampleC' yields
   -- @[Data a]@.
   type SimulateType a :: Type
 
   -- | Similar to 'SimulateType', but without backpressure information. For
   -- example:
   --
-  -- >>> :kind! (forall dom a. ExpectType (Dfs dom a))
+  -- >>> :kind! (forall dom a. ExpectType (Df dom a))
   -- ...
   -- = [a]
   --
@@ -395,8 +394,8 @@ class (C.KnownNat (SimulateChannels a), Backpressure a) => Simulate a where
   type ExpectType a :: Type
 
   -- | The number of simulation channel this channel has after flattening it.
-  -- For example, @(Dfs dom a, Dfs dom a)@ has 2, while
-  -- @Vec 4 (Dfs dom a, Dfs dom a)@ has 8.
+  -- For example, @(Df dom a, Df dom a)@ has 2, while
+  -- @Vec 4 (Df dom a, Df dom a)@ has 8.
   type SimulateChannels a :: C.Nat
 
   -- | Convert a /ExpectType a/, a type representing data without backpressure,
@@ -557,11 +556,11 @@ instance (C.NFDataX a, C.ShowX a, Show a) => Simulate (CSignal dom a) where
 -- To figure out what input you need to supply, either solve the type
 -- "SimulateType" manually, or let the repl do the work for you! Example:
 --
--- >>> :kind! (forall dom a. SimulateType (Dfs dom a))
+-- >>> :kind! (forall dom a. SimulateType (Df dom a))
 -- ...
--- = [Protocols.Df.Simple.Data a]
+-- = [Protocols.Df.Data a]
 --
--- This would mean a @Circuit (Dfs dom a) (Dfs dom b)@ would need
+-- This would mean a @Circuit (Df dom a) (Df dom b)@ would need
 -- @[Data a]@ as the last argument of 'simulateC' and would result in
 -- @[Data b]@. Note that for this particular type you can neither supply
 -- stalls nor introduce backpressure. If you want to to this use 'Df.stall'.
@@ -586,8 +585,8 @@ simulateC c conf as =
 --
 -- Example:
 --
--- >>> import qualified Protocols.Df.Simple as Dfs
--- >>> take 2 (simulateCS (Dfs.catMaybes @C.System @Int) [Nothing, Just 1, Nothing, Just 3])
+-- >>> import qualified Protocols.Df as Df
+-- >>> take 2 (simulateCS (Df.catMaybes @C.System @Int) [Nothing, Just 1, Nothing, Just 3])
 -- [1,3]
 simulateCS ::
   forall a b.
