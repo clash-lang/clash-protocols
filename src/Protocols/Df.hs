@@ -168,20 +168,6 @@ instance DfLike dom (Df dom) a where
   ackToBool _ = coerce
   {-# INLINE ackToBool #-}
 
--- | Interpret simple dataflow carrying a tuple as 'Df' with /meta/ and /payload/
--- asDf :: Circuit (Df dom (meta, payload)) (Df dom meta payload)
--- asDf = Df.mapInternal (B.swapMap go coerce)
---  where
---   go (Data (meta, a)) = Df.Data meta a
---   go NoData = Df.NoData
-
--- -- | Interpret 'Df' as simple dataflow carrying a tuple of /meta/ and /payload/
--- asDf :: Circuit (Df dom meta payload) (Df dom (meta, payload))
--- asDf = Df.mapInternal (B.swapMap go coerce)
---  where
---   go (Df.Data meta a) = Data (meta, a)
---   go Df.NoData = NoData
-
 -- | Force a /nack/ on the backward channel and /no data/ on the forward
 -- channel if reset is asserted.
 forceResetSanity :: forall dom a. C.HiddenClockResetEnable dom => Circuit (Df dom a) (Df dom a)

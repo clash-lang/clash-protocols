@@ -67,6 +67,7 @@ import           Data.Kind (Type)
 import qualified Data.Maybe as Maybe
 import           Data.Proxy (Proxy(..))
 import qualified Data.List.NonEmpty
+import           Data.List ((\\))
 import           GHC.Stack (HasCallStack)
 
 -- me
@@ -77,7 +78,6 @@ import           Clash.Prelude (Domain, type (+), type (-), type (<=))
 import           Clash.Signal.Internal (Signal(..))
 import qualified Clash.Prelude as C
 import qualified Clash.Explicit.Prelude as CE
-import Data.List ((\\))
 
 
 -- | Generalization of Df-like protocols (Df, DfMeta, AXI, Avalon, ..). This
