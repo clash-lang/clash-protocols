@@ -45,3 +45,6 @@ stack.yaml.lock
 /systemverilog
 
 log
+
+# Created by .ci/build_docs.sh
+/docs

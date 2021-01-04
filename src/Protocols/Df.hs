@@ -1,480 +1,470 @@
 {-|
-Defines data structures and operators to create a Dataflow protocol. For
-documentation see:
+Defines data structures and operators to create a Dataflow protocol that only
+carries data, no metadata. For documentation see:
 
   * 'Protocols.Circuit'
   * 'Protocols.Df.Df'
 
-This module is designed to be imported using qualified, i.e.:
-
-@
-  import qualified Protocols.Df as Df
-@
 -}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Protocols.Df
-  ( -- * Type definitions
-    Df
-  , Data(Data, NoData)
-  , Ack(..)
+  ( -- * Types
+    Df, Data(..), Ack(..)
 
-    -- * Pure functions
-  , map, mapMeta
+    -- * Operations on Df like protocols
+  , const, void, pure
+  , map, bimap
   , fst, snd
   , mapMaybe, catMaybes
-  , filter, filterMeta
-  , bimap
+  , filter
   , either
-  , first, firstT, mapLeft
-  , second, secondT, mapRight
-  , const
-  , pure
-
-    -- * Stateful functions
-  , mealy
-  , mealyV
+  , first, {-firstT,-} mapLeft
+  , second, {-secondT,-} mapRight
+  , zipWith, zip
+  , partition
+  , route
+  , select
+  , selectN
+  , selectUntil
+  , fanin
+  , mfanin
   , fanout
+  , bundleVec
+  , unbundleVec
+  , roundrobin
+  , DfLike.CollectMode(..)
+  , roundrobinCollect
   , registerFwd
   , registerBwd
 
-    -- * Simulation
-  , StallAck(..)
-  , stall
+    -- * Simulation functions
   , drive
+  , stall
   , sample
   , simulate
 
     -- * Internals
-  , mapInternal
-  , resetGen
-  , forceAckLow
+  , forceResetSanity
   ) where
 
-import           Protocols.Internal hiding (Ack(..))
-import qualified Protocols.Internal as Protocols
+-- base
+import           Control.Applicative (Alternative((<|>)), Applicative(liftA2))
+import           Control.DeepSeq (NFData)
+import           GHC.Generics (Generic)
+import           GHC.Stack (HasCallStack)
+import           Prelude hiding
+  ((!!), map, zip, zipWith, filter, fst, snd, either, const, pure)
 
-import qualified Prelude as P
-import           Prelude hiding (map, const, fst, snd, pure, either, filter)
 
-import qualified Data.Bool as B
-import           Data.Default
-import qualified Data.Bifunctor.Extra as Bifunctor
-import qualified Data.Bifunctor as Bifunctor
 import           Data.Bifunctor (Bifunctor)
 import           Data.Coerce (coerce)
-import           Data.List ((\\))
+import           Data.Default (Default)
 import           Data.Kind (Type)
 import qualified Data.Maybe as Maybe
-import qualified Data.Tuple.Extra as T
 import           Data.Proxy
+import qualified Prelude as P
 
-import           Control.DeepSeq (NFData)
-import           GHC.Stack (HasCallStack)
-import           GHC.Generics (Generic)
-
-import           Clash.Prelude (Signal, type (<=), type (-))
+-- clash-prelude
+import           Clash.Prelude (type (<=))
+import           Clash.Signal.Internal (Signal)
 import qualified Clash.Prelude as C
-import qualified Clash.Explicit.Prelude as CE
-import           Clash.Signal.Internal (Signal((:-)))
 
--- | Base dataflow protocol of 'clash-protocols'. On the forward channel it
--- carries a tuple of metadata (/meta/) and a payload (/a/). The tuple is
--- wrapped in a /Maybe/-like structure, enabling the sender to send no data
--- instead. The backward channel consists of a simple /Ack/ or /Nack/.
---
--- Components implementing this protocol should adhere to the following rules:
---
---   1. The decision to send or not send data should not depend on the
---      acknowledgement signal sent by the receiver.
---
---   2. The data channel should remain stable (i.e., not change) until the
---      receiver has sent an acknowledgement.
---
--- __N.B.__: For performance reasons 'Protocols.Df.Data' is strict on its
--- fields. That is, if it is evaluated to WHNF, its fields will also be
--- evaluated to WHNF.
---
-data Df (dom :: C.Domain) (meta :: Type) (a :: Type)
-instance Protocol (Df dom meta a) where
-  -- | Forward part of base dataflow: @Signal dom (Data meta a)@
-  type Fwd (Df dom meta a) = Signal dom (Data meta a)
+-- me
+import           Protocols.Internal hiding (Ack(..))
+import           Protocols.DfLike (DfLike)
+import qualified Protocols.DfLike as DfLike
 
-  -- | Backward part of base dataflow: @Signal dom (Ack meta a)@
-  type Bwd (Df dom meta a) = Signal dom (Ack meta a)
+-- $setup
+-- >>> import Protocols
+-- >>> import Clash.Prelude (Vec(..))
+-- >>> import qualified Prelude as P
+-- >>> import qualified Data.Bifunctor as B
 
-instance Backpressure (Df dom meta a) where
+-- | Like 'Protocols.Df', but without metadata.
+--
+-- __N.B.__: For performance reasons 'Protocols.Df.Data' is strict on
+-- its data field. That is, if 'Protocols.Df.Data' is evaluated to WHNF,
+-- its fields will be evaluated to WHNF too.
+data Df (dom :: C.Domain) (a :: Type)
+
+instance Protocol (Df dom a) where
+  -- | Forward part of simple dataflow: @Signal dom (Data meta a)@
+  type Fwd (Df dom a) = Signal dom (Data a)
+
+  -- | Backward part of simple dataflow: @Signal dom (Ack meta a)@
+  type Bwd (Df dom a) = Signal dom (Ack a)
+
+instance Backpressure (Df dom a) where
   boolsToBwd = C.fromList_lazy . coerce
 
-instance ( C.KnownDomain dom
-         , C.NFDataX meta, C.ShowX meta, Show meta
-         , C.NFDataX a, C.ShowX a, Show a ) => Simulate (Df dom meta a) where
-  type SimulateType (Df dom meta a) = [Data meta a]
-  type ExpectType (Df dom meta a) = [(meta, a)]
-  type SimulateChannels (Df dom meta a) = 1
+-- | Data sent over forward channel of 'Df'. Note that this data type is strict
+-- on its data field.
+data Data a
+  -- | Send no data
+  = NoData
+  -- | Send /a/
+  | Data !a
+  deriving (Functor, Generic, C.NFDataX, C.ShowX, Eq, NFData, Show)
 
-  toSimulateType Proxy = P.map (uncurry Data)
+instance Applicative Data where
+  pure = Data
+
+  liftA2 f (Data a) (Data b) = Data (f a b)
+  liftA2 _ _        _        = NoData
+
+instance Alternative Data where
+  empty = NoData
+
+  Data a <|> _ = Data a
+  _      <|> b = b
+
+instance Monad Data where
+  (>>=) :: Data a -> (a -> Data b) -> Data b
+  NoData >>= _f = NoData
+  Data a >>=  f = f a
+
+-- | Convert 'Data' to 'Maybe'. Produces 'Just' on 'Data', 'Nothing' on 'NoData'.
+dataToMaybe :: Data a -> Maybe a
+dataToMaybe NoData = Nothing
+dataToMaybe (Data a) = Just a
+
+-- | Like 'Protocols.Df.Ack', but carrying phantom type variables to satisfy
+-- 'Bwd's injectivity requirement.
+newtype Ack a = Ack Bool
+  deriving (Show)
+
+instance Default (Ack a) where
+  def = Ack True
+
+instance (C.KnownDomain dom, C.NFDataX a, C.ShowX a, Show a) => Simulate (Df dom a) where
+  type SimulateType (Df dom a) = [Data a]
+  type ExpectType (Df dom a) = [a]
+  type SimulateChannels (Df dom a) = 1
+
+  toSimulateType Proxy = P.map Data
   fromSimulateType Proxy = Maybe.mapMaybe dataToMaybe
 
   driveC = drive
   sampleC = sample
   stallC conf (C.head -> (stallAck, stalls)) = stall conf stallAck stalls
 
--- | Data sent over forward channel of 'Df'. Note that this data type is strict
--- on its fields. If you need lazy behavior, check out "Protocols.Df.Lazy".
-data Data meta a
-  -- | Send no data
-  = NoData
-  -- | Send /meta/ and /a/
-  | Data !meta !a
-  deriving (Functor, Generic, C.NFDataX, C.ShowX, Eq, NFData, Show)
+instance DfLike dom (Df dom) a where
+  type Data (Df dom) a = Data a
+  type Payload a = a
+  type Ack (Df dom) a = Ack a
 
-dataToMaybe :: Data meta a -> Maybe (meta, a)
-dataToMaybe (Data meta a) = Just (meta, a)
-dataToMaybe NoData = Nothing
+  getPayload _ (Data a) = Just a
+  getPayload _ NoData = Nothing
+  {-# INLINE getPayload #-}
 
-instance Bifunctor Data where
-  bimap _fab _fcd NoData = NoData
-  bimap fab fcd (Data meta dat) = Data (fab meta) (fcd dat)
+  setPayload _ _ _ (Just b) = Data b
+  setPayload _ _ _ Nothing = NoData
+  {-# INLINE setPayload #-}
 
--- | Like 'Ack', but carrying phantom type variables to satisfy 'Bwd's
--- injectivity requirement.
-newtype Ack meta a = Ack Bool
-  deriving (Generic, C.NFDataX)
+  noData _ = NoData
+  {-# INLINE noData #-}
 
-instance Default (Ack meta a) where
-  def = Ack True
+  boolToAck _ = coerce
+  {-# INLINE boolToAck #-}
 
--- | Convenience function for protocol implementers. Maps over internals of a
--- protocol represented by a single set of signals.
-mapInternal ::
-  ( Fwd a ~ Signal dom aFwd
-  , Bwd b ~ Signal dom bBwd
-  , Fwd b ~ Signal dom bFwd
-  , Bwd a ~ Signal dom aBwd
-  ) =>
-  ((aFwd, bBwd) -> (aBwd, bFwd)) ->
-  Circuit a b
-mapInternal f =
-  Circuit (C.unbundle . fmap f . C.bundle)
+  ackToBool _ = coerce
+  {-# INLINE ackToBool #-}
 
--- | Like 'C.resetGenN', but works on 'Int' instead of 'C.SNat'. Not
--- synthesizable.
-resetGen :: C.KnownDomain dom => Int -> C.Reset dom
-resetGen n = C.unsafeFromHighPolarity
-  (C.fromList (P.replicate n True <> P.repeat False))
+-- | Interpret simple dataflow carrying a tuple as 'Df' with /meta/ and /payload/
+-- asDf :: Circuit (Df dom (meta, payload)) (Df dom meta payload)
+-- asDf = Df.mapInternal (B.swapMap go coerce)
+--  where
+--   go (Data (meta, a)) = Df.Data meta a
+--   go NoData = Df.NoData
 
---------------------------------- FUNCTIONS ------------------------------------
-
--- | Like 'P.map', but over payload (/a/) of a Df stream.
-map :: (a -> b) -> Circuit (Df dom meta a) (Df dom meta b)
-map f = mapInternal (Bifunctor.swapMap (fmap f) coerce)
-
--- | Like 'Data.Maybe.catMaybes', but over payload (/a/) of a Df stream.
-catMaybes :: Circuit (Df dom meta (Maybe a)) (Df dom meta a)
-catMaybes = mapInternal (uncurry go)
- where
-  go NoData _ = (Ack False, NoData)
-  go (Data _meta Nothing) _ack = (Ack True, NoData)
-  go (Data meta (Just dat)) (Ack ack) = (Ack ack, Data meta dat)
-
--- | Like 'Data.Maybe.mapMaybe', but over payload (/a/) of a Df stream.
-mapMaybe :: (a -> Maybe b) -> Circuit (Df dom meta a) (Df dom meta b)
-mapMaybe f = map f |> catMaybes
-
--- | Like 'P.filter', but over payload (/a/) of a Df stream.
-filter :: (a -> Bool) -> Circuit (Df dom meta a) (Df dom meta a)
-filter f = mapInternal (uncurry go)
- where
-  go NoData _ = (Ack False, NoData)
-  go (Data meta dat) (Ack ack)
-    | f dat = (Ack ack, Data meta dat)
-    | otherwise = (Ack True, NoData)
-
--- | Like 'P.filter', but over metadata (/meta/) of a Df stream.
-filterMeta :: (meta -> Bool) -> Circuit (Df dom meta a) (Df dom meta a)
-filterMeta f = mapInternal (uncurry go)
- where
-  go NoData _ = (Ack False, NoData)
-  go (Data meta dat) (Ack ack)
-    | f meta = (Ack ack, Data meta dat)
-    | otherwise = (Ack True, NoData)
-
--- | Like 'Bifunctor.bimap', but over payload (/a/) of a Df stream.
-bimap ::
-  Bifunctor p =>
-  (a -> b) ->
-  (c -> d) ->
-  Circuit
-    (Df dom meta (p a c))
-    (Df dom meta (p b d))
-bimap f g = mapInternal (Bifunctor.swapMap (fmap (Bifunctor.bimap f g)) coerce)
-
--- | Like 'P.map', but over the metadata (/metaA/) of a Df stream.
-mapMeta ::
-  (metaA -> metaB) ->
-  Circuit (Df dom metaA a) (Df dom metaB a)
-mapMeta f = mapInternal (Bifunctor.swapMap (Bifunctor.bimap f P.id) coerce)
-
--- | Like 'P.fst', but over payload of a Df stream.
-fst :: Circuit (Df dom meta (a, b)) (Df dom meta a)
-fst = map P.fst
-
--- | Like 'P.snd', but over payload of a Df stream.
-snd :: Circuit (Df dom meta (a, b)) (Df dom meta b)
-snd = map P.snd
-
--- | Like 'Bifunctor.first', but over payload of a Df stream.
-first ::
-  Bifunctor p =>
-  (a -> b) ->
-  Circuit
-    (Df dom meta (p a c))
-    (Df dom meta (p b c))
-first f = map (Bifunctor.first f)
-
--- | Like 'Bifunctor.second', but over payload of a Df stream.
-second ::
-  Bifunctor p =>
-  (b -> c) ->
-  Circuit
-    (Df dom meta (p a b))
-    (Df dom meta (p a c))
-second f = map (Bifunctor.second f)
-
--- | Like 'T.first', but over payload of a Df stream.
-firstT :: (x -> y) -> Circuit (Df dom meta (x, z)) (Df dom meta (y, z))
-firstT = first
-
--- | Like 'T.second', but over payload of a Df stream.
-secondT :: (y -> z) -> Circuit (Df dom meta (x, y)) (Df dom meta (x, z))
-secondT = second
-
--- | Like 'Data.Either.Combinators.mapLeft', but over payload of a Df stream.
-mapLeft ::
-  (a -> b) ->
-  Circuit
-    (Df dom meta (Either a c))
-    (Df dom meta (Either b c))
-mapLeft = first
-
--- | Like 'Data.Either.Combinators.mapRight', but over payload of a Df stream.
-mapRight ::
-  (b -> c) ->
-  Circuit
-    (Df dom meta (Either a b))
-    (Df dom meta (Either a c))
-mapRight = second
-
--- | Like 'Data.Either.either', but over payload of a Df stream.
-either ::
-  (a -> c) ->
-  (b -> c) ->
-  Circuit
-    (Df dom meta (Either a b))
-    (Df dom meta c)
-either f g = map (P.either f g)
-
--- | Acknowledge but ignore data from LHS protocol. Send a static value composed
--- of /meta/ and /payload/.
-const ::
-  meta ->
-  payload ->
-  Circuit (Df dom meta_ payload_) (Df dom meta payload)
-const meta payload =
-  -- TODO: Should this function be strict on its inputs?
-  mapInternal (Bifunctor.swapMap (P.const fwd) (P.const bwd))
- where
-  fwd = Data meta payload
-  bwd = Ack True
-
--- | Drive a constant value composed of /meta/ and /payload/.
-pure ::
-  meta ->
-  payload ->
-  Circuit () (Df dom meta payload)
-pure meta payload =
-  Circuit (\_ -> ((), P.pure (Data meta payload)))
-
--- | Mealy machine acting on raw Dfs stream
-mealy ::
-  ( C.HiddenClockResetEnable dom
-  , C.NFDataX s ) =>
-  -- | Transition function
-  ( s ->
-    (Maybe (iMeta, i), Protocols.Ack) ->
-    (s, (Protocols.Ack, Maybe (oMeta, o))) ) ->
-  -- | Initial state
-  s ->
-  -- | Circuit analogous to mealy machine
-  Circuit (Df dom iMeta i) (Df dom oMeta o)
-mealy f initS = forceAckLow |> Circuit (C.mealyB f' initS)
- where
-  f' s =
-      T.second (Bifunctor.bimap (coerce :: Protocols.Ack -> Ack iMeta i) toDfData)
-    . f s
-    . Bifunctor.bimap fromDfData (coerce :: Ack oMeta o -> Protocols.Ack)
-
-  toDfData Nothing = NoData
-  toDfData (Just (meta, dat))= Data meta dat
-
-  fromDfData NoData = Nothing
-  fromDfData (Data meta dat) = Just (meta, dat)
-
--- | Mealy machine that only transitions on DF transactions
-mealyV ::
-  forall s i o meta dom .
-  ( C.HiddenClockResetEnable dom
-  , C.NFDataX s ) =>
-  -- | Transition function
-  (s -> i -> (s, Maybe o)) ->
-  -- | Initial state
-  s ->
-  -- | Circuit analogous to mealy machine
-  Circuit (Df dom meta i) (Df dom meta o)
-mealyV f = mealy go
- where
-  go s (Nothing, _) = (s, (Protocols.Ack False, Nothing))
-  go s0 (Just (meta, dat), ack) =
-    case f s0 dat of
-      (s1, Nothing) -> (s1, (Protocols.Ack True, Nothing))
-      (s1, Just o) ->
-        ( B.bool s0 s1 (coerce ack)
-        , (coerce ack, Just (meta, o)) )
-
--- | Copy (meta)data of a single Df stream to multiple. LHS will only receive
--- an acknowledgement when all RHS receivers have acknowledged data.
-fanout ::
-  forall n dom a meta .
-  (C.KnownNat n, C.HiddenClockResetEnable dom, 1 <= n) =>
-  Circuit (Df dom meta a) (C.Vec n (Df dom meta a))
-fanout = goC
- where
-  goC =
-    Circuit $ \(s2r, r2s) ->
-      T.second C.unbundle (C.mealyB f initState (s2r, C.bundle r2s))
-
-  initState :: C.Vec n Bool
-  initState = C.repeat False
-
-  f ::
-    C.Vec n Bool ->
-    (Data meta a, C.Vec n (Ack meta a)) ->
-    (C.Vec n Bool, (Ack meta a, C.Vec n (Data meta a)))
-  f acked (s2r, acks)
-    | NoData <- s2r =
-      -- No data on input, send no data, send nack
-      (acked, (Ack False, C.repeat NoData))
-    | Data meta dat <- s2r =
-      -- Data on input
-      let
-        -- Send data to "clients" that have not acked yet
-        valids_ = C.map not acked
-        dats = C.map (B.bool NoData (Data meta dat)) valids_
-
-        -- Store new acks, send ack if all "clients" have acked
-        acked1 = C.zipWith (||) acked (coerce acks)
-        ack = C.fold @_ @(n-1) (&&) acked1
-      in
-        ( if ack then initState else acked1
-        , (coerce ack, dats) )
+-- -- | Interpret 'Df' as simple dataflow carrying a tuple of /meta/ and /payload/
+-- asDf :: Circuit (Df dom meta payload) (Df dom (meta, payload))
+-- asDf = Df.mapInternal (B.swapMap go coerce)
+--  where
+--   go (Df.Data meta a) = Data (meta, a)
+--   go Df.NoData = NoData
 
 -- | Force a /nack/ on the backward channel and /no data/ on the forward
 -- channel if reset is asserted.
-forceAckLow ::
-  forall dom meta a .
-  C.HiddenClockResetEnable dom =>
-  Circuit (Df dom meta a) (Df dom meta a)
-forceAckLow =
-  Circuit (\(fwd, bwd) -> C.unbundle . fmap f . C.bundle $ (rstLow, fwd, bwd))
- where
-  f (True,  _,   _  ) = (Ack False, NoData)
-  f (False, fwd, bwd) = (bwd, fwd)
-  rstLow = C.unsafeToHighPolarity (C.hasReset @dom)
+forceResetSanity :: forall dom a. C.HiddenClockResetEnable dom => Circuit (Df dom a) (Df dom a)
+forceResetSanity = DfLike.forceResetSanity Proxy
 
--- | Place register on /forward/ part of protocol.
+-- | Like 'P.map', but over payload (/a/) of a Df stream.
+map :: (a -> b) -> Circuit (Df dom a) (Df dom b)
+map = DfLike.map Proxy Proxy
+
+-- | Like 'P.map', but over payload (/a/) of a Df stream.
+bimap :: Bifunctor p => (a -> b) -> (c -> d) -> Circuit (Df dom (p a c)) (Df dom (p b d))
+bimap = DfLike.bimap
+
+-- | Like 'P.fst', but over payload of a Df stream.
+fst :: Circuit (Df dom (a, b)) (Df dom a)
+fst = DfLike.fst
+
+-- | Like 'P.snd', but over payload of a Df stream.
+snd :: Circuit (Df dom (a, b)) (Df dom b)
+snd = DfLike.snd
+
+-- | Like 'Data.Bifunctor.first', but over payload of a Df stream.
+first :: Bifunctor p => (a -> b) -> Circuit (Df dom (p a c)) (Df dom (p b c))
+first = DfLike.first
+
+-- | Like 'Data.Bifunctor.second', but over payload of a Df stream.
+second :: Bifunctor p => (b -> c) -> Circuit (Df dom (p a b)) (Df dom (p a c))
+second = DfLike.second
+
+-- | Acknowledge but ignore data from LHS protocol. Send a static value /b/.
+const :: C.HiddenReset dom => Data b -> Circuit (Df dom a) (Df dom b)
+const = DfLike.const Proxy Proxy
+
+-- | Drive a constant value composed of /a/.
+pure :: Data a -> Circuit () (Df dom a)
+pure = DfLike.pure Proxy
+
+-- | Drive a constant value composed of /a/.
+void :: C.HiddenReset dom => Circuit (Df dom a) ()
+void = DfLike.void Proxy
+
+-- | Like 'Data.Maybe.catMaybes', but over a Df stream.
+--
+-- Example:
+--
+-- >>> take 2 (simulateCS (catMaybes @C.System @Int) [Nothing, Just 1, Nothing, Just 3])
+-- [1,3]
+--
+catMaybes :: Circuit (Df dom (Maybe a)) (Df dom a)
+catMaybes = DfLike.catMaybes Proxy Proxy
+
+-- | Like 'Data.Maybe.mapMaybe', but over payload (/a/) of a Df stream.
+mapMaybe :: (a -> Maybe b) -> Circuit (Df dom a) (Df dom b)
+mapMaybe = DfLike.mapMaybe
+
+-- | Like 'P.filter', but over a 'Df' stream.
+--
+-- Example:
+--
+-- >>> take 3 (simulateCS (filter @C.System @Int (>5)) [1, 5, 7, 10, 3, 11])
+-- [7,10,11]
+--
+filter :: forall dom a. (a -> Bool) -> Circuit (Df dom a) (Df dom a)
+filter = DfLike.filter Proxy
+
+-- | Like 'Data.Either.Combinators.mapLeft', but over payload of a 'Df' stream.
+mapLeft :: (a -> b) -> Circuit (Df dom (Either a c)) (Df dom (Either b c))
+mapLeft = DfLike.mapLeft
+
+-- | Like 'Data.Either.Combinators.mapRight', but over payload of a 'Df' stream.
+mapRight :: (b -> c) -> Circuit (Df dom (Either a b)) (Df dom (Either a c))
+mapRight = DfLike.mapRight
+
+-- | Like 'Data.Either.either', but over a 'Df' stream.
+either :: (a -> c) -> (b -> c) -> Circuit (Df dom (Either a b)) (Df dom c)
+either = DfLike.either
+
+-- | Like 'P.zipWith', but over two 'Df' streams.
+--
+-- Example:
+--
+-- >>> take 3 (simulateCS (zipWith @C.System @Int (+)) ([1, 3, 5], [2, 4, 7]))
+-- [3,7,12]
+--
+zipWith ::
+  forall dom a b c.
+  (a -> b -> c) ->
+  Circuit
+    (Df dom a, Df dom b)
+    (Df dom c)
+zipWith = DfLike.zipWith Proxy Proxy Proxy
+
+-- | Like 'P.zip', but over two 'Df' streams.
+zip :: forall a b dom. Circuit (Df dom a, Df dom b) (Df dom (a, b))
+zip = DfLike.zip Proxy Proxy Proxy
+
+-- | Like 'P.partition', but over 'Df' streams
+--
+-- Example:
+--
+-- >>> let input = [1, 3, 5, 7, 9, 2, 11]
+-- >>> let output = simulateCS (partition @C.System @Int (>5)) input
+-- >>> B.bimap (take 3) (take 4) output
+-- ([7,9,11],[1,3,5,2])
+--
+partition :: forall dom a. (a -> Bool) -> Circuit (Df dom a) (Df dom a, Df dom a)
+partition = DfLike.partition Proxy
+
+-- | Route a 'Df' stream to another corresponding to the index
+--
+-- Example:
+--
+-- >>> let input = [(0, 3), (0, 5), (1, 7), (2, 13), (1, 11), (2, 1)]
+-- >>> let output = simulateCS (route @3 @C.System @Int) input
+-- >>> fmap (take 2) output
+-- <[3,5],[7,11],[13,1]>
+--
+route ::
+  forall n dom a. C.KnownNat n =>
+  Circuit (Df dom (C.Index n, a)) (C.Vec n (Df dom a))
+route = DfLike.route Proxy Proxy
+
+-- | Select data from the channel indicated by the 'Df' stream carrying
+-- @Index n@.
+--
+-- Example:
+--
+-- >>> let indices = [1, 1, 2, 0, 2]
+-- >>> let dats = [8] :> [5, 7] :> [9, 1] :> Nil
+-- >>> let output = simulateCS (select @3 @C.System @Int) (dats, indices)
+-- >>> take 5 output
+-- [5,7,9,8,1]
+--
+select ::
+  forall n dom a.
+  C.KnownNat n =>
+  Circuit (C.Vec n (Df dom a), Df dom (C.Index n)) (Df dom a)
+select = DfLike.select
+
+-- | Select /selectN/ samples from channel /n/.
+--
+-- Example:
+--
+-- >>> let indices = [(0, 2), (1, 3), (0, 2)]
+-- >>> let dats = [10, 20, 30, 40] :> [11, 22, 33] :> Nil
+-- >>> let circuit = C.exposeClockResetEnable (selectN @2 @10 @C.System @Int)
+-- >>> take 7 (simulateCSE circuit (dats, indices))
+-- [10,20,11,22,33,30,40]
+--
+selectN ::
+  forall n selectN dom a.
+  ( C.HiddenClockResetEnable dom
+  , C.KnownNat selectN
+  , C.KnownNat n
+  ) =>
+  Circuit
+    (C.Vec n (Df dom a), Df dom (C.Index n, C.Index selectN))
+    (Df dom a)
+selectN = DfLike.selectN Proxy Proxy
+
+-- | Selects samples from channel /n/ until the predicate holds. The cycle in
+-- which the predicate turns true is included.
+--
+-- Example:
+--
+-- >>> let indices = [0, 0, 1, 2]
+-- >>> let channel1 = [(10, False), (20, False), (30, True), (40, True)]
+-- >>> let channel2 = [(11, False), (21, True)]
+-- >>> let channel3 = [(12, False), (22, False), (32, False), (42, True)]
+-- >>> let dats = channel1 :> channel2 :> channel3 :> Nil
+-- >>> take 10 (simulateCS (selectUntil @3 @C.System @(Int, Bool) P.snd) (dats, indices))
+-- [(10,False),(20,False),(30,True),(40,True),(11,False),(21,True),(12,False),(22,False),(32,False),(42,True)]
+--
+selectUntil ::
+  forall n dom a.
+  C.KnownNat n =>
+  (a -> Bool) ->
+  Circuit
+    (C.Vec n (Df dom a), Df dom (C.Index n))
+    (Df dom a)
+selectUntil = DfLike.selectUntil Proxy Proxy
+
+-- | Copy data of a single 'Df' stream to multiple. LHS will only receive
+-- an acknowledgement when all RHS receivers have acknowledged data.
+fanout ::
+  forall n dom a .
+  (C.KnownNat n, C.HiddenClockResetEnable dom, 1 <= n) =>
+  Circuit (Df dom a) (C.Vec n (Df dom a))
+fanout = DfLike.fanout Proxy
+
+-- | Merge data of multiple 'Df' streams using a user supplied function
+fanin ::
+  forall n dom a .
+  (C.KnownNat n, 1 <= n) =>
+  (a -> a -> a) ->
+  Circuit (C.Vec n (Df dom a)) (Df dom a)
+fanin = DfLike.fanin
+
+-- | Merge data of multiple 'Df' streams using Monoid's '<>'.
+mfanin ::
+  forall n dom a .
+  (C.KnownNat n, Monoid a, 1 <= n) =>
+  Circuit (C.Vec n (Df dom a)) (Df dom a)
+mfanin = DfLike.mfanin
+
+-- | Bundle a vector of 'Df' streams into one.
+bundleVec ::
+  forall n dom a .
+  (C.KnownNat n, 1 <= n) =>
+  Circuit (C.Vec n (Df dom a)) (Df dom (C.Vec n a))
+bundleVec = DfLike.bundleVec Proxy Proxy
+
+-- | Split up a 'Df' stream of a vector into multiple independent 'Df' streams.
+unbundleVec ::
+  forall n dom a .
+  (C.KnownNat n, C.NFDataX a, C.HiddenClockResetEnable dom, 1 <= n) =>
+  Circuit (Df dom (C.Vec n a)) (C.Vec n (Df dom a))
+unbundleVec = DfLike.unbundleVec Proxy Proxy
+
+-- | Distribute data across multiple components on the RHS. Useful if you want
+-- to parallelize a workload across multiple (slow) workers. For optimal
+-- throughput, you should make sure workers can accept data every /n/ cycles.
+roundrobin ::
+  forall n dom a .
+  (C.KnownNat n, C.HiddenClockResetEnable dom, 1 <= n) =>
+  Circuit (Df dom a) (C.Vec n (Df dom a))
+roundrobin = DfLike.roundrobin Proxy
+
+-- | Opposite of 'roundrobin'. Useful to collect data from workers that only
+-- produce a result with an interval of /n/ cycles.
+roundrobinCollect ::
+  forall n dom a .
+  (C.KnownNat n, C.HiddenClockResetEnable dom, 1 <= n) =>
+  DfLike.CollectMode ->
+  Circuit (C.Vec n (Df dom a)) (Df dom a)
+roundrobinCollect = DfLike.roundrobinCollect Proxy
+
+-- | Place register on /forward/ part of a circuit.
 registerFwd ::
-  forall dom meta a .
-  (C.NFDataX meta, C.NFDataX a, C.HiddenClockResetEnable dom) =>
-  Circuit (Df dom meta a) (Df dom meta a)
-registerFwd = mealy go Nothing
- where
-   go ::
-    Maybe (meta, a) ->
-    (Maybe (meta, a), Protocols.Ack) ->
-    (Maybe (meta, a), (Protocols.Ack, Maybe (meta, a)))
-   go s0 (iDat, iAck) = (s1, (Protocols.Ack oAck, s0))
-    where
-     oAck = Maybe.isNothing s0 || coerce iAck
-     s1 = if oAck then iDat else s0
+  forall dom a .
+  (C.NFDataX a, C.HiddenClockResetEnable dom) =>
+  Circuit (Df dom a) (Df dom a)
+registerFwd = DfLike.registerFwd Proxy
 
--- | Place register on /backward/ part of protocol. This is implemented using a
+-- | Place register on /backward/ part of a circuit. This is implemented using a
 -- in-logic two-element shift register.
 registerBwd ::
-  (C.NFDataX meta, C.NFDataX a, C.HiddenClockResetEnable dom) =>
-  Circuit (Df dom meta a) (Df dom meta a)
-registerBwd = mealy go (Nothing, Nothing)
- where
-  go (ra0, rb) (iDat, (iAck :: Protocols.Ack)) =
-    (s, (coerce oAck :: Protocols.Ack, rb))
-   where
-    oAck = Maybe.isNothing ra0
-    ra1 = if oAck then iDat else ra0
-    s = if Maybe.isNothing rb || coerce iAck then (Nothing, ra1) else (ra1, rb)
+  (C.NFDataX a, C.HiddenClockResetEnable dom) =>
+  Circuit (Df dom a) (Df dom a)
+registerBwd = DfLike.registerBwd Proxy
 
 --------------------------------- SIMULATE -------------------------------------
 
 -- | Emit values given in list. Emits no data while reset is asserted. Not
 -- synthesizable.
 drive ::
-  forall dom meta a.
+  forall dom a.
   C.KnownDomain dom =>
-  SimulationConfig  ->
-  [Data meta a] ->
-  Circuit () (Df dom meta a)
-drive SimulationConfig{resetCycles} s0 = Circuit $
-    ((),)
-  . C.fromList_lazy
-  . go s0 (CE.sample (C.unsafeToHighPolarity rst))
-  . CE.sample_lazy
-  . P.snd
- where
-  go _                  []             _           = error "Unexpected end of reset"
-  go _                  (True:resets)  ~(ack:acks) = NoData : (ack `C.seqX` go s0 resets acks)
-  go []                 (_:resets)     ~(ack:acks) = NoData : (ack `C.seqX` go [] resets acks)
-  go (NoData:is)        (_:resets)     ~(ack:acks) = NoData : (ack `C.seqX` go is resets acks)
-  go (Data meta dat:is) (_:resets)     ~(ack:acks) =
-    Data meta dat : go (if coerce ack then is else Data meta dat:is) resets acks
-
-  rst = resetGen @dom resetCycles
+  SimulationConfig ->
+  [Data a] ->
+  Circuit () (Df dom a)
+drive = DfLike.drive Proxy
 
 -- | Sample protocol to a list of values. Drops values while reset is asserted.
 -- Not synthesizable.
 --
 -- For a generalized version of 'sample', check out 'sampleC'.
 sample ::
-  forall dom meta b.
+  forall dom b.
   C.KnownDomain dom =>
-  SimulationConfig  ->
-  Circuit () (Df dom meta b) ->
-  [Data meta b]
-sample SimulationConfig{resetCycles,ignoreReset,timeoutAfter} c =
-    (if ignoreReset then drop resetCycles else id)
-  $ P.take timeoutAfter
-  $ CE.sample_lazy
-  $ ignoreWhileInReset
-  $ P.snd
-  $ toSignals c ((), Ack <$> C.unsafeToLowPolarity rst)
- where
-  ignoreWhileInReset s =
-    (uncurry (B.bool NoData)) <$>
-    C.bundle (s, C.unsafeToLowPolarity rst)
-
-  rst = resetGen @dom resetCycles
+  SimulationConfig ->
+  Circuit () (Df dom b) ->
+  [Data b]
+sample = DfLike.sample Proxy
 
 -- | Stall every valid Df packet with a given number of cycles. If there are
 -- more valid packets than given numbers, passthrough all valid packets without
@@ -482,78 +472,33 @@ sample SimulationConfig{resetCycles,ignoreReset,timeoutAfter} c =
 --
 -- For a generalized version of 'stall', check out 'stallC'.
 stall ::
-  forall dom meta a.
+  forall dom a.
   ( C.KnownDomain dom
   , HasCallStack ) =>
-  SimulationConfig  ->
+  SimulationConfig ->
   -- | Acknowledgement to send when LHS does not send data. Stall will act
   -- transparently when reset is asserted.
   StallAck ->
   -- Number of cycles to stall for every valid Df packet
   [Int] ->
-  Circuit (Df dom meta a) (Df dom meta a)
-stall SimulationConfig{resetCycles} stallAck stalls = Circuit $
-  uncurry (go stallAcks stalls (C.unsafeToHighPolarity rst))
- where
-  rst = resetGen @dom resetCycles
-
-  stallAcks
-    | stallAck == StallCycle = [minBound..maxBound] \\ [StallCycle]
-    | otherwise = [stallAck]
-
-  toStallAck :: Data meta a -> Ack meta a -> StallAck -> Ack meta a
-  toStallAck (Data {}) ack = P.const ack
-  toStallAck NoData ack = \case
-    StallWithNack -> Ack False
-    StallWithAck -> Ack True
-    StallWithErrorX -> CE.errorX "No defined ack"
-    StallTransparently -> ack
-    StallCycle -> Ack False -- shouldn't happen..
-
-  go [] ss rs fwd bwd =
-    go stallAcks ss rs fwd bwd
-
-  go (_:sas) _ (True :- rs) (f :- fwd) ~(b :- bwd) =
-    Bifunctor.bimap (b :-) (f :-) (go sas stalls rs fwd bwd)
-
-  go (sa:sas) [] (_ :- rs) (f :- fwd) ~(b :- bwd) =
-    Bifunctor.bimap (toStallAck f b sa :-) (f :-) (go sas [] rs fwd bwd)
-
-  go (sa:sas) ss (_ :- rs) (NoData :- fwd) ~(b :- bwd) =
-    -- Left hand side does not send data, simply replicate that behavior. Right
-    -- hand side might send an arbitrary acknowledgement, so we simply pass it
-    -- through.
-    Bifunctor.bimap (toStallAck NoData b sa :-) (NoData :-) (go sas ss rs fwd bwd)
-  go (_sa:sas) (s:ss) (_ :- rs) (f0 :- fwd) ~(b0 :- bwd) =
-    let
-      -- Stall as long as s > 0. If s ~ 0, we wait for the RHS to acknowledge
-      -- the data. As long as RHS does not acknowledge the data, we keep sending
-      -- the same data.
-      (f1, b1, s1) = case compare 0 s of
-        LT -> (NoData, Ack False, pred s:ss)                  -- s > 0
-        EQ -> (f0, b0, if coerce b0 then ss else s:ss)        -- s ~ 0
-        GT -> error ("Unexpected negative stall: " <> show s) -- s < 0
-    in
-      Bifunctor.bimap (b1 :-) (f1 :-) (go sas s1 rs fwd bwd)
+  Circuit (Df dom a) (Df dom a)
+stall = DfLike.stall Proxy
 
 -- | Simulate a single domain protocol. Not synthesizable.
 --
 -- For a generalized version of 'simulate', check out 'Protocols.simulateC'.
 simulate ::
-  forall dom meta a b.
+  forall dom a b.
   C.KnownDomain dom =>
-  -- | Simulation configuration. Use 'def' for sensible defaults.
+  -- | Simulation configuration. Use 'Data.Default.def' for sensible defaults.
   SimulationConfig ->
   -- | Circuit to simulate.
   ( C.Clock dom ->
     C.Reset dom ->
     C.Enable dom ->
-    Circuit (Df dom meta a) (Df dom meta b) ) ->
+    Circuit (Df dom a) (Df dom b) ) ->
   -- | Inputs
-  [Data meta a] ->
+  [Data a] ->
   -- | Outputs
-  [Data meta b]
-simulate conf@SimulationConfig{..} circ inputs =
-  sample conf (drive conf inputs |> circ clk rst ena)
- where
-  (clk, rst, ena) = (C.clockGen, resetGen resetCycles, C.enableGen)
+  [Data b]
+simulate = DfLike.simulate Proxy Proxy

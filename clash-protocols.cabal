@@ -12,8 +12,7 @@ description:
   Suggested reading order:
   .
   * 'Protocols' + README.md
-  * 'Protocols.Df.Simple'
-  * 'Protocols.DfLike'
+  * 'Protocols.Df'
   * 'Protocols.Plugin'
   * 'Protocols.Hedgehog'
 
@@ -83,8 +82,8 @@ common common-options
 
   default-language: Haskell2010
   build-depends:
-    -- GHC >= 8.6
-    base >= 4.12.0.0,
+    -- GHC >= 8.10
+    base >= 4.14.0.0,
     Cabal,
 
     -- clash-prelude will set suitable version bounds for the plugins
@@ -140,7 +139,6 @@ library
     Protocols
     Protocols.Df
     Protocols.DfLike
-    Protocols.Df.Simple
     Protocols.Hedgehog
     Protocols.Hedgehog.Internal
     Protocols.Internal
@@ -167,7 +165,6 @@ test-suite unittests
   other-modules:
     Tests.Protocols
     Tests.Protocols.Df
-    Tests.Protocols.Df.Simple
     Tests.Protocols.Plugin
 
     Util

@@ -6,7 +6,7 @@ i.e. using:
   import Protocols
 @
 
-Definitions of 'Circuit', 'Fwd', 'Bwd', 'Protocols.Dfs.Dfs', inspired by
+Definitions of 'Circuit', 'Fwd', 'Bwd', 'Protocols.Df.Df', inspired by
 definitions in @circuit-notation@ at <https://github.com/cchalmers/circuit-notation>.
 -}
 
@@ -23,7 +23,6 @@ module Protocols
 
     -- * Protocol types
   , Df
-  , Dfs
 
     -- * Basic circuits
   , idC
@@ -54,4 +53,3 @@ module Protocols
 import Data.Default (def)
 import Protocols.Internal
 import Protocols.Df (Df)
-import Protocols.Df.Simple (Dfs)

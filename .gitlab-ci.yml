@@ -20,13 +20,6 @@
   after_script:
     - tar -cf - $(ls -d /root/.cabal /root/.stack /nix || true) | zstd -T0 -3 > cache.tar.zstd
 
-.common-806:
-  extends: .common
-  image: docker.pkg.github.com/clash-lang/clash-protocols/protocols-focal-ghc-cabal-stack-8.6.5:2020-12-07
-  variables:
-    GHC_VERSION: "8.6.5"
-    CABAL_VERSION: "3.2.0.0"
-
 .common-810:
   extends: .common
   image: docker.pkg.github.com/clash-lang/clash-protocols/protocols-focal-ghc-cabal-stack-8.10.2:2020-12-07
@@ -44,14 +37,12 @@ haddock:
   script:
     - .ci/build_docs.sh
 
-# Circuit-notation is broken on 810.
-# https://github.com/cchalmers/circuit-notation/pull/8#issuecomment-739844352
-cabal-8.6.5:
-  extends: .common-806
+cabal-8.10.2:
+  extends: .common-810
   script:
     - .ci/test_cabal.sh
 
 stack:
-  extends: .common-806
+  extends: .common-810
   script:
     - .ci/test_stack.sh
