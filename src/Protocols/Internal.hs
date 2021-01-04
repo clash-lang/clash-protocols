@@ -622,3 +622,9 @@ simulateCSE c = simulateCS (c clk rst ena)
 circuit :: Any
 circuit =
   error "'protocol' called: did you forget to enable \"Protocols.Plugin\"?"
+
+-- | Picked up by "Protocols.Plugin" to tie circuits together. See
+-- "Protocols.Plugin" for more information.
+(-<) :: Any
+(-<) =
+  error "(-<) called: did you forget to enable \"Protocols.Plugin\"?"

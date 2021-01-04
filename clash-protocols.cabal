@@ -137,6 +137,15 @@ library
 
   exposed-modules:
     Protocols
+
+    Protocols.Axi4.Raw.Common
+    Protocols.Axi4.Raw.Full
+    Protocols.Axi4.Raw.Full.ReadAddress
+    Protocols.Axi4.Raw.Full.ReadData
+    Protocols.Axi4.Raw.Full.WriteAddress
+    Protocols.Axi4.Raw.Full.WriteData
+    Protocols.Axi4.Raw.Full.WriteResponse
+
     Protocols.Df
     Protocols.DfLike
     Protocols.Hedgehog
