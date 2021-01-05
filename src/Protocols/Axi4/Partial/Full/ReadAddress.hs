@@ -10,7 +10,7 @@ to the AXI4 specification.
 
 {-# OPTIONS_GHC -Wno-missing-fields #-}
 
-module Protocols.Axi4.Raw.Full.ReadAddress
+module Protocols.Axi4.Partial.Full.ReadAddress
   ( M2S_ReadAddress(..)
   , S2M_ReadAddress(..)
   , Axi4ReadAddress
@@ -27,7 +27,7 @@ import qualified Clash.Prelude as C
 import Clash.Prelude ((:::))
 
 -- me
-import Protocols.Axi4.Raw.Common
+import Protocols.Axi4.Common
 import Protocols.Internal
 import Protocols.DfLike (DfLike)
 import qualified Protocols.DfLike as DfLike

@@ -10,7 +10,7 @@ to the AXI4 specification.
 
 {-# OPTIONS_GHC -Wno-missing-fields #-}
 
-module Protocols.Axi4.Raw.Full.ReadData
+module Protocols.Axi4.Strict.Full.ReadData
   ( M2S_ReadData(..)
   , S2M_ReadData(..)
   , Axi4ReadData
@@ -24,10 +24,9 @@ import Data.Proxy
 
 -- clash-prelude
 import qualified Clash.Prelude as C
-import Clash.Prelude ((:::))
 
 -- me
-import Protocols.Axi4.Raw.Common
+import Protocols.Axi4.Common
 import Protocols.Internal
 import Protocols.DfLike (DfLike)
 import qualified Protocols.DfLike as DfLike
@@ -58,15 +57,15 @@ instance DfLike dom (Axi4ReadData dom kr iw dataType) userType where
   type Ack (Axi4ReadData dom kr iw dataType) userType =
     M2S_ReadData
 
-  getPayload _ (S2M_ReadData{_rvalid=True, _ruser}) = Just _ruser
-  getPayload _ _ = Nothing
+  getPayload _ (S2M_ReadData{_ruser}) = Just _ruser
+  getPayload _ S2M_NoReadData = Nothing
   {-# INLINE getPayload #-}
 
-  setPayload _ _ dat (Just b) = dat{_rvalid=True, _ruser=b}
+  setPayload _ _ dat (Just b) = dat{_ruser=b}
   setPayload _ dfB _ Nothing = DfLike.noData dfB
   {-# INLINE setPayload #-}
 
-  noData _ = S2M_ReadData{_rvalid=False}
+  noData _ = S2M_NoReadData
   {-# INLINE noData #-}
 
   boolToAck _ = coerce
@@ -99,31 +98,28 @@ data S2M_ReadData
   (kr :: KeepResponse)
   (iw :: IdWidth)
   (dataType :: Type)
-  (userType :: Type) =
-  S2M_ReadData
+  (userType :: Type)
+  = S2M_NoReadData
+  | S2M_ReadData
     { -- | Read address id*
-      _rid :: "RID"    ::: C.BitVector (Width iw)
+      _rid :: !(C.BitVector (Width iw))
 
     , -- | Read data
-      _rdata :: "RDATA" ::: dataType
+      _rdata :: !dataType
 
       -- | Read response
-    , _rresp :: "RRESP" ::: ResponseType kr
+    , _rresp :: !(ResponseType kr)
 
       -- | Read last
-    , _rlast :: "RLAST" ::: Bool
-
-      -- | Read valid
-    , _rvalid :: "RVALID" ::: Bool
+    , _rlast :: !Bool
 
       -- | User data
-    , _ruser :: "RUSER" ::: userType
+    , _ruser :: !userType
     }
   deriving (Generic)
 
 -- | See Table A2-6 "Read data channel signals"
-newtype M2S_ReadData = M2S_ReadData
-  { _rready :: "RREADY" ::: Bool }
+newtype M2S_ReadData = M2S_ReadData { _rready :: Bool }
   deriving (Show, Generic, C.NFDataX)
 
 deriving instance

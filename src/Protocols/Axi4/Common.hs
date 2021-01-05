@@ -3,7 +3,7 @@ Types and utilities shared between AXI4, AXI4-Lite, and AXI3.
 -}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Protocols.Axi4.Raw.Common where
+module Protocols.Axi4.Common where
 
 -- base
 import Data.Kind (Type)
@@ -12,7 +12,10 @@ import GHC.TypeNats (Nat)
 
 -- clash-prelude
 import qualified Clash.Prelude as C
-import Clash.Prelude (type (^), type (-))
+import Clash.Prelude (type (^), type (-), type (*))
+
+-- strict-tuple
+import Data.Tuple.Strict
 
 -- | Simple wrapper to achieve "named arguments" when instantiating an AXI protocol
 data IdWidth = IdWidth Nat deriving (Show)
@@ -93,7 +96,7 @@ type family LockType (keepLockType :: KeepLock) where
 
 -- | Enables or disables 'Privileged', 'Secure', and 'InstructionOrData'
 type family PermissionsType (keepPermissions :: KeepPermissions) where
-  PermissionsType 'KeepPermissions = (Privileged, Secure, InstructionOrData)
+  PermissionsType 'KeepPermissions = T3 Privileged Secure InstructionOrData
   PermissionsType 'NoPermissions = ()
 
 -- | Enables or disables 'Qos'
@@ -120,6 +123,11 @@ type family SizeType (keepSize :: KeepSize) where
 type family StrobeType (byteSize :: Nat) (keepStrobe :: KeepStrobe) where
   StrobeType byteSize 'KeepStrobe = Strobe byteSize
   StrobeType byteSize 'NoStrobe = ()
+
+-- | Enable or disable 'Strobe'
+type family StrictStrobeType (byteSize :: Nat) (keepStrobe :: KeepStrobe) where
+  StrictStrobeType byteSize 'KeepStrobe = C.Vec byteSize (C.BitVector 8)
+  StrictStrobeType byteSize 'NoStrobe = C.BitVector (byteSize * 8)
 
 -- | Indicates valid bytes on data field.
 type Strobe (byteSize :: Nat) = C.BitVector byteSize
@@ -213,7 +221,7 @@ data Allocate = NoLookupCache | LookupCache
 data OtherAllocate = OtherNoLookupCache | OtherLookupCache
 
 -- | See Table A4-3 AWCACHE bit allocations
-type Cache = (Bufferable, Modifiable, OtherAllocate, Allocate)
+type Cache = T4 Bufferable Modifiable OtherAllocate Allocate
 
 -- | Status of the write transaction.
 data Resp

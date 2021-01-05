@@ -124,12 +124,13 @@ library
   build-depends:
       -- inline-circuit-notation
       circuit-notation
-    , extra
     , data-default
     , deepseq
-    , hedgehog >= 1.0.2
+    , extra
     , ghc >= 8.6
+    , hedgehog >= 1.0.2
     , pretty-show
+    , strict-tuple
 
       -- To be removed; we need 'Test.Tasty.Hedgehog.Extra' to fix upstream issues
     , tasty >= 1.2 && < 1.5
@@ -138,13 +139,21 @@ library
   exposed-modules:
     Protocols
 
-    Protocols.Axi4.Raw.Common
-    Protocols.Axi4.Raw.Full
-    Protocols.Axi4.Raw.Full.ReadAddress
-    Protocols.Axi4.Raw.Full.ReadData
-    Protocols.Axi4.Raw.Full.WriteAddress
-    Protocols.Axi4.Raw.Full.WriteData
-    Protocols.Axi4.Raw.Full.WriteResponse
+    Protocols.Axi4.Common
+
+    Protocols.Axi4.Partial.Full
+    Protocols.Axi4.Partial.Full.ReadAddress
+    Protocols.Axi4.Partial.Full.ReadData
+    Protocols.Axi4.Partial.Full.WriteAddress
+    Protocols.Axi4.Partial.Full.WriteData
+    Protocols.Axi4.Partial.Full.WriteResponse
+
+    Protocols.Axi4.Strict.Full
+    Protocols.Axi4.Strict.Full.ReadAddress
+    Protocols.Axi4.Strict.Full.ReadData
+    Protocols.Axi4.Strict.Full.WriteAddress
+    Protocols.Axi4.Strict.Full.WriteData
+    Protocols.Axi4.Strict.Full.WriteResponse
 
     Protocols.Df
     Protocols.DfLike

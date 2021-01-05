@@ -10,7 +10,7 @@ to the AXI4 specification.
 
 {-# OPTIONS_GHC -Wno-missing-fields #-}
 
-module Protocols.Axi4.Raw.Full.WriteData
+module Protocols.Axi4.Strict.Full.WriteData
   ( M2S_WriteData(..)
   , S2M_WriteData(..)
   , Axi4WriteData
@@ -25,10 +25,9 @@ import Data.Proxy
 
 -- clash-prelude
 import qualified Clash.Prelude as C
-import Clash.Prelude ((:::), type (*))
 
 -- me
-import Protocols.Axi4.Raw.Common
+import Protocols.Axi4.Common
 import Protocols.Internal
 import Protocols.DfLike (DfLike)
 import qualified Protocols.DfLike as DfLike
@@ -58,15 +57,15 @@ instance DfLike dom (Axi4WriteData dom ks dataType) userType where
   type Ack (Axi4WriteData dom ks dataType) userType =
     S2M_WriteData
 
-  getPayload _ (M2S_WriteData{_wvalid=True, _wuser}) = Just _wuser
+  getPayload _ (M2S_WriteData{_wuser}) = Just _wuser
   getPayload _ _ = Nothing
   {-# INLINE getPayload #-}
 
-  setPayload _ _ dat (Just b) = dat{_wvalid=True, _wuser=b}
+  setPayload _ _ dat (Just b) = dat{_wuser=b}
   setPayload _ dfB _ Nothing = DfLike.noData dfB
   {-# INLINE setPayload #-}
 
-  noData _ = M2S_WriteData{_wvalid=False}
+  noData _ = M2S_NoWriteData
   {-# INLINE noData #-}
 
   boolToAck _ = coerce
@@ -94,41 +93,37 @@ instance (C.KnownDomain dom, C.NFDataX userType, C.ShowX userType, Show userType
   stallC conf (C.head -> (stallAck, stalls)) =
     DfLike.stall Proxy conf stallAck stalls
 
--- | See Table A2-3 "Write data channel signals"
+-- | See Table A2-3 "Write data channel signals". If strobing is kept, the data
+-- will be a vector of 'Maybe' bytes. If strobing is not kept, data will be a
+-- 'BitVector'.
 data M2S_WriteData
   (ks :: KeepStrobe)
   (nBytes :: Nat)
-  (userType :: Type) =
-  M2S_WriteData
+  (userType :: Type)
+  = M2S_NoWriteData
+  | M2S_WriteData
     { -- | Write data
-      _wdata :: "WDATA" ::: C.BitVector (nBytes*8)
-
-      -- | Write strobes
-    , _wstrb :: "WSTRB" ::: StrobeType nBytes ks
+      _wdata :: !(StrictStrobeType nBytes ks)
 
       -- | Write last
-    , _wlast :: "WLAST" ::: Bool
-
-      -- | Write valid
-    , _wvalid :: "WVALID" ::: Bool
+    , _wlast :: !Bool
 
       -- | User data
-    , _wuser :: "WUSER" ::: userType
+    , _wuser :: !userType
     }
   deriving (Generic)
 
 -- | See Table A2-3 "Write data channel signals"
-newtype S2M_WriteData = S2M_WriteData
-  { _wready :: "WREADY" ::: Bool }
+newtype S2M_WriteData = S2M_WriteData { _wready :: Bool }
   deriving (Show, Generic, C.NFDataX)
 
 deriving instance
   ( C.NFDataX userType
-  , C.NFDataX (StrobeType nBytes ks) ) =>
+  , C.NFDataX (StrictStrobeType nBytes ks) ) =>
   C.NFDataX (M2S_WriteData ks nBytes userType)
 
 deriving instance
   ( Show userType
-  , Show (StrobeType nBytes ks)
+  , Show (StrictStrobeType nBytes ks)
   , C.KnownNat nBytes ) =>
   Show (M2S_WriteData ks nBytes userType)

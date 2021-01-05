@@ -10,7 +10,7 @@ to the AXI4 specification.
 
 {-# OPTIONS_GHC -Wno-missing-fields #-}
 
-module Protocols.Axi4.Raw.Full.WriteAddress
+module Protocols.Axi4.Strict.Full.WriteAddress
   ( M2S_WriteAddress(..)
   , S2M_WriteAddress(..)
   , Axi4WriteAddress
@@ -24,10 +24,9 @@ import GHC.Generics (Generic)
 
 -- clash-prelude
 import qualified Clash.Prelude as C
-import Clash.Prelude ((:::))
 
 -- me
-import Protocols.Axi4.Raw.Common
+import Protocols.Axi4.Common
 import Protocols.Internal
 import Protocols.DfLike (DfLike)
 import qualified Protocols.DfLike as DfLike
@@ -66,15 +65,15 @@ instance DfLike dom (Axi4WriteAddress dom kb ksz lw iw aw kr kbl kl kc kp kq) us
   type Ack (Axi4WriteAddress dom kb ksz lw iw aw kr kbl kl kc kp kq) userType =
     S2M_WriteAddress
 
-  getPayload _ (M2S_WriteAddress{_awvalid=True, _awuser}) = Just _awuser
-  getPayload _ _ = Nothing
+  getPayload _ (M2S_WriteAddress{_awuser}) = Just _awuser
+  getPayload _ M2S_NoWriteAddress = Nothing
   {-# INLINE getPayload #-}
 
-  setPayload _ _ dat (Just b) = dat{_awvalid=True, _awuser=b}
+  setPayload _ _ dat (Just b) = dat{_awuser=b}
   setPayload _ dfB _ Nothing = DfLike.noData dfB
   {-# INLINE setPayload #-}
 
-  noData _ = M2S_WriteAddress{_awvalid=False}
+  noData _ = M2S_NoWriteAddress
   {-# INLINE noData #-}
 
   boolToAck _ = coerce
@@ -115,49 +114,46 @@ data M2S_WriteAddress
   (kc :: KeepCache)
   (kp :: KeepPermissions)
   (kq :: KeepQos)
-  (userType :: Type) =
-  M2S_WriteAddress
+  (userType :: Type)
+  = M2S_NoWriteAddress
+  | M2S_WriteAddress
     { -- | Write address id*
-      _awid :: "AWID"    ::: C.BitVector (Width iw)
+      _awid :: !(C.BitVector (Width iw))
 
       -- | Write address
-    , _awaddr :: "AWADDR" ::: C.BitVector (Width aw)
+    , _awaddr :: !(C.BitVector (Width aw))
 
       -- | Write region*
-    , _awregion:: "AWREGION" ::: RegionType kr
+    , _awregion:: !(RegionType kr)
 
       -- | Burst length*
-    , _awlen :: "AWLEN" ::: BurstLengthType kbl
+    , _awlen :: !(BurstLengthType kbl)
 
       -- | Burst size*
-    , _awsize :: "AWSIZE" ::: SizeType ksz
+    , _awsize :: !(SizeType ksz)
 
       -- | Burst type*
-    , _awburst :: "AWBURST" ::: BurstType kb
+    , _awburst :: !(BurstType kb)
 
       -- | Lock type*
-    , _awlock :: "AWLOCK" ::: LockType kl
+    , _awlock :: !(LockType kl)
 
       -- | Cache type*
-    , _awcache :: "AWCACHE" ::: CacheType kc
+    , _awcache :: !(CacheType kc)
 
       -- | Protection type
-    , _awprot :: "AWPROT" ::: PermissionsType kp
+    , _awprot :: !(PermissionsType kp)
 
       -- | QoS value
-    , _awqos :: "AWQOS" ::: QosType kq
-
-      -- | Write address valid
-    , _awvalid :: "AWVALID" ::: Bool
+    , _awqos :: !(QosType kq)
 
       -- | User data
-    , _awuser :: "AWUSER" ::: userType
+    , _awuser :: !userType
     }
   deriving (Generic)
 
 -- | See Table A2-2 "Write address channel signals"
-newtype S2M_WriteAddress = S2M_WriteAddress
-  { _awready :: "AWREADY" ::: Bool }
+newtype S2M_WriteAddress = S2M_WriteAddress { _awready :: Bool }
   deriving (Show, Generic, C.NFDataX)
 
 deriving instance

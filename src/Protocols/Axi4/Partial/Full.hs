@@ -10,7 +10,7 @@ is not.
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Protocols.Axi4.Raw.Full
+module Protocols.Axi4.Partial.Full
   ( module ReadAddress
   , module ReadData
   , module WriteAddress
@@ -18,8 +18,8 @@ module Protocols.Axi4.Raw.Full
   , module WriteResponse
   ) where
 
-import Protocols.Axi4.Raw.Full.ReadAddress as ReadAddress
-import Protocols.Axi4.Raw.Full.ReadData as ReadData
-import Protocols.Axi4.Raw.Full.WriteAddress as WriteAddress
-import Protocols.Axi4.Raw.Full.WriteData as WriteData
-import Protocols.Axi4.Raw.Full.WriteResponse as WriteResponse
+import Protocols.Axi4.Partial.Full.ReadAddress as ReadAddress
+import Protocols.Axi4.Partial.Full.ReadData as ReadData
+import Protocols.Axi4.Partial.Full.WriteAddress as WriteAddress
+import Protocols.Axi4.Partial.Full.WriteData as WriteData
+import Protocols.Axi4.Partial.Full.WriteResponse as WriteResponse
