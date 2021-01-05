@@ -16,7 +16,7 @@ carries data, no metadata. For documentation see:
 
 module Protocols.Df
   ( -- * Types
-    Df, Data(..), Ack(..)
+    Df, Data(..)
 
     -- * Operations on Df like protocols
   , const, void, pure
@@ -65,7 +65,6 @@ import           Prelude hiding
 
 import           Data.Bifunctor (Bifunctor)
 import           Data.Coerce (coerce)
-import           Data.Default (Default)
 import           Data.Kind (Type)
 import qualified Data.Maybe as Maybe
 import           Data.Proxy
@@ -77,7 +76,7 @@ import           Clash.Signal.Internal (Signal)
 import qualified Clash.Prelude as C
 
 -- me
-import           Protocols.Internal hiding (Ack(..))
+import           Protocols.Internal
 import           Protocols.DfLike (DfLike)
 import qualified Protocols.DfLike as DfLike
 
@@ -98,11 +97,11 @@ instance Protocol (Df dom a) where
   -- | Forward part of simple dataflow: @Signal dom (Data meta a)@
   type Fwd (Df dom a) = Signal dom (Data a)
 
-  -- | Backward part of simple dataflow: @Signal dom (Ack meta a)@
-  type Bwd (Df dom a) = Signal dom (Ack a)
+  -- | Backward part of simple dataflow: @Signal dom Bool@
+  type Bwd (Df dom a) = Signal dom Ack
 
 instance Backpressure (Df dom a) where
-  boolsToBwd = C.fromList_lazy . coerce
+  boolsToBwd _ = C.fromList_lazy . coerce
 
 -- | Data sent over forward channel of 'Df'. Note that this data type is strict
 -- on its data field.
@@ -135,14 +134,6 @@ dataToMaybe :: Data a -> Maybe a
 dataToMaybe NoData = Nothing
 dataToMaybe (Data a) = Just a
 
--- | Like 'Protocols.Df.Ack', but carrying phantom type variables to satisfy
--- 'Bwd's injectivity requirement.
-newtype Ack a = Ack Bool
-  deriving (Show)
-
-instance Default (Ack a) where
-  def = Ack True
-
 instance (C.KnownDomain dom, C.NFDataX a, C.ShowX a, Show a) => Simulate (Df dom a) where
   type SimulateType (Df dom a) = [Data a]
   type ExpectType (Df dom a) = [a]
@@ -158,7 +149,7 @@ instance (C.KnownDomain dom, C.NFDataX a, C.ShowX a, Show a) => Simulate (Df dom
 instance DfLike dom (Df dom) a where
   type Data (Df dom) a = Data a
   type Payload a = a
-  type Ack (Df dom) a = Ack a
+  type Ack (Df dom) a = Ack
 
   getPayload _ (Data a) = Just a
   getPayload _ NoData = Nothing

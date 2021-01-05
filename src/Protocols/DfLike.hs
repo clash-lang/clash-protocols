@@ -96,7 +96,7 @@ class ( Protocol (df a)
   type Payload a = (r :: Type) | r -> a
 
   -- | Acknowledgement data carried on backward channel
-  type Ack df a = (r :: Type) | r -> a
+  type Ack df a
 
   noData ::
     Proxy (df a) ->
@@ -108,6 +108,7 @@ class ( Protocol (df a)
     Maybe (Payload a)
 
   setPayload ::
+    HasCallStack =>
     DfLike dom df b =>
     Proxy (df a) ->
     Proxy (df b) ->

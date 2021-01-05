@@ -98,11 +98,8 @@ import           GHC.Generics (Generic)
 -- data. Similar to /Bool/ we define:
 --
 -- @
---   data Ack a = DfNack | Ack
+--   newtype Ack = Ack Bool
 -- @
---
--- (For technical reasons[1] we need the type variable /a/ in this definition,
--- even though we don't use it on the right hand side.)
 --
 -- With these three definitions we're ready to make an instance for /Fwd/ and
 -- /Bwd/:
@@ -110,7 +107,7 @@ import           GHC.Generics (Generic)
 -- @
 -- instance Protocol (Df dom a) where
 --   type Fwd (Df dom a) = Signal dom (Data a)
---   type Bwd (Df dom a) = Signal dom (Ack a)
+--   type Bwd (Df dom a) = Signal dom Ack
 -- @
 --
 -- Having defined all this, we can take a look at /Circuit/ once more: now
@@ -128,7 +125,7 @@ import           GHC.Generics (Generic)
 --  +------------------------>+           +------------------------->
 --                            |           |
 --                            |           |
---       Signal dom (Ack a)   |           |  Signal dom (Ack b)
+--       Signal dom Ack       |           |  Signal dom Ack
 --  <-------------------------+           +<------------------------+
 --                            |           |
 --                            +-----------+
@@ -141,15 +138,6 @@ import           GHC.Generics (Generic)
 --
 --   2. It eliminates the need for manually routing acknowledgement lines
 --
--- Footnotes:
---
--- 1. Fwd and Bwd are injective type families. I.e., something on
---    the right hand side of a type instance must uniquely identify the left
---    hand side and vice versa. This helps type inference and error messages
---    substantially, in exchange for a slight syntactical artifact. As a
---    result, any type variables on the left hand side must occur on the right
---    hand side too.
---
 newtype Circuit a b =
   Circuit ( (Fwd a, Bwd b) -> (Bwd a, Fwd b) )
 
@@ -157,11 +145,17 @@ newtype Circuit a b =
 newtype Ack = Ack Bool
   deriving (Generic, C.NFDataX)
 
+-- | Acknowledge. Used in circuit-notation plugin to drive ignore components.
+instance Default Ack where
+  def = Ack True
+
 -- | Circuit protocol with /CSignal dom a/ in its forward direction, and
 -- /CSignal dom ()/ in its backward direction. Convenient for exposing
 -- protocol internals.
 data CSignal dom a = CSignal (Signal dom a)
 
+instance Default a => Default (CSignal dom a) where
+  def = CSignal def
 
 -- | A protocol describes the in- and outputs of one side of a 'Circuit'.
 class Protocol a where
@@ -171,7 +165,7 @@ class Protocol a where
 
   -- | Receiver to sender type family. See 'Circuit' for an explanation on the
   -- existence of 'Bwd'.
-  type Bwd (a :: Type) = (r :: Type) | r -> a
+  type Bwd (a :: Type)
 
 instance Protocol () where
   type Fwd () = ()
@@ -196,7 +190,7 @@ instance C.KnownNat n => Protocol (C.Vec n a) where
 -- XXX: Type families with Signals on LHS are currently broken on Clash:
 instance Protocol (CSignal dom a) where
   type Fwd (CSignal dom a) = CSignal dom a
-  type Bwd (CSignal dom a) = CSignal dom (Const () a)
+  type Bwd (CSignal dom a) = CSignal dom ()
 
 -- | Left-to-right circuit composition.
 --
@@ -231,22 +225,25 @@ infixr 1 |>
 class Protocol a => Backpressure a where
   -- | Interpret list of booleans as a list of acknowledgements at every cycle.
   -- Implementations don't have to account for finite lists.
-  boolsToBwd :: [Bool] -> Bwd a
+  boolsToBwd :: Proxy a -> [Bool] -> Bwd a
 
 instance Backpressure () where
-  boolsToBwd _ = ()
+  boolsToBwd _ _ = ()
 
 instance (Backpressure a, Backpressure b) => Backpressure (a, b) where
-  boolsToBwd bs = (boolsToBwd bs, boolsToBwd bs)
+  boolsToBwd _ bs = (boolsToBwd (Proxy @a) bs, boolsToBwd (Proxy @b) bs)
 
 instance (Backpressure a, Backpressure b, Backpressure c) => Backpressure (a, b, c) where
-  boolsToBwd bs = (boolsToBwd bs, boolsToBwd bs, boolsToBwd bs)
+  boolsToBwd _ bs =
+    ( boolsToBwd (Proxy @a) bs
+    , boolsToBwd (Proxy @b) bs
+    , boolsToBwd (Proxy @c) bs )
 
 instance (C.KnownNat n, Backpressure a) => Backpressure (C.Vec n a) where
-  boolsToBwd bs = C.repeat (boolsToBwd bs)
+  boolsToBwd _ bs = C.repeat (boolsToBwd (Proxy @a) bs)
 
 instance Backpressure (CSignal dom a) where
-  boolsToBwd _ = CSignal (pure (Const ()))
+  boolsToBwd _ _ = CSignal (pure ())
 
 -- | Right-to-left circuit composition.
 --
@@ -480,7 +477,7 @@ instance (Simulate a, Simulate b) => Simulate (a, b) where
   sampleC conf (Circuit f) =
     let
       bools = replicate (resetCycles conf) False <> repeat True
-      (_, (fwd1, fwd2)) = f ((), (boolsToBwd bools, boolsToBwd bools))
+      (_, (fwd1, fwd2)) = f ((), (boolsToBwd (Proxy @a) bools, boolsToBwd (Proxy @b) bools))
     in
       ( sampleC conf (Circuit $ \_ -> ((), fwd1))
       , sampleC conf (Circuit $ \_ -> ((), fwd2)) )
@@ -517,7 +514,7 @@ instance (C.KnownNat n, Simulate a) => Simulate (C.Vec n a) where
   sampleC conf (Circuit f) =
     let
       bools = replicate (resetCycles conf) False <> repeat True
-      (_, fwds) = f ((), (C.repeat (boolsToBwd bools)))
+      (_, fwds) = f ((), (C.repeat (boolsToBwd (Proxy @a) bools)))
     in
       C.map (\fwd -> sampleC conf (Circuit $ \_ -> ((), fwd))) fwds
 
