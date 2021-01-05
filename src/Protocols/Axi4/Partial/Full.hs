@@ -18,8 +18,13 @@ module Protocols.Axi4.Partial.Full
   , module WriteResponse
   ) where
 
-import Protocols.Axi4.Partial.Full.ReadAddress as ReadAddress
-import Protocols.Axi4.Partial.Full.ReadData as ReadData
-import Protocols.Axi4.Partial.Full.WriteAddress as WriteAddress
-import Protocols.Axi4.Partial.Full.WriteData as WriteData
-import Protocols.Axi4.Partial.Full.WriteResponse as WriteResponse
+import Protocols.Axi4.Partial.Full.ReadAddress
+  as ReadAddress hiding (toStrict, toStrictDf, fromStrict, fromStrictDf)
+import Protocols.Axi4.Partial.Full.ReadData
+  as ReadData hiding (toStrict, toStrictDf, fromStrict, fromStrictDf)
+import Protocols.Axi4.Partial.Full.WriteAddress
+  as WriteAddress hiding (toStrict, toStrictDf, fromStrict, fromStrictDf)
+import Protocols.Axi4.Partial.Full.WriteData
+  as WriteData hiding (toStrict, toStrictDf, fromStrict, fromStrictDf)
+import Protocols.Axi4.Partial.Full.WriteResponse
+  as WriteResponse hiding (toStrict, toStrictDf, fromStrict, fromStrictDf)

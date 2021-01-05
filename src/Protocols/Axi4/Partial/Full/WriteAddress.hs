@@ -6,6 +6,7 @@ to the AXI4 specification.
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wno-missing-fields #-}
@@ -14,6 +15,8 @@ module Protocols.Axi4.Partial.Full.WriteAddress
   ( M2S_WriteAddress(..)
   , S2M_WriteAddress(..)
   , Axi4WriteAddress
+  , toStrict, toStrictDf
+  , fromStrict, fromStrictDf
   ) where
 
 -- base
@@ -31,6 +34,9 @@ import Protocols.Axi4.Common
 import Protocols.Internal
 import Protocols.DfLike (DfLike)
 import qualified Protocols.DfLike as DfLike
+import qualified Protocols.Axi4.Strict.Full.WriteAddress as Strict
+import qualified Protocols.Df as Df
+import Protocols.Df (Df)
 
 -- | AXI4 Write Address channel protocol
 data Axi4WriteAddress
@@ -187,3 +193,49 @@ deriving instance
   , C.NFDataX (PermissionsType kp)
   , C.NFDataX (QosType kq) ) =>
   C.NFDataX (M2S_WriteAddress kb ksz lw iw aw kr kbl kl kc kp kq userType)
+
+-- | Convert an 'Axi4WriteAddress' into its strict version
+-- 'Strict.Axi4WriteAddress'. The latter is usually preferred in Clash designs
+-- as its definitions don't contain partial fields. Note that the functions
+-- defined over these circuits operate on @userType@. If you need functions to
+-- map over all fields, consider using 'toStrictDf'.
+toStrict ::
+  Circuit
+    (Axi4WriteAddress dom kb ksz lw iw aw kr kbl kl kc kp kq userType)
+    (Strict.Axi4WriteAddress dom kb ksz lw iw aw kr kbl kl kc kp kq userType)
+toStrict = Circuit (C.unbundle . fmap go . C.bundle)
+ where
+  go (M2S_WriteAddress{..}, ack)
+    | _awvalid  = (coerce ack, Strict.M2S_WriteAddress{..})
+    | otherwise = (coerce ack, Strict.M2S_NoWriteAddress)
+
+-- | Convert a 'Strict.Axi4WriteAddress' into 'Axi4WriteAddress'
+fromStrict ::
+  Circuit
+    (Strict.Axi4WriteAddress dom kb ksz lw iw aw kr kbl kl kc kp kq userType)
+    (Axi4WriteAddress dom kb ksz lw iw aw kr kbl kl kc kp kq userType)
+fromStrict = Circuit (C.unbundle . fmap go . C.bundle)
+ where
+  go (Strict.M2S_WriteAddress{..}, ack) = (coerce ack, M2S_WriteAddress{_awvalid=True,..})
+  go (Strict.M2S_NoWriteAddress, ack) = (coerce ack, M2S_WriteAddress{_awvalid=False})
+
+-- | Convert an 'Axi4WriteAddress' into its strict 'Df' equivalent.
+toStrictDf ::
+  Circuit
+    (Axi4WriteAddress dom kb ksz lw iw aw kr kbl kl kc kp kq userType)
+    (Df dom (Strict.M2S_WriteAddress kb ksz lw iw aw kr kbl kl kc kp kq userType))
+toStrictDf = Circuit (C.unbundle . fmap go . C.bundle)
+ where
+  go (M2S_WriteAddress{..}, ack)
+    | _awvalid  = (coerce ack, Df.Data (Strict.M2S_WriteAddress{..}))
+    | otherwise = (coerce ack, Df.NoData)
+
+-- | Convert a into 'Axi4WriteAddress' from its Df equivalent
+fromStrictDf ::
+  Circuit
+    (Df dom (Strict.M2S_WriteAddress kb ksz lw iw aw kr kbl kl kc kp kq userType))
+    (Axi4WriteAddress dom kb ksz lw iw aw kr kbl kl kc kp kq userType)
+fromStrictDf = Circuit (C.unbundle . fmap go . C.bundle)
+ where
+  go (Df.Data (Strict.M2S_WriteAddress{..}), ack) = (coerce ack, M2S_WriteAddress{_awvalid=True,..})
+  go (_, ack) = (coerce ack, M2S_WriteAddress{_awvalid=False})

@@ -6,6 +6,7 @@ to the AXI4 specification.
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wno-missing-fields #-}
@@ -14,6 +15,8 @@ module Protocols.Axi4.Partial.Full.WriteResponse
   ( M2S_WriteResponse(..)
   , S2M_WriteResponse(..)
   , Axi4WriteResponse
+  , toStrict, toStrictDf
+  , fromStrict, fromStrictDf
   ) where
 
 -- base
@@ -31,6 +34,9 @@ import Protocols.Axi4.Common
 import Protocols.Internal
 import Protocols.DfLike (DfLike)
 import qualified Protocols.DfLike as DfLike
+import qualified Protocols.Axi4.Strict.Full.WriteResponse as Strict
+import qualified Protocols.Df as Df
+import Protocols.Df (Df)
 
 -- | AXI4 Read Data channel protocol
 data Axi4WriteResponse
@@ -128,3 +134,49 @@ deriving instance
   , Show (ResponseType kr)
   , C.KnownNat (Width iw) ) =>
   Show (S2M_WriteResponse kr iw userType)
+
+-- | Convert an 'Axi4WriteResponse' into its strict version
+-- 'Strict.Axi4WriteResponse'. The latter is usually preferred in Clash designs
+-- as its definitions don't contain partial fields. Note that the functions
+-- defined over these circuits operate on @userType@. If you need functions to
+-- map over all fields, consider using 'toStrictDf'.
+toStrict ::
+  Circuit
+    (Axi4WriteResponse dom kr iw userType)
+    (Strict.Axi4WriteResponse dom kr iw userType)
+toStrict = Circuit (C.unbundle . fmap go . C.bundle)
+ where
+  go (S2M_WriteResponse{..}, ack)
+    | _bvalid  = (coerce ack, Strict.S2M_WriteResponse{..})
+    | otherwise = (coerce ack, Strict.S2M_NoWriteResponse)
+
+-- | Convert a 'Strict.Axi4WriteResponse' into 'Axi4WriteResponse'
+fromStrict ::
+  Circuit
+    (Strict.Axi4WriteResponse dom kr iw userType)
+    (Axi4WriteResponse dom kr iw userType)
+fromStrict = Circuit (C.unbundle . fmap go . C.bundle)
+ where
+  go (Strict.S2M_WriteResponse{..}, ack) = (coerce ack, S2M_WriteResponse{_bvalid=True,..})
+  go (Strict.S2M_NoWriteResponse, ack) = (coerce ack, S2M_WriteResponse{_bvalid=False})
+
+-- | Convert an 'Axi4WriteResponse' into its strict 'Df' equivalent.
+toStrictDf ::
+  Circuit
+    (Axi4WriteResponse dom kr iw userType)
+    (Df dom (Strict.S2M_WriteResponse kr iw userType))
+toStrictDf = Circuit (C.unbundle . fmap go . C.bundle)
+ where
+  go (S2M_WriteResponse{..}, ack)
+    | _bvalid  = (coerce ack, Df.Data (Strict.S2M_WriteResponse{..}))
+    | otherwise = (coerce ack, Df.NoData)
+
+-- | Convert a into 'Axi4WriteResponse' from its Df equivalent
+fromStrictDf ::
+  Circuit
+    (Df dom (Strict.S2M_WriteResponse kr iw userType))
+    (Axi4WriteResponse dom kr iw userType)
+fromStrictDf = Circuit (C.unbundle . fmap go . C.bundle)
+ where
+  go (Df.Data (Strict.S2M_WriteResponse{..}), ack) = (coerce ack, S2M_WriteResponse{_bvalid=True,..})
+  go (_, ack) = (coerce ack, S2M_WriteResponse{_bvalid=False})

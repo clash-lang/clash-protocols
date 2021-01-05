@@ -1,6 +1,7 @@
 {-|
 Types and utilities shared between AXI4, AXI4-Lite, and AXI3.
 -}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Protocols.Axi4.Common where
@@ -15,7 +16,7 @@ import qualified Clash.Prelude as C
 import Clash.Prelude (type (^), type (-), type (*))
 
 -- strict-tuple
-import Data.Tuple.Strict
+import Data.Tuple.Strict (T3, T4)
 
 -- | Simple wrapper to achieve "named arguments" when instantiating an AXI protocol
 data IdWidth = IdWidth Nat deriving (Show)
@@ -62,6 +63,11 @@ data KeepSize = KeepSize | NoSize deriving (Show)
 
 -- | Keep or remove strobe field. See 'Strobe'
 data KeepStrobe = KeepStrobe | NoStrobe deriving (Show)
+
+-- | Type used to introduce strobe information on the term level
+data SKeepStrobe (strobeType :: KeepStrobe) where
+  SKeepStrobe :: SKeepStrobe 'KeepStrobe
+  SNoStrobe :: SKeepStrobe 'NoStrobe
 
 -- | Extracts Nat from 'IdWidth', 'AddrWidth', and 'LengthWidth'
 type family Width (a :: k) :: Nat where
@@ -126,7 +132,7 @@ type family StrobeType (byteSize :: Nat) (keepStrobe :: KeepStrobe) where
 
 -- | Enable or disable 'Strobe'
 type family StrictStrobeType (byteSize :: Nat) (keepStrobe :: KeepStrobe) where
-  StrictStrobeType byteSize 'KeepStrobe = C.Vec byteSize (C.BitVector 8)
+  StrictStrobeType byteSize 'KeepStrobe = C.Vec byteSize (Maybe (C.BitVector 8))
   StrictStrobeType byteSize 'NoStrobe = C.BitVector (byteSize * 8)
 
 -- | Indicates valid bytes on data field.

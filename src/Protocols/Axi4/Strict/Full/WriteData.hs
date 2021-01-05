@@ -95,7 +95,7 @@ instance (C.KnownDomain dom, C.NFDataX userType, C.ShowX userType, Show userType
 
 -- | See Table A2-3 "Write data channel signals". If strobing is kept, the data
 -- will be a vector of 'Maybe' bytes. If strobing is not kept, data will be a
--- 'BitVector'.
+-- 'C.BitVector'.
 data M2S_WriteData
   (ks :: KeepStrobe)
   (nBytes :: Nat)

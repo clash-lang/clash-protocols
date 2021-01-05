@@ -6,6 +6,7 @@ to the AXI4 specification.
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wno-missing-fields #-}
@@ -14,6 +15,8 @@ module Protocols.Axi4.Partial.Full.ReadData
   ( M2S_ReadData(..)
   , S2M_ReadData(..)
   , Axi4ReadData
+  , toStrict, toStrictDf
+  , fromStrict, fromStrictDf
   ) where
 
 -- base
@@ -31,6 +34,9 @@ import Protocols.Axi4.Common
 import Protocols.Internal
 import Protocols.DfLike (DfLike)
 import qualified Protocols.DfLike as DfLike
+import qualified Protocols.Axi4.Strict.Full.ReadData as Strict
+import qualified Protocols.Df as Df
+import Protocols.Df (Df)
 
 -- | AXI4 Read Data channel protocol
 data Axi4ReadData
@@ -138,3 +144,49 @@ deriving instance
   , Show dataType
   , Show (ResponseType kr) ) =>
   Show (S2M_ReadData kr iw dataType userType)
+
+-- | Convert an 'Axi4ReadData' into its strict version
+-- 'Strict.Axi4ReadData'. The latter is usually preferred in Clash designs
+-- as its definitions don't contain partial fields. Note that the functions
+-- defined over these circuits operate on @userType@. If you need functions to
+-- map over all fields, consider using 'toStrictDf'.
+toStrict ::
+  Circuit
+    (Axi4ReadData dom kr iw dataType userType)
+    (Strict.Axi4ReadData dom kr iw dataType userType)
+toStrict = Circuit (C.unbundle . fmap go . C.bundle)
+ where
+  go (S2M_ReadData{..}, ack)
+    | _rvalid  = (coerce ack, Strict.S2M_ReadData{..})
+    | otherwise = (coerce ack, Strict.S2M_NoReadData)
+
+-- | Convert a 'Strict.Axi4ReadData' into 'Axi4ReadData'
+fromStrict ::
+  Circuit
+    (Strict.Axi4ReadData dom kr iw dataType userType)
+    (Axi4ReadData dom kr iw dataType userType)
+fromStrict = Circuit (C.unbundle . fmap go . C.bundle)
+ where
+  go (Strict.S2M_ReadData{..}, ack) = (coerce ack, S2M_ReadData{_rvalid=True,..})
+  go (Strict.S2M_NoReadData, ack) = (coerce ack, S2M_ReadData{_rvalid=False})
+
+-- | Convert an 'Axi4ReadData' into its strict 'Df' equivalent.
+toStrictDf ::
+  Circuit
+    (Axi4ReadData dom kr iw dataType userType)
+    (Df dom (Strict.S2M_ReadData kr iw dataType userType))
+toStrictDf = Circuit (C.unbundle . fmap go . C.bundle)
+ where
+  go (S2M_ReadData{..}, ack)
+    | _rvalid  = (coerce ack, Df.Data (Strict.S2M_ReadData{..}))
+    | otherwise = (coerce ack, Df.NoData)
+
+-- | Convert a into 'Axi4ReadData' from its Df equivalent
+fromStrictDf ::
+  Circuit
+    (Df dom (Strict.S2M_ReadData kr iw dataType userType))
+    (Axi4ReadData dom kr iw dataType userType)
+fromStrictDf = Circuit (C.unbundle . fmap go . C.bundle)
+ where
+  go (Df.Data (Strict.S2M_ReadData{..}), ack) = (coerce ack, S2M_ReadData{_rvalid=True,..})
+  go (_, ack) = (coerce ack, S2M_ReadData{_rvalid=False})
