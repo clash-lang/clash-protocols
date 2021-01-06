@@ -47,7 +47,7 @@ module Protocols
   , def
 
     -- * Circuit notation plugin
-  , circuit
+  , circuit, (-<)
   ) where
 
 import Data.Default (def)
