@@ -21,6 +21,7 @@ module Protocols.DfLike
 
     -- * Operations on Df like protocols
   , const, pure, void
+  , mapDfLike
   , map, bimap
   , fst, snd
   , mapMaybe, catMaybes
@@ -123,7 +124,7 @@ hasPayload :: DfLike dom df a => Proxy (df a) -> Data df a -> Bool
 hasPayload dfA = Maybe.isJust . getPayload dfA
 {-# INLINE hasPayload #-}
 
-mapData ::
+mapPayload ::
   forall df dom a b.
   ( DfLike dom df a
   , DfLike dom df b ) =>
@@ -132,9 +133,27 @@ mapData ::
   (Payload a -> Payload b) ->
   Data df a ->
   Data df b
-mapData dfA dfB f fwdA =
+mapPayload dfA dfB f fwdA =
   setPayload dfA dfB fwdA (fmap f (getPayload dfA fwdA))
-{-# INLINE mapData #-}
+{-# INLINE mapPayload #-}
+
+
+-- | Allows conversion of one DfLike protocol into another, given two functions that
+-- transform the data and ack type of one protocol to the other.
+mapDfLike ::
+  forall df1 df2 dom a1 a2.
+  ( DfLike dom df1 a1
+  , DfLike dom df2 a2 ) =>
+  Proxy (df1 a1) ->
+  Proxy (df2 a2) ->
+  (Data df1 a1 -> Data df2 a2) ->
+  (Ack df2 a2 -> Ack df1 a1) ->
+  Circuit (df1 a1) (df2 a2)
+mapDfLike Proxy Proxy fData fAck = Circuit (CE.unbundle . fmap go . CE.bundle)
+  where
+    go :: (Data df1 a1, Ack df2 a2) -> (Ack df1 a1, Data df2 a2)
+    go (d, ack) = (fAck ack, fData d)
+
 
 -- | Like 'P.map'
 map ::
@@ -149,7 +168,7 @@ map dfA dfB f = Circuit (uncurry go)
  where
   go fwd bwd =
     ( boolToAck dfA . ackToBool dfB <$> bwd
-    , mapData dfA dfB f <$> fwd )
+    , mapPayload dfA dfB f <$> fwd )
 {-# INLINE map #-}
 
 -- | Like 'P.fst'

@@ -15,6 +15,7 @@ module Protocols.Axi4.ReadData
   , S2M_ReadData(..)
   , Axi4ReadData
   , map
+  , mapDfLike
   ) where
 
 -- base
@@ -143,3 +144,14 @@ map :: (a -> b) -> Circuit
   (Axi4ReadData dom kr iw dataType a)
   (Axi4ReadData dom kr iw dataType b)
 map = DfLike.map Proxy Proxy
+
+mapFull ::
+  forall dom
+    kr1 iw1 userType1 dataType1
+    kr2 iw2 userType2 dataType2 .
+  (S2M_ReadData kr1 iw1 userType1 dataType1 -> S2M_ReadData kr2 iw2 userType2 dataType2) ->
+  (M2S_ReadData -> M2S_ReadData) ->
+  Circuit
+    (Axi4ReadData dom kr1 iw1 userType1 dataType1)
+    (Axi4ReadData dom kr2 iw2 userType2 dataType2)
+mapFull = DfLike.mapDfLike Proxy Proxy

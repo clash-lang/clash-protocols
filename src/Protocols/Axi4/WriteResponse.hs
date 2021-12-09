@@ -14,6 +14,7 @@ module Protocols.Axi4.WriteResponse
   ( M2S_WriteResponse(..)
   , S2M_WriteResponse(..)
   , Axi4WriteResponse
+  , mapDfLike
   ) where
 
 -- base
@@ -125,3 +126,13 @@ deriving instance
   , C.KnownNat (Width iw) ) =>
   Show (S2M_WriteResponse kr iw userType)
 
+mapFull ::
+  forall dom
+    kr1 iw1 userType1
+    kr2 iw2 userType2 .
+  (S2M_WriteResponse kr1 iw1 userType1 -> S2M_WriteResponse kr2 iw2 userType2) ->
+  (M2S_WriteResponse -> M2S_WriteResponse) ->
+  Circuit
+    (Axi4WriteResponse dom kr1 iw1 userType1)
+    (Axi4WriteResponse dom kr2 iw2 userType2)
+mapFull = DfLike.mapDfLike Proxy Proxy

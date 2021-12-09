@@ -14,7 +14,7 @@ module Protocols.Axi4.WriteData
   ( M2S_WriteData(..)
   , S2M_WriteData(..)
   , Axi4WriteData
-  , map
+  , mapDfLike
   ) where
 
 -- base
@@ -131,3 +131,9 @@ deriving instance
   , C.KnownNat nBytes ) =>
   Show (M2S_WriteData ks nBytes userType)
 
+mapFull ::
+  forall dom ks1 ks2 nBytes1 nBytes2 t1 t2.
+  (M2S_WriteData ks1 nBytes1 t1 -> M2S_WriteData ks2 nBytes2 t2) ->
+  (S2M_WriteData -> S2M_WriteData) ->
+  Circuit ((Axi4WriteData dom ks1 nBytes1) t1) ((Axi4WriteData dom ks2 nBytes2) t2)
+mapFull = DfLike.mapDfLike Proxy Proxy

@@ -14,6 +14,7 @@ module Protocols.Axi4.WriteAddress
   ( M2S_WriteAddress(..)
   , S2M_WriteAddress(..)
   , Axi4WriteAddress
+  , mapDfLike
   ) where
 
 -- base
@@ -184,3 +185,14 @@ deriving instance
   , C.NFDataX (QosType kq) ) =>
   C.NFDataX (M2S_WriteAddress kb ksz lw iw aw kr kbl kl kc kp kq userType)
 
+mapFull ::
+  forall dom
+    kb1 ksz1 lw1 iw1 aw1 kr1 kbl1 kl1 kc1 kp1 kq1 userType1
+    kb2 ksz2 lw2 iw2 aw2 kr2 kbl2 kl2 kc2 kp2 kq2 userType2 .
+  (M2S_WriteAddress kb1 ksz1 lw1 iw1 aw1 kr1 kbl1 kl1 kc1 kp1 kq1 userType1 ->
+    M2S_WriteAddress kb2 ksz2 lw2 iw2 aw2 kr2 kbl2 kl2 kc2 kp2 kq2 userType2) ->
+  (S2M_WriteAddress -> S2M_WriteAddress) ->
+  Circuit
+    (Axi4WriteAddress dom kb1 ksz1 lw1 iw1 aw1 kr1 kbl1 kl1 kc1 kp1 kq1 userType1)
+    (Axi4WriteAddress dom kb2 ksz2 lw2 iw2 aw2 kr2 kbl2 kl2 kc2 kp2 kq2 userType2)
+mapFull = DfLike.mapDfLike Proxy Proxy

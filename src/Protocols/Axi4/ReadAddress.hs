@@ -14,6 +14,7 @@ module Protocols.Axi4.ReadAddress
   ( M2S_ReadAddress(..)
   , S2M_ReadAddress(..)
   , Axi4ReadAddress
+  , mapDfLike
   ) where
 
 -- base
@@ -186,3 +187,15 @@ deriving instance
   , C.NFDataX (QosType kq) ) =>
   C.NFDataX (M2S_ReadAddress kb ksz lw iw aw kr kbl kl kc kp kq userType)
 
+
+mapFull ::
+  forall dom
+    kb1 ksz1 lw1 iw1 aw1 kr1 kbl1 kl1 kc1 kp1 kq1 t1
+    kb2 ksz2 lw2 iw2 aw2 kr2 kbl2 kl2 kc2 kp2 kq2 t2 .
+  (M2S_ReadAddress kb1 ksz1 lw1 iw1 aw1 kr1 kbl1 kl1 kc1 kp1 kq1 t1 ->
+    M2S_ReadAddress kb2 ksz2 lw2 iw2 aw2 kr2 kbl2 kl2 kc2 kp2 kq2 t2) ->
+  (S2M_ReadAddress -> S2M_ReadAddress) ->
+  Circuit
+    (Axi4ReadAddress dom kb1 ksz1 lw1 iw1 aw1 kr1 kbl1 kl1 kc1 kp1 kq1 t1)
+    (Axi4ReadAddress dom kb2 ksz2 lw2 iw2 aw2 kr2 kbl2 kl2 kc2 kp2 kq2 t2)
+mapFull = DfLike.mapDfLike Proxy Proxy
