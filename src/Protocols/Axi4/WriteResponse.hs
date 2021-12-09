@@ -14,7 +14,7 @@ module Protocols.Axi4.WriteResponse
   ( M2S_WriteResponse(..)
   , S2M_WriteResponse(..)
   , Axi4WriteResponse
-  , mapDfLike
+  , mapFull
   ) where
 
 -- base

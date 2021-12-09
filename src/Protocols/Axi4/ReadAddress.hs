@@ -14,7 +14,7 @@ module Protocols.Axi4.ReadAddress
   ( M2S_ReadAddress(..)
   , S2M_ReadAddress(..)
   , Axi4ReadAddress
-  , mapDfLike
+  , mapFull
   ) where
 
 -- base

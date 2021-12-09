@@ -14,7 +14,7 @@ module Protocols.Axi4.WriteAddress
   ( M2S_WriteAddress(..)
   , S2M_WriteAddress(..)
   , Axi4WriteAddress
-  , mapDfLike
+  , mapFull
   ) where
 
 -- base
