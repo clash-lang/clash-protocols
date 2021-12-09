@@ -6,17 +6,14 @@ to the AXI4 specification.
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wno-missing-fields #-}
 
-module Protocols.Axi4.Partial.Full.ReadAddress
+module Protocols.Axi4.ReadAddress
   ( M2S_ReadAddress(..)
   , S2M_ReadAddress(..)
   , Axi4ReadAddress
-  , toStrict, toStrictDf
-  , fromStrict, fromStrictDf
   ) where
 
 -- base
@@ -27,16 +24,12 @@ import GHC.Generics (Generic)
 
 -- clash-prelude
 import qualified Clash.Prelude as C
-import Clash.Prelude ((:::))
 
 -- me
 import Protocols.Axi4.Common
 import Protocols.Internal
 import Protocols.DfLike (DfLike)
 import qualified Protocols.DfLike as DfLike
-import qualified Protocols.Axi4.Strict.Full.ReadAddress as Strict
-import qualified Protocols.Df as Df
-import Protocols.Df (Df)
 
 -- | AXI4 Read Address channel protocol
 data Axi4ReadAddress
@@ -72,15 +65,15 @@ instance DfLike dom (Axi4ReadAddress dom kb ksz lw iw aw kr kbl kl kc kp kq) use
   type Ack (Axi4ReadAddress dom kb ksz lw iw aw kr kbl kl kc kp kq) userType =
     S2M_ReadAddress
 
-  getPayload _ (M2S_ReadAddress{_arvalid=True, _aruser}) = Just _aruser
-  getPayload _ _ = Nothing
+  getPayload _ (M2S_ReadAddress{_aruser}) = Just _aruser
+  getPayload _ M2S_NoReadAddress = Nothing
   {-# INLINE getPayload #-}
 
-  setPayload _ _ dat (Just b) = dat{_arvalid=True, _aruser=b}
+  setPayload _ _ dat (Just b) = dat{_aruser=b}
   setPayload _ dfB _ Nothing = DfLike.noData dfB
   {-# INLINE setPayload #-}
 
-  noData _ = M2S_ReadAddress{_arvalid=False}
+  noData _ = M2S_NoReadAddress
   {-# INLINE noData #-}
 
   boolToAck _ = coerce
@@ -109,6 +102,7 @@ instance (C.KnownDomain dom, C.NFDataX userType, C.ShowX userType, Show userType
     DfLike.stall Proxy conf stallAck stalls
 
 -- | See Table A2-5 "Read address channel signals"
+
 data M2S_ReadAddress
   (kb :: KeepBurst)
   (ksz :: KeepSize)
@@ -121,49 +115,47 @@ data M2S_ReadAddress
   (kc :: KeepCache)
   (kp :: KeepPermissions)
   (kq :: KeepQos)
-  (userType :: Type) =
-  M2S_ReadAddress
+  (userType :: Type)
+  = M2S_NoReadAddress
+  | M2S_ReadAddress
     { -- | Read address id*
-      _arid :: "ARID"    ::: C.BitVector (Width iw)
+      _arid :: !(C.BitVector (Width iw))
 
       -- | Read address
-    , _araddr :: "ARADDR" ::: C.BitVector (Width aw)
+    , _araddr :: !(C.BitVector (Width aw))
 
       -- | Read region*
-    , _arregion:: "ARREGION" ::: RegionType kr
+    , _arregion :: !(RegionType kr)
 
       -- | Burst length*
-    , _arlen :: "ARLEN" ::: BurstLengthType kbl
+    , _arlen :: !(BurstLengthType kbl)
 
       -- | Burst size*
-    , _arsize :: "ARSIZE" ::: SizeType ksz
+    , _arsize :: !(SizeType ksz)
 
       -- | Burst type*
-    , _arburst :: "ARBURST" ::: BurstType kb
+    , _arburst :: !(BurstType kb)
 
       -- | Lock type*
-    , _arlock :: "ARLOCK" ::: LockType kl
+    , _arlock :: !(LockType kl)
 
       -- | Cache type* (has been renamed to modifiable in AXI spec)
-    , _arcache :: "ARCACHE" ::: CacheType kc
+    , _arcache :: !(CacheType kc)
 
       -- | Protection type
-    , _arprot :: "ARPROT" ::: PermissionsType kp
+    , _arprot :: !(PermissionsType kp)
 
       -- | QoS value
-    , _arqos :: "ARQOS" ::: QosType kq
-
-      -- | Read address valid
-    , _arvalid :: "ARVALID" ::: Bool
+    , _arqos :: !(QosType kq)
 
       -- | User data
-    , _aruser :: "ARUSER" ::: userType
+    , _aruser :: !userType
     }
   deriving (Generic)
 
 -- | See Table A2-5 "Read address channel signals"
 newtype S2M_ReadAddress = S2M_ReadAddress
-  { _arready :: "ARREADY" ::: Bool }
+  { _arready :: Bool }
   deriving (Show, Generic, C.NFDataX)
 
 deriving instance
@@ -194,48 +186,3 @@ deriving instance
   , C.NFDataX (QosType kq) ) =>
   C.NFDataX (M2S_ReadAddress kb ksz lw iw aw kr kbl kl kc kp kq userType)
 
--- | Convert an 'Axi4ReadAddress' into its strict version
--- 'Strict.Axi4ReadAddress'. The latter is usually preferred in Clash designs
--- as its definitions don't contain partial fields. Note that the functions
--- defined over these circuits operate on @userType@. If you need functions to
--- map over all fields, consider using 'toStrictDf'.
-toStrict ::
-  Circuit
-    (Axi4ReadAddress dom kb ksz lw iw aw kr kbl kl kc kp kq userType)
-    (Strict.Axi4ReadAddress dom kb ksz lw iw aw kr kbl kl kc kp kq userType)
-toStrict = Circuit (C.unbundle . fmap go . C.bundle)
- where
-  go (M2S_ReadAddress{..}, ack)
-    | _arvalid  = (coerce ack, Strict.M2S_ReadAddress{..})
-    | otherwise = (coerce ack, Strict.M2S_NoReadAddress)
-
--- | Convert a 'Strict.Axi4ReadAddress' into 'Axi4ReadAddress'
-fromStrict ::
-  Circuit
-    (Strict.Axi4ReadAddress dom kb ksz lw iw aw kr kbl kl kc kp kq userType)
-    (Axi4ReadAddress dom kb ksz lw iw aw kr kbl kl kc kp kq userType)
-fromStrict = Circuit (C.unbundle . fmap go . C.bundle)
- where
-  go (Strict.M2S_ReadAddress{..}, ack) = (coerce ack, M2S_ReadAddress{_arvalid=True,..})
-  go (Strict.M2S_NoReadAddress, ack) = (coerce ack, M2S_ReadAddress{_arvalid=False})
-
--- | Convert an 'Axi4ReadAddress' into its strict 'Df' equivalent.
-toStrictDf ::
-  Circuit
-    (Axi4ReadAddress dom kb ksz lw iw aw kr kbl kl kc kp kq userType)
-    (Df dom (Strict.M2S_ReadAddress kb ksz lw iw aw kr kbl kl kc kp kq userType))
-toStrictDf = Circuit (C.unbundle . fmap go . C.bundle)
- where
-  go (M2S_ReadAddress{..}, ack)
-    | _arvalid  = (coerce ack, Df.Data (Strict.M2S_ReadAddress{..}))
-    | otherwise = (coerce ack, Df.NoData)
-
--- | Convert a into 'Axi4ReadAddress' from its Df equivalent
-fromStrictDf ::
-  Circuit
-    (Df dom (Strict.M2S_ReadAddress kb ksz lw iw aw kr kbl kl kc kp kq userType))
-    (Axi4ReadAddress dom kb ksz lw iw aw kr kbl kl kc kp kq userType)
-fromStrictDf = Circuit (C.unbundle . fmap go . C.bundle)
- where
-  go (Df.Data (Strict.M2S_ReadAddress{..}), ack) = (coerce ack, M2S_ReadAddress{_arvalid=True,..})
-  go (_, ack) = (coerce ack, M2S_ReadAddress{_arvalid=False})

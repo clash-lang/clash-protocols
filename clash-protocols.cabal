@@ -141,19 +141,11 @@ library
 
     Protocols.Axi4.Common
 
-    Protocols.Axi4.Partial.Full
-    Protocols.Axi4.Partial.Full.ReadAddress
-    Protocols.Axi4.Partial.Full.ReadData
-    Protocols.Axi4.Partial.Full.WriteAddress
-    Protocols.Axi4.Partial.Full.WriteData
-    Protocols.Axi4.Partial.Full.WriteResponse
-
-    Protocols.Axi4.Strict.Full
-    Protocols.Axi4.Strict.Full.ReadAddress
-    Protocols.Axi4.Strict.Full.ReadData
-    Protocols.Axi4.Strict.Full.WriteAddress
-    Protocols.Axi4.Strict.Full.WriteData
-    Protocols.Axi4.Strict.Full.WriteResponse
+    Protocols.Axi4.ReadAddress
+    Protocols.Axi4.ReadData
+    Protocols.Axi4.WriteAddress
+    Protocols.Axi4.WriteData
+    Protocols.Axi4.WriteResponse
 
     Protocols.Df
     Protocols.DfLike

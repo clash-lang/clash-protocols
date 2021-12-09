@@ -10,10 +10,11 @@ to the AXI4 specification.
 
 {-# OPTIONS_GHC -Wno-missing-fields #-}
 
-module Protocols.Axi4.Strict.Full.WriteData
+module Protocols.Axi4.WriteData
   ( M2S_WriteData(..)
   , S2M_WriteData(..)
   , Axi4WriteData
+  , map
   ) where
 
 -- base
@@ -22,6 +23,8 @@ import Data.Kind (Type)
 import GHC.Generics (Generic)
 import GHC.TypeNats (Nat)
 import Data.Proxy
+import Prelude hiding
+  ((!!), map, zip, zipWith, filter, fst, snd, either, const, pure)
 
 -- clash-prelude
 import qualified Clash.Prelude as C
@@ -127,3 +130,4 @@ deriving instance
   , Show (StrictStrobeType nBytes ks)
   , C.KnownNat nBytes ) =>
   Show (M2S_WriteData ks nBytes userType)
+

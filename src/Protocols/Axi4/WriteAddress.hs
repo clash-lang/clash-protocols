@@ -10,7 +10,7 @@ to the AXI4 specification.
 
 {-# OPTIONS_GHC -Wno-missing-fields #-}
 
-module Protocols.Axi4.Strict.Full.WriteAddress
+module Protocols.Axi4.WriteAddress
   ( M2S_WriteAddress(..)
   , S2M_WriteAddress(..)
   , Axi4WriteAddress
@@ -183,3 +183,4 @@ deriving instance
   , C.NFDataX (PermissionsType kp)
   , C.NFDataX (QosType kq) ) =>
   C.NFDataX (M2S_WriteAddress kb ksz lw iw aw kr kbl kl kc kp kq userType)
+
