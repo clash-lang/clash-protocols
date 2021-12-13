@@ -19,50 +19,50 @@ import Clash.Prelude (type (^), type (-), type (*))
 import Data.Tuple.Strict (T3, T4)
 
 -- | Simple wrapper to achieve "named arguments" when instantiating an AXI protocol
-data IdWidth = IdWidth Nat deriving (Show)
+data IdWidth = IdWidth Nat deriving (Show, Eq)
 
 -- | Simple wrapper to achieve "named arguments" when instantiating an AXI protocol
-data AddrWidth = AddrWidth Nat deriving (Show)
+data AddrWidth = AddrWidth Nat deriving (Show, Eq)
 
 -- | Simple wrapper to achieve "named arguments" when instantiating an AXI protocol
-data LengthWidth = LengthWidth Nat deriving (Show)
+data LengthWidth = LengthWidth Nat deriving (Show, Eq)
 
 -- | Simple wrapper to achieve "named arguments" when instantiating an AXI protocol
 data UserType = UserType Type KeepStrobe
 
 -- | Keep or remove Burst, see 'BurstMode'
-data KeepBurst = KeepBurst | NoBurst deriving (Show)
+data KeepBurst = KeepBurst | NoBurst deriving (Show, Eq)
 
 -- | Keep or remove Burst Length, see 'BurstSize'
-data KeepBurstLength = KeepBurstLength | NoBurstLength deriving (Show)
+data KeepBurstLength = KeepBurstLength | NoBurstLength deriving (Show, Eq)
 
 -- | Keep or remove cache field, see 'Cache'
-data KeepCache = KeepCache | NoCache deriving (Show)
+data KeepCache = KeepCache | NoCache deriving (Show, Eq)
 
 -- | Keep or remove last field
-data KeepLast = KeepLast | NoLast deriving (Show)
+data KeepLast = KeepLast | NoLast deriving (Show, Eq)
 
 -- | Keep or remove lock, see 'AtomicAccess'
-data KeepLock = KeepLock | NoLock deriving (Show)
+data KeepLock = KeepLock | NoLock deriving (Show, Eq)
 
 -- | Keep or remove permissions, see 'Privileged', 'Secure', and
 -- 'InstructionOrData'.
-data KeepPermissions = KeepPermissions | NoPermissions deriving (Show)
+data KeepPermissions = KeepPermissions | NoPermissions deriving (Show, Eq)
 
 -- | Keep or remove quality of service field. See 'Qos'.
-data KeepQos = KeepQos | NoQos deriving (Show)
+data KeepQos = KeepQos | NoQos deriving (Show, Eq)
 
 -- | Keep or remove region field
-data KeepRegion = KeepRegion | NoRegion deriving (Show)
+data KeepRegion = KeepRegion | NoRegion deriving (Show, Eq)
 
 -- | Keep or remove response field. See 'Resp'.
-data KeepResponse = KeepResponse | NoResponse deriving (Show)
+data KeepResponse = KeepResponse | NoResponse deriving (Show, Eq)
 
 -- | Keep or remove burst size field. See 'BurstSize'.
-data KeepSize = KeepSize | NoSize deriving (Show)
+data KeepSize = KeepSize | NoSize deriving (Show, Eq)
 
 -- | Keep or remove strobe field. See 'Strobe'
-data KeepStrobe = KeepStrobe | NoStrobe deriving (Show)
+data KeepStrobe = KeepStrobe | NoStrobe deriving (Show, Eq)
 
 -- | Type used to introduce strobe information on the term level
 data SKeepStrobe (strobeType :: KeepStrobe) where
@@ -188,7 +188,7 @@ data BurstMode
   -- This burst type is used for cache line accesses.
   --
   | BmWrap
-  deriving (Show, C.ShowX, Generic, C.NFDataX)
+  deriving (Show, C.ShowX, Generic, C.NFDataX, Eq)
 
 -- | The maximum number of bytes to transfer in each data transfer, or beat,
 -- in a burst.
