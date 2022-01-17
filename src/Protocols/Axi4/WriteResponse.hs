@@ -126,6 +126,9 @@ deriving instance
   , C.KnownNat (Width iw) ) =>
   Show (S2M_WriteResponse kr iw userType)
 
+-- | Circuit that transforms the LHS 'Axi4WriteResponse' protocol to a
+-- version using different type parameters according to two functions
+-- that can transform the data and ack signal to and from the other protocol.
 mapFull ::
   forall dom
     kr1 iw1 userType1

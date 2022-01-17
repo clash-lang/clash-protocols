@@ -185,6 +185,9 @@ deriving instance
   , C.NFDataX (QosType kq) ) =>
   C.NFDataX (M2S_WriteAddress kb ksz lw iw aw kr kbl kl kc kp kq userType)
 
+-- | Circuit that transforms the LHS 'Axi4WriteAddress' protocol to a
+-- version using different type parameters according to two functions
+-- that can transform the data and ack signal to and from the other protocol.
 mapFull ::
   forall dom
     kb1 ksz1 lw1 iw1 aw1 kr1 kbl1 kl1 kc1 kp1 kq1 userType1

@@ -131,6 +131,9 @@ deriving instance
   , C.KnownNat nBytes ) =>
   Show (M2S_WriteData ks nBytes userType)
 
+-- | Circuit that transforms the LHS 'Axi4WriteData' protocol to a
+-- version using different type parameters according to two functions
+-- that can transform the data and ack signal to and from the other protocol.
 mapFull ::
   forall dom ks1 ks2 nBytes1 nBytes2 t1 t2.
   (M2S_WriteData ks1 nBytes1 t1 -> M2S_WriteData ks2 nBytes2 t2) ->
