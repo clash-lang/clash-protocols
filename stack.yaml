@@ -1,4 +1,4 @@
-resolver: nightly-2020-12-14
+resolver: lts-18.21 # ghc-8.10.7
 
 packages:
   - .
@@ -9,7 +9,8 @@ extra-deps:
   subdirs:
     - hedgehog
 - git: https://github.com/cchalmers/circuit-notation.git
-  commit: 0fe897cb95bd1be87abed044f4072f104dec2f7d
+  commit: 2574640364eef12222517af059b9e4a7e6b503a7
+- clash-prelude-1.2.5
 
 flags:
   clash-prelude:
