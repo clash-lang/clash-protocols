@@ -1,0 +1,62 @@
+{
+    "circuit-notation": {
+        "branch": "master",
+        "description": "A plugin for circuit notation",
+        "homepage": null,
+        "owner": "cchalmers",
+        "repo": "circuit-notation",
+        "rev": "2574640364eef12222517af059b9e4a7e6b503a7",
+        "sha256": "1a8pjg0g66kggsghap36airnb7r3q7ywc31hwbjskcv5dgpgfnap",
+        "type": "tarball",
+        "url": "https://github.com/cchalmers/circuit-notation/archive/2574640364eef12222517af059b9e4a7e6b503a7.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
+    "clash-compiler": {
+        "branch": "1.4",
+        "description": "Haskell to VHDL/Verilog/SystemVerilog compiler",
+        "homepage": "https://www.clash-lang.org/",
+        "owner": "clash-lang",
+        "repo": "clash-compiler",
+        "rev": "fa01fd98799cd7c00cae44a9df847142410f1618",
+        "sha256": "0b42gschkb7sk958a7j529lcw9kmzikhcqjxblm43lggwwy24hns",
+        "type": "tarball",
+        "url": "https://github.com/clash-lang/clash-compiler/archive/fa01fd98799cd7c00cae44a9df847142410f1618.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
+    "gitignore": {
+        "branch": "master",
+        "description": "Nix function for filtering local git sources",
+        "homepage": "",
+        "owner": "hercules-ci",
+        "repo": "gitignore",
+        "rev": "bff2832ec341cf30acb3a4d3e2e7f1f7b590116a",
+        "sha256": "0va0janxvmilm67nbl81gdbpppal4aprxzb25gp9pqvf76ahxsci",
+        "type": "tarball",
+        "url": "https://github.com/hercules-ci/gitignore/archive/bff2832ec341cf30acb3a4d3e2e7f1f7b590116a.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
+    "niv": {
+        "branch": "master",
+        "description": "Easy dependency management for Nix projects",
+        "homepage": "https://github.com/nmattia/niv",
+        "owner": "nmattia",
+        "repo": "niv",
+        "rev": "9cb7ef336bb71fd1ca84fc7f2dff15ef4b033f2a",
+        "sha256": "1ajyqr8zka1zlb25jx1v4xys3zqmdy3prbm1vxlid6ah27a8qnzh",
+        "type": "tarball",
+        "url": "https://github.com/nmattia/niv/archive/9cb7ef336bb71fd1ca84fc7f2dff15ef4b033f2a.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
+    "nixpkgs": {
+        "branch": "nixos-21.11",
+        "description": "Nix Packages collection",
+        "homepage": "",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "47cd6702934434dd02bc53a67dbce3e5493e33a2",
+        "sha256": "1rvp9gx7n0gppc86bcysaybw79zl3y8yninsgz6rawdjprzvg7y6",
+        "type": "tarball",
+        "url": "https://github.com/NixOS/nixpkgs/archive/47cd6702934434dd02bc53a67dbce3e5493e33a2.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    }
+}
