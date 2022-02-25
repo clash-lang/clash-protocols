@@ -1,4 +1,4 @@
-resolver: lts-18.21 # ghc-8.10.7
+resolver: lts-18.26 # ghc-8.10.7
 
 packages:
   - .
@@ -10,14 +10,3 @@ extra-deps:
     - hedgehog
 - git: https://github.com/cchalmers/circuit-notation.git
   commit: 2574640364eef12222517af059b9e4a7e6b503a7
-- clash-prelude-1.2.5
-
-flags:
-  clash-prelude:
-    # 'large-tuples' generates tuple instances for various classes up to the
-    # GHC imposed maximum of 62 elements. This severely slows down compiling
-    # Clash, and triggers Template Haskell bugs on Windows. Hence, we disable
-    # it by default. This will be the default for Clash >=1.4.
-    large-tuples: false
-
-allow-newer: true

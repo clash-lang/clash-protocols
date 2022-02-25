@@ -155,7 +155,9 @@ newtype M2S_ReadData = M2S_ReadData { _rready :: Bool }
 deriving instance
   ( C.NFDataX userType
   , C.NFDataX dataType
-  , C.NFDataX (ResponseType kr) ) =>
+  , C.NFDataX (ResponseType kr)
+  , C.KnownNat (Width iw)
+  ) =>
   C.NFDataX (S2M_ReadData kr iw userType dataType)
 
 deriving instance
@@ -393,7 +395,12 @@ roundrobinCollect = DfLike.roundrobinCollect Proxy
 -- | Place register on /forward/ part of a circuit.
 registerFwd ::
   forall dom a kr iw userType .
-  (C.NFDataX a, C.HiddenClockResetEnable dom, C.NFDataX (ResponseType kr), C.NFDataX userType) =>
+  ( C.NFDataX a
+  , C.HiddenClockResetEnable dom
+  , C.NFDataX (ResponseType kr)
+  , C.NFDataX userType
+  , C.KnownNat (Width iw)
+  ) =>
   Circuit
     (Axi4ReadData dom kr iw userType a)
     (Axi4ReadData dom kr iw userType a)
@@ -402,7 +409,12 @@ registerFwd = DfLike.registerFwd Proxy
 -- | Place register on /backward/ part of a circuit. This is implemented using a
 -- in-logic two-element shift register.
 registerBwd ::
-  (C.NFDataX a, C.HiddenClockResetEnable dom, C.NFDataX (ResponseType kr), C.NFDataX userType) =>
+  ( C.NFDataX a
+  , C.HiddenClockResetEnable dom
+  , C.NFDataX (ResponseType kr)
+  , C.NFDataX userType
+  , C.KnownNat (Width iw)
+  ) =>
   Circuit
     (Axi4ReadData dom kr iw userType a)
     (Axi4ReadData dom kr iw userType a)

@@ -168,7 +168,8 @@ deriving instance
   , Show (LockType kl)
   , Show (CacheType kc)
   , Show (PermissionsType kp)
-  , Show (QosType kq) ) =>
+  , Show (QosType kq)
+  ) =>
   Show (M2S_WriteAddress kb ksz lw iw aw kr kbl kl kc kp kq userType)
 
 deriving instance
@@ -182,7 +183,10 @@ deriving instance
   , C.NFDataX (LockType kl)
   , C.NFDataX (CacheType kc)
   , C.NFDataX (PermissionsType kp)
-  , C.NFDataX (QosType kq) ) =>
+  , C.NFDataX (QosType kq)
+  , C.KnownNat (Width iw)
+  , C.KnownNat (Width aw)
+  ) =>
   C.NFDataX (M2S_WriteAddress kb ksz lw iw aw kr kbl kl kc kp kq userType)
 
 -- | Circuit that transforms the LHS 'Axi4WriteAddress' protocol to a

@@ -19,50 +19,50 @@ import Clash.Prelude (type (^), type (-), type (*))
 import Data.Tuple.Strict (T3, T4)
 
 -- | Simple wrapper to achieve "named arguments" when instantiating an AXI protocol
-data IdWidth = IdWidth Nat deriving (Show, Eq)
+data IdWidth = IdWidth Nat
 
 -- | Simple wrapper to achieve "named arguments" when instantiating an AXI protocol
-data AddrWidth = AddrWidth Nat deriving (Show, Eq)
+data AddrWidth = AddrWidth Nat
 
 -- | Simple wrapper to achieve "named arguments" when instantiating an AXI protocol
-data LengthWidth = LengthWidth Nat deriving (Show, Eq)
+data LengthWidth = LengthWidth Nat
 
 -- | Simple wrapper to achieve "named arguments" when instantiating an AXI protocol
 data UserType = UserType Type KeepStrobe
 
 -- | Keep or remove Burst, see 'BurstMode'
-data KeepBurst = KeepBurst | NoBurst deriving (Show, Eq)
+data KeepBurst = KeepBurst | NoBurst
 
 -- | Keep or remove Burst Length, see 'BurstSize'
-data KeepBurstLength = KeepBurstLength | NoBurstLength deriving (Show, Eq)
+data KeepBurstLength = KeepBurstLength | NoBurstLength
 
 -- | Keep or remove cache field, see 'Cache'
-data KeepCache = KeepCache | NoCache deriving (Show, Eq)
+data KeepCache = KeepCache | NoCache
 
 -- | Keep or remove last field
-data KeepLast = KeepLast | NoLast deriving (Show, Eq)
+data KeepLast = KeepLast | NoLast
 
 -- | Keep or remove lock, see 'AtomicAccess'
-data KeepLock = KeepLock | NoLock deriving (Show, Eq)
+data KeepLock = KeepLock | NoLock
 
 -- | Keep or remove permissions, see 'Privileged', 'Secure', and
 -- 'InstructionOrData'.
-data KeepPermissions = KeepPermissions | NoPermissions deriving (Show, Eq)
+data KeepPermissions = KeepPermissions | NoPermissions
 
 -- | Keep or remove quality of service field. See 'Qos'.
-data KeepQos = KeepQos | NoQos deriving (Show, Eq)
+data KeepQos = KeepQos | NoQos
 
 -- | Keep or remove region field
-data KeepRegion = KeepRegion | NoRegion deriving (Show, Eq)
+data KeepRegion = KeepRegion | NoRegion
 
 -- | Keep or remove response field. See 'Resp'.
-data KeepResponse = KeepResponse | NoResponse deriving (Show, Eq)
+data KeepResponse = KeepResponse | NoResponse
 
 -- | Keep or remove burst size field. See 'BurstSize'.
-data KeepSize = KeepSize | NoSize deriving (Show, Eq)
+data KeepSize = KeepSize | NoSize
 
 -- | Keep or remove strobe field. See 'Strobe'
-data KeepStrobe = KeepStrobe | NoStrobe deriving (Show, Eq)
+data KeepStrobe = KeepStrobe | NoStrobe
 
 -- | Type used to introduce strobe information on the term level
 data SKeepStrobe (strobeType :: KeepStrobe) where

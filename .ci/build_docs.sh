@@ -3,6 +3,7 @@ set -xeou pipefail
 
 # Build dependencies first, so they don't end up in logs
 cabal build \
+  --constraint=clash-prelude==$clash_version \
   --enable-documentation \
   --allow-newer=circuit-notation:ghc \
   clash-protocols
@@ -12,6 +13,7 @@ cabal build \
 # cannot generate documentation for clash-prelude. Hence, we build docs with
 # 8.10 and relax circuit-notation's ghc bounds
 cabal haddock \
+  --constraint=clash-prelude==$clash_version \
   --enable-documentation \
   --allow-newer=circuit-notation:ghc \
   clash-protocols \

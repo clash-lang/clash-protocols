@@ -117,7 +117,8 @@ newtype M2S_WriteResponse = M2S_WriteResponse { _bready :: Bool }
 
 deriving instance
   ( C.NFDataX userType
-  , C.NFDataX (ResponseType kr) ) =>
+  , C.NFDataX (ResponseType kr)
+  , C.KnownNat (Width iw) ) =>
   C.NFDataX (S2M_WriteResponse kr iw userType)
 
 deriving instance

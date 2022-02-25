@@ -6,6 +6,11 @@ on:
   push:
     branches: [master]
 
+
+concurrency:
+  group: ${{ github.head_ref }}
+  cancel-in-progress: true
+
 jobs:
   stack:
     name: Stack tests
@@ -41,15 +46,22 @@ jobs:
           .ci/test_stack.sh
 
   cabal:
-    name: Cabal tests - ${{ matrix.os }} / ghc ${{ matrix.ghc }}
+    name: Cabal tests - ghc ${{ matrix.ghc }} / clash ${{ matrix.clash }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest]
+        clash:
+          - "1.4.7"
+          - "1.6.1"
         cabal:
           - "3.2"
         ghc:
           - "8.10.7"
+
+    env:
+      clash_version: ${{ matrix.clash }}
 
     steps:
       - name: Checkout
@@ -62,19 +74,24 @@ jobs:
           ghc-version: ${{ matrix.ghc }}
           cabal-version: ${{ matrix.cabal }}
 
+      - name: Setup CI
+        run: |
+          cabal v2-freeze
+          mv cabal.project.freeze frozen
+
       - name: Cache dependencies
         uses: actions/cache@v2
         with:
-          path: ~/.cabal
-          key: ${{ runner.os }}-ghc-${{ matrix.ghc }}-${{ github.ref }}-${{ github.sha }}
+          path: ${{ steps.setup-haskell-cabal.outputs.cabal-store }}
+          key: ${{ runner.os }}-ghc-${{ matrix.ghc }}-${{ matrix.clash }}-${{ hashFiles('frozen') }}
           restore-keys: |
-            ${{ runner.os }}-ghc-${{ matrix.ghc }}-${{ github.ref }}-${{ github.sha }}
-            ${{ runner.os }}-ghc-${{ matrix.ghc }}-${{ github.ref }}-
+            ${{ runner.os }}-ghc-${{ matrix.ghc }}-${{ matrix.clash }}-${{ hashFiles('frozen') }}
+            ${{ runner.os }}-ghc-${{ matrix.ghc }}-${{ matrix.clash }}-
             ${{ runner.os }}-ghc-${{ matrix.ghc }}-
 
       - name: Build
         run: |
-          cabal build all -fci
+          cabal build all --constraint=clash-prelude==$clash_version -fci
 
       - name: Test
         run: |
