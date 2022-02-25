@@ -82,6 +82,9 @@ import           Protocols.DfLike (DfLike)
 import qualified Protocols.DfLike as DfLike
 
 -- $setup
+-- >>> :m -Prelude
+-- >>> import Prelude hiding (filter, zipWith)
+-- >>> import qualified Clash.Prelude as C
 -- >>> import Protocols
 -- >>> import Clash.Prelude (Vec(..))
 -- >>> import qualified Prelude as P
