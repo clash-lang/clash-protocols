@@ -72,6 +72,12 @@ import Protocols
 import Protocols.DfConv qualified as DfConv
 import Protocols.Idle
 
+{- $setup
+>>> import Clash.Prelude hiding (undefined)
+>>> import Protocols
+>>> import Protocols.PacketStream.Base
+-}
+
 {- |
 Data sent from manager to subordinate.
 

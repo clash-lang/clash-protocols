@@ -75,6 +75,12 @@ import Protocols.Experimental.Hedgehog
 import Protocols.Experimental.Wishbone
 import Prelude as P hiding (cycle)
 
+{- $setup
+>>> import Clash.Prelude
+>>> import Protocols.Experimental.Wishbone
+>>> import Protocols.Experimental.Wishbone.Standard.Hedgehog
+-}
+
 -- | Datatype representing a single transaction request sent from a Wishbone Master to a Wishbone Slave
 data WishboneMasterRequest addressBits dataBytes
   = Read (BitVector addressBits) (BitVector dataBytes)

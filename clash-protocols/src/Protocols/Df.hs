@@ -116,6 +116,9 @@ import Protocols.Internal
 {-# ANN module "HLint: ignore Use const" #-}
 
 {- $setup
+>>> :m -Prelude
+>>> import Prelude hiding (filter, zipWith)
+>>> import Clash.Prelude qualified as C
 >>> import Protocols
 >>> import Protocols.Experimental.Df
 >>> import Clash.Prelude (Vec(..))
