@@ -577,7 +577,7 @@ fanout dfA = forceResetSanity dfA |> goC
 
           -- Store new acks, send ack if all "clients" have acked
           acked1 = C.zipWith (||) acked (C.map (ackToBool dfA) acks)
-          ack = C.fold @_ @(n-1) (&&) acked1
+          ack = C.fold @(n-1) (&&) acked1
         in
           ( if ack then initState else acked1
           , (boolToAck dfA ack, dats) )
@@ -595,7 +595,7 @@ fanin ::
   ) =>
   (a -> a -> a) ->
   Circuit (C.Vec n (df x)) (df x)
-fanin f = bundleVec Proxy Proxy |> map Proxy Proxy (C.fold @_ @(n-1) f)
+fanin f = bundleVec Proxy Proxy |> map Proxy Proxy (C.fold @(n-1) f)
 {-# INLINE fanin #-}
 
 -- | Merge data of multiple streams using Monoid's '<>'.
@@ -673,7 +673,7 @@ unbundleVec dfX dfY =
 
           -- Store new acks, send ack if all "clients" have acked
           acked1 = C.zipWith (||) acked (C.map (ackToBool dfY) acks)
-          ack = C.fold @_ @(n-1) (&&) acked1
+          ack = C.fold @(n-1) (&&) acked1
         in
           ( if ack then initState else acked1
           , (boolToAck dfX ack, dats1) )
@@ -776,7 +776,7 @@ roundrobinCollect dfA Parallel =
     acks = Maybe.fromMaybe nacks ((\i -> C.replace i ack nacks) <$> iM)
     dat1 = Maybe.fromMaybe (noData dfA) dat0
     (iM, dat0) = Data.List.NonEmpty.unzip dats1
-    dats1 = C.fold @_ @(n-1) (<|>) (C.zipWith goDat C.indicesI dats0)
+    dats1 = C.fold @(n-1) (<|>) (C.zipWith goDat C.indicesI dats0)
 
     goDat i dat
       | hasPayload dfA dat = Just (i, dat)

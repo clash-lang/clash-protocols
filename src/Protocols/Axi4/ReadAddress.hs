@@ -184,7 +184,10 @@ deriving instance
   , C.NFDataX (LockType kl)
   , C.NFDataX (CacheType kc)
   , C.NFDataX (PermissionsType kp)
-  , C.NFDataX (QosType kq) ) =>
+  , C.NFDataX (QosType kq)
+  , C.KnownNat (Width iw)
+  , C.KnownNat (Width aw)
+  ) =>
   C.NFDataX (M2S_ReadAddress kb ksz lw iw aw kr kbl kl kc kp kq userType)
 
 -- | Circuit that transforms the LHS 'Axi4ReadAddress' protocol to a

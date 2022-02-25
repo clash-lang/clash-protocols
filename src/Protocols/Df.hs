@@ -6,6 +6,7 @@ carries data, no metadata. For documentation see:
   * 'Protocols.Df.Df'
 
 -}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -280,10 +281,17 @@ partition = DfLike.partition Proxy
 --
 -- Example:
 --
+#if MIN_VERSION_clash_prelude(1,6,0)
+-- >>> let input = [(0, 3), (0, 5), (1, 7), (2, 13), (1, 11), (2, 1)]
+-- >>> let output = simulateCS (route @3 @C.System @Int) input
+-- >>> fmap (take 2) output
+-- [3,5] :> [7,11] :> [13,1] :> Nil
+#else
 -- >>> let input = [(0, 3), (0, 5), (1, 7), (2, 13), (1, 11), (2, 1)]
 -- >>> let output = simulateCS (route @3 @C.System @Int) input
 -- >>> fmap (take 2) output
 -- <[3,5],[7,11],[13,1]>
+#endif
 --
 route ::
   forall n dom a. C.KnownNat n =>
