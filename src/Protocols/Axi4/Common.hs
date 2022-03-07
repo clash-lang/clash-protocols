@@ -18,6 +18,8 @@ import Clash.Prelude (type (^), type (-), type (*))
 -- strict-tuple
 import Data.Tuple.Strict (T4)
 
+import Control.DeepSeq
+
 -- | Simple wrapper to achieve "named arguments" when instantiating an AXI protocol
 data IdWidth = IdWidth Nat
 
@@ -70,10 +72,10 @@ data SKeepStrobe (strobeType :: KeepStrobe) where
   SNoStrobe :: SKeepStrobe 'NoStrobe
 
 -- | Extracts Nat from 'IdWidth', 'AddrWidth', and 'LengthWidth'
-type family Width (a :: k) :: Nat where
-  Width ('IdWidth n) = n
-  Width ('AddrWidth n) = n
-  Width ('LengthWidth n) = n
+type family Width (a :: k) :: Nat --where
+type instance Width ('IdWidth n) = n
+type instance Width ('AddrWidth n) = n
+type instance Width ('LengthWidth n) = n
 
 -- | Enables or disables 'BurstMode'
 type family BurstType (keepBurst :: KeepBurst) where
@@ -102,7 +104,7 @@ type family LockType (keepLockType :: KeepLock) where
 
 -- | Enables or disables 'Privileged', 'Secure', and 'InstructionOrData'
 type family PermissionsType (keepPermissions :: KeepPermissions) where
-  PermissionsType 'KeepPermissions = T3 Privileged Secure InstructionOrData
+  PermissionsType 'KeepPermissions = (Privileged, Secure, InstructionOrData)
   PermissionsType 'NoPermissions = ()
 
 -- | Enables or disables 'Qos'
@@ -245,6 +247,19 @@ data Resp
   | RDecodeError
   deriving (Show, C.ShowX, Generic, C.NFDataX)
 
+-- | Status of a read or write transaction on AXI4 Lite.
+data RespLite
+  -- | Normal access success. Indicates that a normal access has been
+  -- successful.
+  = RLOkay
+  -- | Slave error. Used when the access has reached the slave successfully, but
+  -- the slave wishes to return an error condition to the originating master.
+  | RLSlaveError
+  -- | Decode error. Generated, typically by an interconnect component, to
+  -- indicate that there is no slave at the transaction address.
+  | RLDecodeError
+  deriving (Show, C.ShowX, Generic, C.NFDataX)
+
 -- | Whether a resource is accessed with exclusive access or not
 data AtomicAccess
   = NonExclusiveAccess
@@ -260,12 +275,14 @@ data Modifiable
 data Secure
   = Secure
   | NonSecure
+  deriving (Show, Generic, C.NFDataX, NFData, C.ShowX, Eq)
 
 -- | An AXI master might support more than one level of operating privilege,
 -- and extend this concept of privilege to memory access.
 data Privileged
   = NotPrivileged
   | Privileged
+  deriving (Show, Generic, C.NFDataX, NFData, C.ShowX, Eq)
 
 -- | Whether the transaction is an instruction access or a data access. The AXI
 -- protocol defines this indication as a hint. It is not accurate in all cases,
@@ -276,3 +293,4 @@ data Privileged
 data InstructionOrData
   = Data
   | Instruction
+  deriving (Show, Generic, C.NFDataX, NFData, C.ShowX, Eq)

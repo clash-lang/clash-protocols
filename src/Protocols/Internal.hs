@@ -6,6 +6,7 @@ Internal module to prevent hs-boot files (breaks Haddock)
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Protocols.Internal where
 
@@ -144,6 +145,7 @@ newtype Circuit a b =
 -- | Protocol-agnostic acknowledgement
 newtype Ack = Ack Bool
   deriving (Generic, C.NFDataX, Show)
+
 
 -- | Acknowledge. Used in circuit-notation plugin to drive ignore components.
 instance Default Ack where
@@ -365,6 +367,7 @@ data StallAck
   | StallCycle
   deriving (Eq, Bounded, Enum, Show)
 
+
 -- | Class that defines how to /drive/, /sample/, and /stall/ a "Circuit" of
 -- some shape. The "Backpressure" instance requires that the /backward/ type of the
 -- circuit can be generated from a list of Booleans.
@@ -487,6 +490,13 @@ instance Drivable () where
 
   driveC _ _ = idC
   sampleC _  _ = ()
+
+
+  simulateRight _ _ _ = ()
+  simulateLeft _ _ _ = ()
+
+  simulateManager _ _ _ = ()
+  simulateSubordinate _ _ _ = ()
 
 
 instance (Simulate a, Simulate b) => Simulate (a, b) where

@@ -1,7 +1,10 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
+<<<<<<< HEAD
 {-# LANGUAGE RecordWildCards #-}
+=======
+>>>>>>> cc790e6... Add AXI4 Lite types
 {-|
 Defines datatypes for all five channels of the AXI4 Lite protocol. For more
 information on AXI4 Lite, see chapter B of the AMBA AXI specification.
@@ -16,7 +19,11 @@ import Clash.Prelude as C
 import Control.DeepSeq
 
 -- | AXI4 Lite busses are always either 32 bit or 64 bit.
+<<<<<<< HEAD
 data BusWidth = Width32 | Width64 deriving (Show, Eq, Generic, NFDataX)
+=======
+data BusWidth = Width32 | Width64 deriving (Show, Eq)
+>>>>>>> cc790e6... Add AXI4 Lite types
 
 type instance Width 'Width32 = 32
 type instance Width 'Width64 = 64
@@ -33,6 +40,10 @@ type family ReadBusWidthType (bw :: BusWidth) where
   ReadBusWidthType 'Width32 = C.Vec 4 (C.BitVector 8)
   ReadBusWidthType 'Width64 = C.Vec 8 (C.BitVector 8)
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> cc790e6... Add AXI4 Lite types
 ---------------------------
 --- Write address types ---
 ---------------------------
