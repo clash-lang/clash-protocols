@@ -143,7 +143,7 @@ newtype Circuit a b =
 
 -- | Protocol-agnostic acknowledgement
 newtype Ack = Ack Bool
-  deriving (Generic, C.NFDataX)
+  deriving (Generic, C.NFDataX, Show)
 
 -- | Acknowledge. Used in circuit-notation plugin to drive ignore components.
 instance Default Ack where
@@ -378,6 +378,9 @@ class (C.KnownNat (SimulateChannels a), Backpressure a) => Simulate a where
   -- @[Data a]@.
   type SimulateType a :: Type
 
+  type SimulateFwdType a :: Type
+  type SimulateBwdType a :: Type
+
   -- | Similar to 'SimulateType', but without backpressure information. For
   -- example:
   --
@@ -445,8 +448,30 @@ class (C.KnownNat (SimulateChannels a), Backpressure a) => Simulate a where
     C.Vec (SimulateChannels a) (StallAck, [Int]) ->
     Circuit a a
 
+
+  -- | Simulates a manager style circuit, i.e. a circuit that is connected to a subordinate or
+  -- some interconnect component on its right side, and has no connections on its left side.
+  -- Used to simulate AXI master components, for example.
+  simulateRight ::
+    SimulationConfig ->
+    SimulateBwdType a ->
+    Circuit () a ->
+    SimulateFwdType a
+
+  -- | Simulates a subordinate style circuit, i.e. a circuit that is connected to a manager or
+  -- some interconnect component on its left side, and has no connections on its right side.
+  -- Used to simulate AXI slave components, for example.
+  simulateLeft ::
+    SimulationConfig ->
+    SimulateFwdType a ->
+    Circuit a () ->
+    SimulateBwdType a
+
+
 instance Simulate () where
   type SimulateType () = ()
+  type SimulateFwdType () = ()
+  type SimulateBwdType () = ()
   type ExpectType () = ()
   type SimulateChannels () = 0
 
@@ -456,6 +481,10 @@ instance Simulate () where
   driveC _ _ = idC
   sampleC _  _ = ()
   stallC _ _ = idC
+
+  simulateRight _ _ _ = ()
+  simulateLeft _ _ _ = ()
+
 
 instance (Simulate a, Simulate b) => Simulate (a, b) where
   type SimulateType (a, b) = (SimulateType a, SimulateType b)

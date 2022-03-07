@@ -75,6 +75,7 @@ import qualified Prelude as P
 import           Clash.Prelude (type (<=))
 import           Clash.Signal.Internal (Signal)
 import qualified Clash.Prelude as C
+import qualified Clash.Explicit.Prelude as CE
 
 -- me
 import           Protocols.Internal
@@ -137,6 +138,9 @@ dataToMaybe (Data a) = Just a
 
 instance (C.KnownDomain dom, C.NFDataX a, C.ShowX a, Show a) => Simulate (Df dom a) where
   type SimulateType (Df dom a) = [Data a]
+  type SimulateFwdType (Df dom a) = [Data a]
+  type SimulateBwdType (Df dom a) = [Ack]
+
   type ExpectType (Df dom a) = [a]
   type SimulateChannels (Df dom a) = 1
 
@@ -146,6 +150,29 @@ instance (C.KnownDomain dom, C.NFDataX a, C.ShowX a, Show a) => Simulate (Df dom
   driveC = drive
   sampleC = sample
   stallC conf (C.head -> (stallAck, stalls)) = stall conf stallAck stalls
+
+  simulateRight SimulationConfig{..} acks circ =
+    P.take timeoutAfter $
+    CE.sample_lazy $
+    P.snd $
+    toSignals circ ((), resetAndAcks)
+    where
+      resetAndAcks = C.fromList $ (P.map Ack (replicate resetCycles False) <> acks)
+
+  simulateLeft SimulationConfig{..} fwds circ = CE.sample_lazy ackSig
+    where
+      (ackSig, ()) = toSignals circ (dataSig, ())
+      dataSig = C.fromList_lazy (ackedData resetCycles fwds (C.sample ackSig))
+
+      ackedData resetN _ (_:acks) | resetN > 0 =
+        NoData : ackedData (resetN - 1) fwds acks
+      ackedData _ _ [] = C.errorX "Empty acks list."
+      ackedData _ [] (_:acks) = NoData : ackedData 0 [] acks
+      ackedData _ (dat:datas) (ack:acks) = case ack of
+        Ack True -> dat : ackedData 0 (datas) acks
+        Ack False -> dat : ackedData 0 (dat:datas) acks
+
+
 
 instance DfLike dom (Df dom) a where
   type Data (Df dom) a = Data a
@@ -428,6 +455,7 @@ registerBwd ::
 registerBwd = DfLike.registerBwd Proxy
 
 --------------------------------- SIMULATE -------------------------------------
+
 
 -- | Emit values given in list. Emits no data while reset is asserted. Not
 -- synthesizable.
