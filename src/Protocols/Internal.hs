@@ -492,13 +492,6 @@ instance Drivable () where
   sampleC _  _ = ()
 
 
-  simulateRight _ _ _ = ()
-  simulateLeft _ _ _ = ()
-
-  simulateManager _ _ _ = ()
-  simulateSubordinate _ _ _ = ()
-
-
 instance (Simulate a, Simulate b) => Simulate (a, b) where
   type SimulateFwdType (a, b) = (SimulateFwdType a, SimulateFwdType b)
   type SimulateBwdType (a, b) = (SimulateBwdType a, SimulateBwdType b)
@@ -689,6 +682,7 @@ simulateCSE c = simulateCS (c clk rst ena)
 -- | Applies conversion functions defined in the 'Simulate' instance of @a@ and @b@ to
 -- the given simulation types, and applies the results to the internal function of the
 -- given 'Circuit'. The resulting internal types are converted to the simulation types.
+-- TODO: implement SimulationConfig
 simulateCircuit :: forall a b . (Simulate a, Simulate b) =>
   SimulateFwdType a -> SimulateBwdType b ->
   Circuit a b ->

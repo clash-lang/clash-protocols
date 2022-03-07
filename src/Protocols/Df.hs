@@ -75,17 +75,12 @@ import qualified Prelude as P
 import           Clash.Prelude (type (<=))
 import           Clash.Signal.Internal (Signal)
 import qualified Clash.Prelude as C
-import qualified Clash.Explicit.Prelude as CE
 
 -- me
 import           Protocols.Internal
 import           Protocols.DfLike (DfLike)
 import qualified Protocols.DfLike as DfLike
 
-<<<<<<< HEAD
-=======
-import Debug.Trace
->>>>>>> cc790e6... Add AXI4 Lite types
 
 -- $setup
 -- >>> import Protocols
@@ -163,52 +158,6 @@ instance (C.KnownDomain dom, C.NFDataX a, C.ShowX a, Show a) => Drivable (Df dom
 
   driveC = drive
   sampleC = sample
-
-
-  simulateRight SimulationConfig{..} acks circ =
-    P.take timeoutAfter $
-    CE.sample_lazy $
-    P.snd $
-    toSignals circ ((), resetAndAcks)
-    where
-      resetAndAcks = C.fromList $ (P.map Ack (replicate resetCycles False) <> acks)
-
-  simulateLeft SimulationConfig{..} fwds circ = CE.sample_lazy ackSig
-    where
-      (ackSig, ()) = toSignals circ (dataSig, ())
-      dataSig = C.fromList_lazy (ackedData resetCycles fwds (C.sample ackSig))
-
-      ackedData resetN _ (_:acks) | resetN > 0 =
-        NoData : ackedData (resetN - 1) fwds acks
-      ackedData _ _ [] = C.errorX "Empty acks list."
-      ackedData _ [] (_:acks) = NoData : ackedData 0 [] acks
-      ackedData _ (dat:datas) (ack:acks) = case ack of
-        Ack True -> dat : ackedData 0 (datas) acks
-        Ack False -> dat : ackedData 0 (dat:datas) acks
-
-
-
-  simulateManager SimulationConfig{..} acks circ =
-    P.take timeoutAfter $
-    CE.sample_lazy $
-    P.snd $
-    toSignals circ ((), resetAndAcks)
-    where
-      resetAndAcks = C.fromList $ (P.map Ack (replicate resetCycles False) <> acks)
-
-  -- TODO: apply simulation config
-  simulateSubordinate SimulationConfig{..} fwds circ = CE.sample_lazy ackSig
-    where
-      (ackSig, ()) = toSignals circ (dataSig, ())
-      dataSig = C.fromList_lazy (ackedData resetCycles fwds (C.sample ackSig))
-
-      ackedData resetN _ (_:acks) | resetN > 0 =
-        NoData : ackedData (resetN - 1) fwds acks
-      ackedData _ [] (_:acks) = NoData : ackedData 0 [] acks
-      ackedData _ (dat:datas) (ack:acks) = case ack of
-        Ack True -> dat : ackedData 0 (datas) acks
-        Ack False -> dat : ackedData 0 (dat:datas) acks
-
 
 
 instance DfLike dom (Df dom) a where
