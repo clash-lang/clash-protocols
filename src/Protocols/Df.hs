@@ -81,6 +81,7 @@ import           Protocols.Internal
 import           Protocols.DfLike (DfLike)
 import qualified Protocols.DfLike as DfLike
 
+
 -- $setup
 -- >>> import Protocols
 -- >>> import Clash.Prelude (Vec(..))

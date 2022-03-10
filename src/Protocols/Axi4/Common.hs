@@ -16,7 +16,7 @@ import qualified Clash.Prelude as C
 import Clash.Prelude (type (^), type (-), type (*))
 
 -- strict-tuple
-import Data.Tuple.Strict (T3, T4)
+import Data.Tuple.Strict (T4)
 
 -- | Simple wrapper to achieve "named arguments" when instantiating an AXI protocol
 data IdWidth = IdWidth Nat

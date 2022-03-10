@@ -369,16 +369,6 @@ data StallAck
 -- some shape. The "Backpressure" instance requires that the /backward/ type of the
 -- circuit can be generated from a list of Booleans.
 class (C.KnownNat (SimulateChannels a), Backpressure a, Simulate a) => Drivable a where
-  -- TODO: documentatie verplaatsen
-  -- Type a /Circuit/ driver needs or sampler yields. For example:
-  --
-  -- >>> :kind! (forall dom a. SimulateFwdType (Df dom a))
-  -- ...
-  -- = [Data a]
-  --
-  -- This means sampling a @Circuit () (Df dom a)@ with 'sampleC' yields
-  -- @[Data a]@.
-
   -- | Similar to 'SimulateFwdType', but without backpressure information. For
   -- example:
   --
