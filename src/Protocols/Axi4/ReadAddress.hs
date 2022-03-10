@@ -86,19 +86,19 @@ instance DfLike dom (Axi4ReadAddress dom kb ksz lw iw aw kr kbl kl kc kp kq) use
 instance (C.KnownDomain dom, C.NFDataX userType, C.ShowX userType, Show userType) =>
   Simulate (Axi4ReadAddress dom kb ksz lw iw aw kr kbl kl kc kp kq userType) where
 
-  type SimulateType (Axi4ReadAddress dom kb ksz lw iw aw kr kbl kl kc kp kq userType) =
+  type SimulateFwdType (Axi4ReadAddress dom kb ksz lw iw aw kr kbl kl kc kp kq userType) =
     [M2S_ReadAddress kb ksz lw iw aw kr kbl kl kc kp kq userType]
 
-  type ExpectType (Axi4ReadAddress dom kb ksz lw iw aw kr kbl kl kc kp kq userType) =
-    [M2S_ReadAddress kb ksz lw iw aw kr kbl kl kc kp kq userType]
+  type SimulateBwdType (Axi4ReadAddress dom kb ksz lw iw aw kr kbl kl kc kp kq userType) =
+    [S2M_ReadAddress]
 
   type SimulateChannels (Axi4ReadAddress dom kb ksz lw iw aw kr kbl kl kc kp kq userType) = 1
 
-  toSimulateType _ = id
-  fromSimulateType _ = id
+  simToSigFwd Proxy = C.fromList_lazy
+  simToSigBwd Proxy = C.fromList_lazy
+  sigToSimFwd Proxy = C.sample_lazy
+  sigToSimBwd Proxy = C.sample_lazy
 
-  driveC = DfLike.drive Proxy
-  sampleC = DfLike.sample Proxy
   stallC conf (C.head -> (stallAck, stalls)) =
     DfLike.stall Proxy conf stallAck stalls
 

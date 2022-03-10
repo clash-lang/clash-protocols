@@ -67,8 +67,8 @@ instance (NFData a, C.NFDataX a, C.ShowX a, C.Show a, Eq a) => TestType a
 
 -- | Provides a way of comparing expected data with data produced by a
 -- protocol component.
-class ( Simulate a
-      , TestType (SimulateType a)
+class ( Drivable a
+      , TestType (SimulateFwdType a)
       , TestType (ExpectType a)
 
       -- Foldable requirement on Vec :(
@@ -91,13 +91,13 @@ class ( Simulate a
     -- | Number of valid data cycles expected on each channel
     C.Vec (SimulateChannels a) Int ->
     -- | Raw sampled data
-    SimulateType a ->
+    SimulateFwdType a ->
     -- | Depending on "ExpectOptions", fails the test if:
     --
     --   * Circuit produced less data than expected
     --   * Circuit produced more data than expected
     --
-    -- If it does not fail, /SimulateType a/ will contain exactly the number
+    -- If it does not fail, /SimulateFwdType a/ will contain exactly the number
     -- of expected data packets.
     --
     -- TODO:
@@ -174,7 +174,7 @@ instance
     Proxy (C.Vec n a) ->
     ExpectOptions ->
     C.Vec (n * SimulateChannels a) Int ->
-    C.Vec n (SimulateType a) ->
+    C.Vec n (SimulateFwdType a) ->
     m (C.Vec n (ExpectType a))
   expectN Proxy opts nExpecteds sampled = do
     -- TODO: This creates some pretty terrible error messages, as one
@@ -199,7 +199,7 @@ instance
     Proxy (a, b) ->
     ExpectOptions ->
     C.Vec (SimulateChannels a + SimulateChannels b) Int ->
-    (SimulateType a, SimulateType b) ->
+    (SimulateFwdType a, SimulateFwdType b) ->
     m (ExpectType a, ExpectType b)
   expectN Proxy opts nExpecteds (sampledA, sampledB) = do
     -- TODO: This creates some pretty terrible error messages, as one
