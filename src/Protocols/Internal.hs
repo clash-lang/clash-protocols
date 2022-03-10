@@ -161,7 +161,7 @@ instance Default a => Default (CSignal dom a) where
 class Protocol a where
   -- | Sender to receiver type family. See 'Circuit' for an explanation on the
   -- existence of 'Fwd'.
-  type Fwd (a :: Type) = (r :: Type) | r -> a
+  type Fwd (a :: Type)
 
   -- | Receiver to sender type family. See 'Circuit' for an explanation on the
   -- existence of 'Bwd'.
@@ -471,7 +471,7 @@ instance (Simulate a, Simulate b) => Simulate (a, b) where
     , fromSimulateType (Proxy @b) t2 )
 
   driveC conf (fwd1, fwd2) =
-    let (Circuit f1, Circuit f2) = (driveC conf fwd1, driveC conf fwd2) in
+    let (Circuit f1, Circuit f2) = (driveC @a conf fwd1, driveC @b conf fwd2) in
     Circuit (\(_, ~(bwd1, bwd2)) -> ((), (snd (f1 ((), bwd1)), snd (f2 ((), bwd2)))))
 
   sampleC conf (Circuit f) =
@@ -479,8 +479,8 @@ instance (Simulate a, Simulate b) => Simulate (a, b) where
       bools = replicate (resetCycles conf) False <> repeat True
       (_, (fwd1, fwd2)) = f ((), (boolsToBwd (Proxy @a) bools, boolsToBwd (Proxy @b) bools))
     in
-      ( sampleC conf (Circuit $ \_ -> ((), fwd1))
-      , sampleC conf (Circuit $ \_ -> ((), fwd2)) )
+      ( sampleC @a conf (Circuit $ \_ -> ((), fwd1))
+      , sampleC @b conf (Circuit $ \_ -> ((), fwd2)) )
 
   stallC conf stalls =
     let
@@ -508,7 +508,7 @@ instance (C.KnownNat n, Simulate a) => Simulate (C.Vec n a) where
   fromSimulateType Proxy = C.map (fromSimulateType (Proxy @a))
 
   driveC conf fwds =
-    let circuits = C.map (($ ()) . curry . toSignals . driveC conf) fwds in
+    let circuits = C.map (($ ()) . curry . (toSignals @_ @a) . driveC conf) fwds in
     Circuit (\(_, bwds) -> ((), C.map snd (C.zipWith ($) circuits bwds)))
 
   sampleC conf (Circuit f) =
@@ -516,7 +516,7 @@ instance (C.KnownNat n, Simulate a) => Simulate (C.Vec n a) where
       bools = replicate (resetCycles conf) False <> repeat True
       (_, fwds) = f ((), (C.repeat (boolsToBwd (Proxy @a) bools)))
     in
-      C.map (\fwd -> sampleC conf (Circuit $ \_ -> ((), fwd))) fwds
+      C.map (\fwd -> sampleC @a conf (Circuit $ \_ -> ((), fwd))) fwds
 
   stallC conf stalls0 =
     let
