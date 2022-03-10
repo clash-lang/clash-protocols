@@ -143,7 +143,7 @@ newtype Circuit a b =
 
 -- | Protocol-agnostic acknowledgement
 newtype Ack = Ack Bool
-  deriving (Generic, C.NFDataX)
+  deriving (Generic, C.NFDataX, Show)
 
 -- | Acknowledge. Used in circuit-notation plugin to drive ignore components.
 instance Default Ack where
@@ -366,8 +366,10 @@ data StallAck
   deriving (Eq, Bounded, Enum, Show)
 
 -- | Class that defines how to /drive/, /sample/, and /stall/ a "Circuit" of
- -- some shape.
-class (C.KnownNat (SimulateChannels a), Backpressure a) => Simulate a where
+-- some shape. The "Backpressure" instance requires that the /backward/ type of the
+-- circuit can be generated from a list of Booleans.
+class (C.KnownNat (SimulateChannels a), Backpressure a, Simulate a) => Drivable a where
+  -- TODO: documentatie verplaatsen
   -- Type a /Circuit/ driver needs or sampler yields. For example:
   --
   -- >>> :kind! (forall dom a. SimulateType (Df dom a))
@@ -376,7 +378,6 @@ class (C.KnownNat (SimulateChannels a), Backpressure a) => Simulate a where
   --
   -- This means sampling a @Circuit () (Df dom a)@ with 'sampleC' yields
   -- @[Data a]@.
-  type SimulateType a :: Type
 
   -- | Similar to 'SimulateType', but without backpressure information. For
   -- example:
@@ -390,11 +391,6 @@ class (C.KnownNat (SimulateChannels a), Backpressure a) => Simulate a where
   -- in "Protocols.Hedgehog" and 'simulateCS'.
   type ExpectType a :: Type
 
-  -- | The number of simulation channel this channel has after flattening it.
-  -- For example, @(Df dom a, Df dom a)@ has 2, while
-  -- @Vec 4 (Df dom a, Df dom a)@ has 8.
-  type SimulateChannels a :: C.Nat
-
   -- | Convert a /ExpectType a/, a type representing data without backpressure,
   -- into a type that does, /SimulateType a/.
   toSimulateType ::
@@ -403,7 +399,7 @@ class (C.KnownNat (SimulateChannels a), Backpressure a) => Simulate a where
     -- | Expect type: input for a protocol /without/ stall information
     ExpectType a ->
     -- | Expect type: input for a protocol /with/ stall information
-    SimulateType a
+    SimulateFwdType a
 
   -- | Convert a /ExpectType a/, a type representing data without backpressure,
   -- into a type that does, /SimulateType a/.
@@ -411,7 +407,7 @@ class (C.KnownNat (SimulateChannels a), Backpressure a) => Simulate a where
     -- | Type witness
     Proxy a ->
     -- | Expect type: input for a protocol /with/ stall information
-    SimulateType a ->
+    SimulateFwdType a ->
     -- | Expect type: input for a protocol /without/ stall information
     ExpectType a
 
@@ -419,7 +415,7 @@ class (C.KnownNat (SimulateChannels a), Backpressure a) => Simulate a where
   -- to simulate a circuit. Related: 'simulateC'.
   driveC ::
     SimulationConfig ->
-    SimulateType a ->
+    SimulateFwdType a ->
     Circuit () a
 
   -- | Sample a circuit that is trivially drivable. Use 'driveC'  to create
@@ -427,7 +423,42 @@ class (C.KnownNat (SimulateChannels a), Backpressure a) => Simulate a where
   sampleC ::
     SimulationConfig ->
     Circuit () a ->
-    SimulateType a
+    SimulateFwdType a
+
+
+-- | Defines functions necessary for implementation of the 'simulateCircuit' function. This
+-- kind of simulation requires a lists for both the forward and the backward direction.
+--
+-- This class requires the definition of the types that the test supplies and returns. Its
+-- functions are converters from these /simulation types/ to types on the 'Signal' level.
+-- The 'simulateCircuit' function can thus receive the necessary simulation types, convert
+-- them to types on the 'Signal' level, pass those signals to the circuit, and convert the
+-- result of the circuit back to the simulation types giving the final result.
+class (C.KnownNat (SimulateChannels a), Protocol a) => Simulate a where
+  -- | The type that a test must provide to the 'simulateCircuit' function in the forward direction.
+  -- Usually this is some sort of list.
+  type SimulateFwdType a :: Type
+
+  -- | The type that a test must provide to the 'simulateCircuit' function in the backward direction.
+  -- Usually this is some sort of list
+  type SimulateBwdType a :: Type
+
+  -- | The number of simulation channels this channel has after flattening it.
+  -- For example, @(Df dom a, Df dom a)@ has 2, while
+  -- @Vec 4 (Df dom a, Df dom a)@ has 8.
+  type SimulateChannels a :: C.Nat
+
+  -- | Convert the forward simulation type to the 'Fwd' of 'a'.
+  simToSigFwd :: Proxy a -> SimulateFwdType a -> Fwd a
+
+  -- | Convert the backward simulation type to the 'Bwd' of 'a'.
+  simToSigBwd :: Proxy a -> SimulateBwdType a -> Bwd a
+
+  -- | Convert a signal of type @Bwd a@ to the backward simulation type.
+  sigToSimFwd :: Proxy a -> Fwd a -> SimulateFwdType a
+
+  -- | Convert a signal of type @Fwd a@ to the forward simulation type.
+  sigToSimBwd :: Proxy a -> Bwd a -> SimulateBwdType a
 
   -- | Create a /stalling/ circuit. For each simulation channel (see
   -- 'SimulateChannels') a tuple determines how the component stalls:
@@ -445,22 +476,54 @@ class (C.KnownNat (SimulateChannels a), Backpressure a) => Simulate a where
     C.Vec (SimulateChannels a) (StallAck, [Int]) ->
     Circuit a a
 
+
 instance Simulate () where
-  type SimulateType () = ()
-  type ExpectType () = ()
+  type SimulateFwdType () = ()
+  type SimulateBwdType () = ()
   type SimulateChannels () = 0
+
+  simToSigFwd _ = id
+  simToSigBwd _ = id
+  sigToSimFwd _ = id
+  sigToSimBwd _ = id
+
+  stallC _ _ = idC
+
+instance Drivable () where
+  type ExpectType () = ()
 
   toSimulateType Proxy () = ()
   fromSimulateType Proxy () = ()
 
   driveC _ _ = idC
   sampleC _  _ = ()
-  stallC _ _ = idC
+
 
 instance (Simulate a, Simulate b) => Simulate (a, b) where
-  type SimulateType (a, b) = (SimulateType a, SimulateType b)
-  type ExpectType (a, b) = (ExpectType a, ExpectType b)
+  type SimulateFwdType (a, b) = (SimulateFwdType a, SimulateFwdType b)
+  type SimulateBwdType (a, b) = (SimulateBwdType a, SimulateBwdType b)
   type SimulateChannels (a, b) = SimulateChannels a + SimulateChannels b
+
+  simToSigFwd Proxy (fwdsA, fwdsB) = (simToSigFwd (Proxy @a) fwdsA, simToSigFwd (Proxy @b) fwdsB)
+  simToSigBwd Proxy (bwdsA, bwdsB) = (simToSigBwd (Proxy @a) bwdsA, simToSigBwd (Proxy @b) bwdsB)
+  sigToSimFwd Proxy (fwdSigA, fwdSigB) = (sigToSimFwd (Proxy @a) fwdSigA, sigToSimFwd (Proxy @b) fwdSigB)
+  sigToSimBwd Proxy (bwdSigA, bwdSigB) = (sigToSimBwd (Proxy @a) bwdSigA, sigToSimBwd (Proxy @b) bwdSigB)
+
+  stallC conf stalls =
+    let
+      (stallsL, stallsR) = C.splitAtI @(SimulateChannels a) @(SimulateChannels b) stalls
+      Circuit stalledL = stallC @a conf stallsL
+      Circuit stalledR = stallC @b conf stallsR
+    in
+      Circuit $ \((fwdL0, fwdR0), (bwdL0, bwdR0)) ->
+        let
+          (fwdL1, bwdL1) = stalledL (fwdL0, bwdL0)
+          (fwdR1, bwdR1) = stalledR (fwdR0, bwdR0)
+        in
+          ((fwdL1, fwdR1), (bwdL1, bwdR1))
+
+instance (Drivable a, Drivable b) => Drivable (a, b) where
+  type ExpectType (a, b) = (ExpectType a, ExpectType b)
 
   toSimulateType Proxy (t1, t2) =
     ( toSimulateType (Proxy @a) t1
@@ -482,27 +545,30 @@ instance (Simulate a, Simulate b) => Simulate (a, b) where
       ( sampleC @a conf (Circuit $ \_ -> ((), fwd1))
       , sampleC @b conf (Circuit $ \_ -> ((), fwd2)) )
 
-  stallC conf stalls =
-    let
-      (stallsL, stallsR) = C.splitAtI @(SimulateChannels a) @(SimulateChannels b) stalls
-      Circuit stalledL = stallC @a conf stallsL
-      Circuit stalledR = stallC @b conf stallsR
-    in
-      Circuit $ \((fwdL0, fwdR0), (bwdL0, bwdR0)) ->
-        let
-          (fwdL1, bwdL1) = stalledL (fwdL0, bwdL0)
-          (fwdR1, bwdR1) = stalledR (fwdR0, bwdR0)
-        in
-          ((fwdL1, fwdR1), (bwdL1, bwdR1))
 
 -- TODO TemplateHaskell?
 -- instance SimulateType (a, b, c)
 -- instance SimulateType (a, b, c, d)
 
-instance (C.KnownNat n, Simulate a) => Simulate (C.Vec n a) where
-  type SimulateType (C.Vec n a) = C.Vec n (SimulateType a)
-  type ExpectType (C.Vec n a) = C.Vec n (ExpectType a)
+instance (CE.KnownNat n, Simulate a) => Simulate (C.Vec n a) where
+  type SimulateFwdType (C.Vec n a) = C.Vec n (SimulateFwdType a)
+  type SimulateBwdType (C.Vec n a) = C.Vec n (SimulateBwdType a)
   type SimulateChannels (C.Vec n a) = n * SimulateChannels a
+
+  simToSigFwd Proxy = C.map (simToSigFwd (Proxy @a))
+  simToSigBwd Proxy = C.map (simToSigBwd (Proxy @a))
+  sigToSimFwd Proxy = C.map (sigToSimFwd (Proxy @a))
+  sigToSimBwd Proxy = C.map (sigToSimBwd (Proxy @a))
+
+  stallC conf stalls0 =
+    let
+      stalls1 = C.unconcatI @n @(SimulateChannels a) stalls0
+      stalled = C.map (toSignals . stallC @a conf) stalls1
+    in
+      Circuit $ \(fwds, bwds) -> C.unzip (C.zipWith ($) stalled (C.zip fwds bwds))
+
+instance (C.KnownNat n, Drivable a) => Drivable (C.Vec n a) where
+  type ExpectType (C.Vec n a) = C.Vec n (ExpectType a)
 
   toSimulateType Proxy = C.map (toSimulateType (Proxy @a))
   fromSimulateType Proxy = C.map (fromSimulateType (Proxy @a))
@@ -518,20 +584,24 @@ instance (C.KnownNat n, Simulate a) => Simulate (C.Vec n a) where
     in
       C.map (\fwd -> sampleC @a conf (Circuit $ \_ -> ((), fwd))) fwds
 
-  stallC conf stalls0 =
-    let
-      stalls1 = C.unconcatI @n @(SimulateChannels a) stalls0
-      stalled = C.map (toSignals . stallC @a conf) stalls1
-    in
-      Circuit $ \(fwds, bwds) -> C.unzip (C.zipWith ($) stalled (C.zip fwds bwds))
+
+instance (C.KnownDomain dom) => Simulate (CSignal dom a) where
+  type SimulateFwdType (CSignal dom a) = [a]
+  type SimulateBwdType (CSignal dom a) = ()
+  type SimulateChannels (CSignal dom a) = 1
+
+  simToSigFwd Proxy list = CSignal (C.fromList_lazy list)
+  simToSigBwd Proxy () = def
+  sigToSimFwd Proxy (CSignal sig) = C.sample_lazy sig
+  sigToSimBwd Proxy _ = ()
+
+  stallC _ _ = idC
 
 instance Default (CSignal dom (Const () a)) where
   def = CSignal (pure (Const ()))
 
-instance (C.NFDataX a, C.ShowX a, Show a) => Simulate (CSignal dom a) where
-  type SimulateType (CSignal dom a) = [a]
+instance (C.NFDataX a, C.ShowX a, Show a, C.KnownDomain dom) => Drivable (CSignal dom a) where
   type ExpectType (CSignal dom a) = [a]
-  type SimulateChannels (CSignal dom a) = 1
 
   toSimulateType Proxy = id
   fromSimulateType Proxy = id
@@ -545,7 +615,6 @@ instance (C.NFDataX a, C.ShowX a, Show a) => Simulate (CSignal dom a) where
     let sampled = CE.sample_lazy ((\(CSignal s) -> s) (snd (f ((), def)))) in
     if ignoreReset then drop resetCycles sampled else sampled
 
-  stallC _ _ = idC
 
 -- | Simulate a circuit. Includes samples while reset is asserted.
 -- Not synthesizable.
@@ -563,16 +632,16 @@ instance (C.NFDataX a, C.ShowX a, Show a) => Simulate (CSignal dom a) where
 -- stalls nor introduce backpressure. If you want to to this use 'Df.stall'.
 simulateC ::
   forall a b.
-  (Simulate a, Simulate b) =>
+  (Drivable a, Drivable b) =>
   -- | Circuit to simulate
   Circuit a b ->
   -- | Simulation configuration. Note that some options only apply to 'sampleC'
   -- and some only to 'driveC'.
   SimulationConfig ->
   -- | Circuit input
-  SimulateType a ->
+  SimulateFwdType a ->
   -- | Circuit output
-  SimulateType b
+  SimulateFwdType b
 simulateC c conf as =
   sampleC conf (driveC conf as |> c)
 
@@ -587,7 +656,7 @@ simulateC c conf as =
 -- [1,3]
 simulateCS ::
   forall a b.
-  (Simulate a, Simulate b) =>
+  (Drivable a, Drivable b) =>
   -- | Circuit to simulate
   Circuit a b ->
   -- | Circuit input
@@ -602,7 +671,7 @@ simulateCS c =
 -- | Like 'simulateCS', but takes a circuit expecting a clock, reset, and enable.
 simulateCSE ::
   forall dom a b.
-  (Simulate a, Simulate b, C.KnownDomain dom) =>
+  (Drivable a, Drivable b, C.KnownDomain dom) =>
   -- | Circuit to simulate
   (C.Clock dom -> C.Reset dom -> C.Enable dom -> Circuit a b) ->
   -- | Circuit input
@@ -617,6 +686,17 @@ simulateCSE c = simulateCS (c clk rst ena)
 
   resetGen n = C.unsafeFromHighPolarity (C.fromList (replicate n True <> repeat False))
 
+simulateCircuit :: forall a b . (Simulate a, Simulate b) =>
+  SimulateFwdType a -> SimulateBwdType b ->
+  Circuit a b ->
+  (SimulateBwdType a, SimulateFwdType b)
+simulateCircuit fwds bwds circ =
+    (sigToSimBwd (Proxy @a) bwdSig, sigToSimFwd (Proxy @b) fwdSig)
+    where
+      (bwdSig, fwdSig) = toSignals circ $
+        (simToSigFwd (Proxy @a) fwds, simToSigBwd (Proxy @b) bwds)
+
+
 -- | Picked up by "Protocols.Plugin" to process protocol DSL. See
 -- "Protocols.Plugin" for more information.
 circuit :: Any
@@ -628,3 +708,4 @@ circuit =
 (-<) :: Any
 (-<) =
   error "(-<) called: did you forget to enable \"Protocols.Plugin\"?"
+

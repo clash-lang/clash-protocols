@@ -101,6 +101,7 @@ instance Protocol (Df dom a) where
   -- | Backward part of simple dataflow: @Signal dom Bool@
   type Bwd (Df dom a) = Signal dom Ack
 
+
 instance Backpressure (Df dom a) where
   boolsToBwd _ = C.fromList_lazy . coerce
 
@@ -136,16 +137,26 @@ dataToMaybe NoData = Nothing
 dataToMaybe (Data a) = Just a
 
 instance (C.KnownDomain dom, C.NFDataX a, C.ShowX a, Show a) => Simulate (Df dom a) where
-  type SimulateType (Df dom a) = [Data a]
-  type ExpectType (Df dom a) = [a]
+  type SimulateFwdType (Df dom a) = [Data a]
+  type SimulateBwdType (Df dom a) = [Ack]
   type SimulateChannels (Df dom a) = 1
+
+  simToSigFwd _ = C.fromList_lazy
+  simToSigBwd _ = C.fromList_lazy
+  sigToSimFwd _ = C.sample_lazy
+  sigToSimBwd _ = C.sample_lazy
+
+  stallC conf (C.head -> (stallAck, stalls)) = stall conf stallAck stalls
+
+instance (C.KnownDomain dom, C.NFDataX a, C.ShowX a, Show a) => Drivable (Df dom a) where
+  type ExpectType (Df dom a) = [a]
 
   toSimulateType Proxy = P.map Data
   fromSimulateType Proxy = Maybe.mapMaybe dataToMaybe
 
   driveC = drive
   sampleC = sample
-  stallC conf (C.head -> (stallAck, stalls)) = stall conf stallAck stalls
+
 
 instance DfLike dom (Df dom) a where
   type Data (Df dom) a = Data a
