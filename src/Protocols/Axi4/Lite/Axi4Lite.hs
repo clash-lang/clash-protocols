@@ -210,7 +210,6 @@ data S2M_Axi4Lite
   }
   deriving (Generic)
 
--- this breaks when e.g. fromList is used on an unconstrained value :: S2MAxi4Lite aw bw.
 deriving instance (NFDataX (ReadBusWidthType bw)) => NFDataX (S2M_Axi4Lite aw bw)
 
 deriving instance
@@ -245,8 +244,12 @@ instance (C.KnownDomain dom, NFDataX (S2M_Axi4Lite aw bw)) => Simulate (Axi4Lite
 
   stallC conf stallAckVector = Circuit go
     where
+      -- A pattern match failed as the linting needs all patterns to be caught, even though we know
+      -- due to the type of SimulateChannels that this vector always has length five, this way
+      -- of deconstructing the vector gives no such pattern matching errors...
       (waStalls:>wdStalls:>wrStalls:>raStalls:>rdStalls:>Nil) = stallAckVector
       SimulationConfig{..} = conf
+
       go :: (Signal dom (M2S_Axi4Lite aw bw),
              Signal dom (S2M_Axi4Lite aw bw)) ->
             (Signal dom (S2M_Axi4Lite aw bw),
@@ -298,7 +301,7 @@ instance (C.KnownDomain dom, NFDataX (S2M_Axi4Lite aw bw)) => Simulate (Axi4Lite
           saList | stallAck == StallCycle = [minBound..maxBound] \\ [StallCycle]
                  | otherwise = [stallAck]
 
-
+      -- Very similar to the go function found in the stallC implementation of DfLike.
       stallM2S :: (Source src, Destination dst) =>
         [StallAck] -> [Int] -> Int ->
         Signal dom src -> Signal dom dst ->
@@ -320,6 +323,8 @@ instance (C.KnownDomain dom, NFDataX (S2M_Axi4Lite aw bw)) => Simulate (Axi4Lite
         in
           B.bimap (b1 :-) (f1 :-) (stallM2S sas stalls' 0 fwd bwd)
 
+      -- stalling from slave to master is the same as the other way around, just with the forward and
+      -- backward channels switched.
       stallS2M :: (Destination dst, Source src) =>
         [StallAck] -> [Int] -> Int ->
         Signal dom dst -> Signal dom src ->
@@ -327,6 +332,7 @@ instance (C.KnownDomain dom, NFDataX (S2M_Axi4Lite aw bw)) => Simulate (Axi4Lite
       stallS2M sas stalls resetN fwd bwd = (src, dst)
         where (dst, src) = stallM2S sas stalls resetN bwd fwd
 
+      -- TODO: A similar function also exists in another stallC implementation, perhaps better to generalize?
       toStallAck :: (Source src, Destination dst) => Maybe src -> Bool -> StallAck -> dst
       toStallAck (Just _) ack = const (ready ack)
       toStallAck Nothing ack = \case
