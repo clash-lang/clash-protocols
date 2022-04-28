@@ -31,15 +31,22 @@ module Protocols
 
     -- * Simulation
   , Simulate
-     ( SimulateType
-     , ExpectType
+     ( SimulateFwdType
+     , SimulateBwdType
      , SimulateChannels
-     , toSimulateType
-     , fromSimulateType
-     , driveC
-     , sampleC
+     , sigToSimFwd
+     , sigToSimBwd
+     , simToSigFwd
+     , simToSigBwd
      , stallC
      )
+  , Drivable
+    ( ExpectType
+    , toSimulateType
+    , fromSimulateType
+    , driveC
+    , sampleC
+    )
   , SimulationConfig(..)
   , StallAck(..)
   , simulateC

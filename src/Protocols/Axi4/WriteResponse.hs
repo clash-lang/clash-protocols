@@ -77,19 +77,19 @@ instance DfLike dom (Axi4WriteResponse dom kr iw) userType where
 instance (C.KnownDomain dom, C.NFDataX userType, C.ShowX userType, Show userType) =>
   Simulate (Axi4WriteResponse dom kr iw userType) where
 
-  type SimulateType (Axi4WriteResponse dom kr iw userType) =
+  type SimulateFwdType (Axi4WriteResponse dom kr iw userType) =
     [S2M_WriteResponse kr iw userType]
 
-  type ExpectType (Axi4WriteResponse dom kr iw userType) =
-    [S2M_WriteResponse kr iw userType]
+  type SimulateBwdType (Axi4WriteResponse dom kr iw userType) =
+    [M2S_WriteResponse]
 
   type SimulateChannels (Axi4WriteResponse dom kr iw userType) = 1
 
-  toSimulateType _ = id
-  fromSimulateType _ = id
+  simToSigFwd Proxy = C.fromList_lazy
+  simToSigBwd Proxy = C.fromList_lazy
+  sigToSimFwd Proxy = C.sample_lazy
+  sigToSimBwd Proxy = C.sample_lazy
 
-  driveC = DfLike.drive Proxy
-  sampleC = DfLike.sample Proxy
   stallC conf (C.head -> (stallAck, stalls)) =
     DfLike.stall Proxy conf stallAck stalls
 
