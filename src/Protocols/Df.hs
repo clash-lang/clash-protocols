@@ -81,6 +81,7 @@ import           Protocols.Internal
 import           Protocols.DfLike (DfLike)
 import qualified Protocols.DfLike as DfLike
 
+
 -- $setup
 -- >>> import Protocols
 -- >>> import Clash.Prelude (Vec(..))
@@ -135,6 +136,7 @@ instance Monad Data where
 dataToMaybe :: Data a -> Maybe a
 dataToMaybe NoData = Nothing
 dataToMaybe (Data a) = Just a
+
 
 instance (C.KnownDomain dom, C.NFDataX a, C.ShowX a, Show a) => Simulate (Df dom a) where
   type SimulateFwdType (Df dom a) = [Data a]
@@ -439,6 +441,7 @@ registerBwd ::
 registerBwd = DfLike.registerBwd Proxy
 
 --------------------------------- SIMULATE -------------------------------------
+
 
 -- | Emit values given in list. Emits no data while reset is asserted. Not
 -- synthesizable.

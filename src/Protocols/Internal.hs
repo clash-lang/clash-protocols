@@ -6,6 +6,7 @@ Internal module to prevent hs-boot files (breaks Haddock)
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Protocols.Internal where
 
@@ -144,6 +145,7 @@ newtype Circuit a b =
 -- | Protocol-agnostic acknowledgement
 newtype Ack = Ack Bool
   deriving (Generic, C.NFDataX, Show)
+
 
 -- | Acknowledge. Used in circuit-notation plugin to drive ignore components.
 instance Default Ack where
@@ -365,20 +367,11 @@ data StallAck
   | StallCycle
   deriving (Eq, Bounded, Enum, Show)
 
+
 -- | Class that defines how to /drive/, /sample/, and /stall/ a "Circuit" of
 -- some shape. The "Backpressure" instance requires that the /backward/ type of the
 -- circuit can be generated from a list of Booleans.
 class (C.KnownNat (SimulateChannels a), Backpressure a, Simulate a) => Drivable a where
-  -- TODO: documentatie verplaatsen
-  -- Type a /Circuit/ driver needs or sampler yields. For example:
-  --
-  -- >>> :kind! (forall dom a. SimulateFwdType (Df dom a))
-  -- ...
-  -- = [Data a]
-  --
-  -- This means sampling a @Circuit () (Df dom a)@ with 'sampleC' yields
-  -- @[Data a]@.
-
   -- | Similar to 'SimulateFwdType', but without backpressure information. For
   -- example:
   --
@@ -689,6 +682,7 @@ simulateCSE c = simulateCS (c clk rst ena)
 -- | Applies conversion functions defined in the 'Simulate' instance of @a@ and @b@ to
 -- the given simulation types, and applies the results to the internal function of the
 -- given 'Circuit'. The resulting internal types are converted to the simulation types.
+-- TODO: implement SimulationConfig
 simulateCircuit :: forall a b . (Simulate a, Simulate b) =>
   SimulateFwdType a -> SimulateBwdType b ->
   Circuit a b ->
