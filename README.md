@@ -13,6 +13,12 @@ A battery-included library for writing on-chip protocols, such as AMBA AXI and A
     - [Testing](#testing)
     - [Debugging](#debugging)
   - [Connecting multiple circuits](#connecting-multiple-circuits)
+- [AXI-like `Circuit`s](#axi-like-circuits)
+  - [Why there is no `DfLike` instance for AXI](#why-there-is-no-dflike-instance-for-axi)
+  - [Why there is no `Drivable` instance for AXI](#why-there-is-no-drivable-instance-for-axi)
+  - [Why `Fwd` cannot be injective](#why-fwd-cannot-be-injective)
+  - [The `Simulate` instance](#the-simulate-instance)
+  - [Interconnects](#interconnects)
 - [License](#license)
 - [Project goals](#project-goals)
 - [Contributing](#contributing)
@@ -553,6 +559,50 @@ At this point we're forced to conclude that `forceAckWithLow` did not fix our wo
 ## Connecting multiple circuits
 Check out [tests/Tests/Protocols/Plugin.hs](https://github.com/clash-lang/clash-protocols/blob/main/tests/Tests/Protocols/Plugin.hs) for examples on how to use `Protocols.Plugin` to wire up circuits using a convenient syntax.
 
+# AXI-like `Circuit`s
+
+Communication bus protocols like [AMBA AXI](https://en.wikipedia.org/wiki/Advanced_eXtensible_Interface) are different from circuits like those described above. These protocols are intended for communication between masters and slaves, hence useful data is going both in the forward and in the backward direction. What such protocols _do_ have in common is that data is acknowledged. The part of the bus over which data goes in one direction and acknowledgements in the other are called channels, in the case of AXI. Therefore such a channel individually is similar to `Df`.
+
+`clash-protocols` aims to provide classes and instances for popular communication bus protocols, including AXI. This section describes what parts of `clash-protocols` are suitable for such protocols and which are not. We further illustrate how the nature of protocols like AXI influenced architectural decisions in `clash-protocols`.
+
+## Why there is no `DfLike` instance for AXI
+
+As mentioned, one channel in AXI is like `Df`. For each channel individually it is indeed possible to define a `DfLike` instance. Then, we might compose all five channels to obtain an AXI interface. This will however not result in a correct interface: `DfLike` is defined such that the data type over the `Fwd` channel is something with a `Payload`, while the backward channel is an acknowledgement. Therefore when we compose the five AXI channels, the channels that send data from the slave to the master will be sending data in the same direction as the master to slave channels.
+
+A further problem with `DfLike` and AXI is that `DfLike` requires some generic type `a` in the type for which `DfLike` is implemented. While AXI does specify "user-defined signaling", which can be anything, the specification also recommends not using such signals. So in general, an AXI channel is simply not as generic as a type for which `DfLike` is implemented ought to be.
+
+## Why there is no `Drivable` instance for AXI
+
+`Drivable` is a class providing convenient functions that can generate circuits that drive and sample another circuit. For example, the `driveC` function yields a `Circuit () a` circuit. Since this circuit has the `()` protocol on its left hand side it is trivially driveable. The sample function can drive such a circuit by applying `()` and in that way simulates the circuit of type `Circuit a b` to which the `driveC` circuit is connected.
+
+To be able to generate a `Circuit () a`, it must be possible to generate backpressure. For example, if the SimulationConfig defines that the circuit should first stall 100 cycles after reset, the acknowledge signal of the circuit that is sampled must be set to false for 100 cycles. If this acknowledge signal is not exactly a `Bool`, it must be generated from a `Bool`. This is what the `Backpressure` instance is for. It supplies one function, `boolsToBwd`, which converts a list of Booleans to `Bwd a` (e.g. a `Signal Ack`).
+
+AXI has two channels that allow data to be sent from the slave to the master. Hence, on these channels there is meaningful data on the backward part and this data cannot in general be generated from a list of booleans. This inhibits a `Drivable` instance for AXI.
+
+## Why `Fwd` cannot be injective
+
+The channels that communicate data from the slave to the master receive an acknowledgement (or ready) signal from the master. This is the signal that is on the Forward channel. Thus it can happen that we simply want to have `Signal Ack` on the forward channel for several protocols. This means that `Fwd` cannot be an injective type family anymore due to AXI like circuits.
+
+This means that when we write functions such as:
+
+```
+catMaybes = Circuit (C.unbundle . go . C.bundle)
+```
+
+The type that can be inferred for `go` by GHC is much less precise than when `Fwd` (and `Bwd` for that matter) are injective.
+
+
+## The `Simulate` instance
+
+The `clash-protocols` features mentioned above are all not suitable to be used with communication bus protocols such as AXI. What _is_ suitable is the `Simulate` class. For a protocol `a`, a `Simulate` instance defines conversion functions from types that are easy to use in testcases and manual simulations (usually these are lists), from and to the types that are used by the protocol `a`. Furthermore, a `Simulate` instance provides an unsynthesizable `stallC` function which generates a circuit that stalls the circuit according to a given list of stalls. This function can be used to test the circuit's behaviour under different stalls. It is most useful to define Hedgehog tests that stall the circuit arbitrarily.
+
+## Interconnects
+
+AXI-like circuits contain a master and a slave. These can be modelled as `Circuit m axi` and `Circuit axi s` respectively, where `axi` is the type for the AXI protocol whith specific settings, and `m` and `s` could be other protocols the master and slave use to communicate with I/O or other components (or just `()`). An n to m interconnect would thus be of the form:
+
+```haskell
+interconnect :: (KnownNat n, KnownNat m) => Circuit (Vec n axi) (Vec m axi)
+```
 
 # License
 `clash-protocols` is licensed under BSD2. See [LICENSE](LICENSE).
@@ -584,11 +634,16 @@ No formal guidelines yet, but feel free to open a PR!
 - [x] Add examples on how to use DSL plugin
 - [ ] Port and upstream examples `circuit-notation`
 - [ ] Blogpost introducing explaining the _why_ of `clash-protocols`
+- [ ] Apply SimulationConfig in `simulateCircuit` function, currently it just ignores it.
+- [ ] Write (hedgehog) tests for the stallC implementation of Axi4-lite
+- [ ] Write Simulate instance for AXI4
 
 0.2
 
 - [x] Make DSL plugin work with GHC 8.10 ([github.com/cchalmers/circuit-notation/pull/9](https://github.com/cchalmers/circuit-notation/pull/9))
-- [ ] AXI AMBA (in terms of `DfLike`!)
+- [ ] AXI AMBA
 - [ ] Test framework for "chunked" designs
 - [ ] Improve errors for multichannel tests
+- [ ] Investigate whether something like an ExpectType can work in Simulate and not just Drivable
+- [ ] Generic Hedgehog test functions for something with only a Simulate instance
 - [ ] Investigate whether we can use injective type families for `SimulateType` and `ExpectType`
