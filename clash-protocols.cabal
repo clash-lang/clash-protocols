@@ -147,6 +147,8 @@ library
     Protocols.Axi4.WriteData
     Protocols.Axi4.WriteResponse
 
+    Protocols.Wishbone
+
     Protocols.Df
     Protocols.DfLike
     Protocols.Hedgehog
