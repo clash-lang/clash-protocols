@@ -156,6 +156,8 @@ library
 
     Protocols.Avalon.MemMap
 
+    Protocols.Wishbone
+
     Protocols.Df
     Protocols.DfConv
     Protocols.Hedgehog
