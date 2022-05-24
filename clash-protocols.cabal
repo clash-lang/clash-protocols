@@ -189,10 +189,12 @@ test-suite unittests
     Tests.Protocols.DfConv
     Tests.Protocols.AvalonMemMap
     Tests.Protocols.Plugin
+    Tests.Protocols.Wishbone
 
     Util
   build-depends:
     clash-protocols,
+    clash-prelude-hedgehog,
     data-default,
     unordered-containers,
     deepseq,
