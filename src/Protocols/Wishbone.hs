@@ -13,7 +13,7 @@ Types modelling the Wishbone bus protocol.
 
 module Protocols.Wishbone where
 
-import           Clash.Prelude              hiding (sample_lazy, (||))
+import           Clash.Prelude              hiding (length, sample_lazy, (||))
 import           Clash.Signal.Internal      (Signal (..), sample_lazy)
 
 import           Control.DeepSeq            (NFData)
@@ -180,124 +180,52 @@ instance (KnownNat (BitSize dat), KnownDomain dom) => Simulate (Wishbone dom mod
         in
           B.bimap (b1 :-) (f1 :-) (go sas s1 0 fwd bwd)
 
-data WishboneTransfer addrWidth dat
-  = Read (BitVector addrWidth)
-  | Write (BitVector addrWidth) dat
-  deriving (NFData, ShowX, Generic, NFDataX, Show, Eq)
 
-data WishboneTransferReply dat
-  = Ack dat
-  | Err
-  | Retry
-  deriving (NFData, ShowX, Generic, NFDataX, Show, Eq)
+data WishboneState
+  = Quiet
+  | InCycleNoStrobe
+  | WaitForSlave
+  -- TODO add a SlaveHolding state? Spec seems unclear
 
--- Circuit (Wishbone 8 a) ()
-
-transferFromM2S :: WishboneM2S addressWidth (BitSize dat `DivRU` 8) dat -> Maybe (WishboneTransfer addressWidth dat)
-transferFromM2S WishboneM2S {..}
-  | not strobe || not busCycle = Nothing
-  | writeEnable                = Just (Write addr writeData)
-  | otherwise                  = Just (Read addr)
-
-instance (KnownNat (BitSize dat), KnownNat addressWidth, KnownDomain dom) => Drivable (Wishbone dom mode addressWidth dat) where
-  type ExpectType (Wishbone dom mode addressWidth dat) = [WishboneTransfer addressWidth dat]
-
-  toSimulateType Proxy = Prelude.map $ \case
-     Read bv           -> (wishboneM2S @addressWidth) { strobe = True, busCycle = True, writeEnable = False, addr = bv }
-     Write bv writeDat -> (wishboneM2S @addressWidth @dat) { strobe = True, busCycle = True, writeEnable = False, addr = bv, writeData = writeDat }
-
-  fromSimulateType Proxy = mapMaybe transferFromM2S
-
-  driveC SimulationConfig{..} s0 = Circuit $
-        ((),)
-      . fromList_lazy
-      . go s0 resetCycles
-      . sample_lazy
-      . snd
-    where
-      go _ reset ~(ack:acks) | reset > 0 =
-        wishboneM2S @addressWidth : (ack `seqX` go s0 (reset - 1) acks)
-      go [] _ ~(ack:acks) =
-        wishboneM2S @addressWidth : (ack `seqX` go [] 0 acks)
-      go (dat@(transferFromM2S -> Just _):is) _ ~(ack:acks) =
-        dat : go (if acknowledge ack then is else dat:is) 0 acks
-      go (_:is) _ ~(ack:acks) =
-        wishboneM2S @addressWidth : (ack `seqX` go is 0 acks)
-
-  sampleC SimulationConfig{..} (Circuit f) =
-    let sampled = sample_lazy (snd $ f ((), pure wishboneS2M))
-    in
-      if ignoreReset then
-        Prelude.drop resetCycles sampled
-      else
-        sampled
+data WishboneError
+  = MoreThanOneTerminationSignalAsserted
+  | TerminationSignalOutsideOfCycle
 
 
-class (Protocol a) => TestBidir a where
-  type ExpectFwdType a
-  type ExpectBwdType a
+nextStateStandard
+  :: WishboneState
+  -> WishboneM2S addressWidth (BitSize a `DivRU` 8) a
+  -> WishboneS2M a
+  -> Either WishboneError WishboneState
+nextStateStandard _ m2s s2m
+  | length (filter ($ s2m) [acknowledge, err, retry]) > 1           = Left MoreThanOneTerminationSignalAsserted
+  | not (busCycle m2s) && (acknowledge s2m || err s2m || retry s2m) = Left TerminationSignalOutsideOfCycle
+nextStateStandard Quiet m2s _
+  | busCycle m2s && not (strobe m2s)        = Right InCycleNoStrobe
+  | busCycle m2s && strobe m2s              = Right WaitForSlave
+  | otherwise                               = Right Quiet
+nextStateStandard InCycleNoStrobe m2s _
+  | not (busCycle m2s)         = Right Quiet
+  | busCycle m2s && strobe m2s = Right WaitForSlave
+  | otherwise                  = Right InCycleNoStrobe
+nextStateStandard WaitForSlave m2s s2m
+  | busCycle m2s && not (strobe m2s)        = Right InCycleNoStrobe
+  | not (busCycle m2s)                      = Right Quiet
+  | acknowledge s2m || err s2m || retry s2m = Right Quiet
+  | otherwise                               = Right WaitForSlave
 
-instance TestBidir (Wishbone dom mode addressWidth a) where
-  type ExpectFwdType (Wishbone dom mode addressWidth a) = [Maybe (WishboneTransfer addressWidth a)]
-  type ExpectBwdType (Wishbone dom mode addressWidth a) = [Maybe (WishboneTransferReply a)]
 
-
-
-
-instance ( NFData a
-         , NFDataX a
-         , Show a
-         , ShowX a
-         , Eq a
-         , KnownNat (BitSize a)
-         , KnownNat addressWidth
-         , KnownDomain dom)
-      => Test (Wishbone dom mode addressWidth a) where
-  expectToLengths Proxy = pure . Prelude.length
-
-  expectN ::
-      forall m.
-      (HasCallStack, MonadTest m) =>
-      Proxy (Wishbone dom mode addressWidth a) ->
-      ExpectOptions ->
-      Vec 1 Int ->
-      [WishboneM2S addressWidth (BitSize a `DivRU` 8) a] ->
-      m [WishboneTransfer addressWidth a]
-  expectN Proxy ExpectOptions{eoTimeout, eoEmptyTail} (head -> nExpected) sampled =
-      go (fromMaybe maxBound eoTimeout) nExpected sampled'
-    where
-      sampled' = Prelude.map transferFromM2S sampled
-
-      go
-        :: HasCallStack
-        -- Timeout counter
-        => Int
-        -- expected number of values
-        -> Int
-        -- sampled data
-        -> [Maybe (WishboneTransfer addressWidth a)]
-        -- Results
-        -> m [WishboneTransfer addressWidth a]
-      go _ _ [] = error "unexpected end of signal"
-      go _timeout 0 rest =
-        case catMaybes (Prelude.take eoEmptyTail rest) of
-          [] -> pure (Prelude.take nExpected (catMaybes sampled'))
-          superfluous ->
-            let err = "Circuit produced more output than expected:" in
-            H.failWith Nothing (err <> "\n\n" <> ppShow superfluous)
-      go timeout n _ | timeout <= 0 =
-        H.failWith Nothing $ Prelude.concat
-        [ "Circuit did not produce enough output. Expected "
-        , show n, " more values. Sampled only ", show (nExpected - n), ":\n\n"
-        , ppShow (Prelude.take (nExpected - n) (catMaybes sampled'))
-        ]
-      go timeout n (Nothing:as) = do
-        -- Circuit did not output valid cycle, just continue
-        go (pred timeout) n as
-      go _ n (Just _:as) =
-        -- Circuit produced a valid cycle, reset timeout
-        go (fromMaybe maxBound eoTimeout) (pred n) as
-
+-- | Validate the input/output streams of a standard wishbone interface
+--
+-- Returns 'Right ()' when the interactions comply with the spec.
+-- Returns 'Left (cycle, err)' when a spec violation was found.
+validateStandard :: [WishboneM2S addressWidth (BitSize a `DivRU` 8) a] -> [WishboneS2M a] -> Either (Int, WishboneError) ()
+validateStandard m2s s2m = go 0 (Prelude.zip m2s s2m) Quiet
+  where
+    go _ [] _                 = Right ()
+    go n ((fwd, bwd):rest) st = case nextStateStandard st fwd bwd of
+      Left err  -> Left (n, err)
+      Right st' -> go (n + 1) rest st'
 
 wishboneM2S :: (KnownNat addressWidth, KnownNat (BitSize dat)) => WishboneM2S addressWidth (BitSize dat `DivRU` 8) dat
 wishboneM2S
