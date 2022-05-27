@@ -285,35 +285,33 @@ wishboneSource respondAddress statusAddress fifoDepth = Circuit $ unbundle . mea
 
   machineAsFunction s i = (s',o) where (o,s') = runState (fullStateMachine i) s
 
-  s0 = ((NoData, Nothing), E.replicate fifoDepth NoData)
+  s0 = (NoData, Nothing, maxBound, E.replicate fifoDepth NoData)
 
   fullStateMachine (True, _) = pure (wishboneS2M, NoData) -- reset is on, don't output anything or change anything
   fullStateMachine (False, (m2s, (Ack ack))) = do
     leftOtp <- leftStateMachine m2s
-    rightOtp <- gets (fst . fst)
-    when ack $ modify rightAck
+    rightOtp <- gets (\(otp,_,_,_) -> otp)
+    when ack $ modify (\(_, otpB, numFree, buf) -> (E.last buf, otpB, numFree + 1, NoData +>> buf))
     pure (leftOtp, rightOtp)
 
   leftStateMachine m2s
     | strobe m2s && addr m2s == respondAddress && writeEnable m2s = modify removeFifoStatusInfo >> pushInput (fromRight Clash.Prelude.undefined $ writeData m2s)
     | strobe m2s && Just (addr m2s) == statusAddress && not (writeEnable m2s) = do
-        ((otpA, otpB), buf) <- get
-        when (isNothing otpB) $ put ((otpA, Just (fifoEmptySpots fifoDepth buf)), buf)
-        ((_, otpB'), _) <- get
+        (otpA, otpB, numFree, buf) <- get
+        when (isNothing otpB) $ put (otpA, Just numFree, numFree, buf)
+        (_, otpB', _, _) <- get
         pure (wishboneS2M { acknowledge = True, readData = Left (fromJust otpB') })
     | strobe m2s = modify removeFifoStatusInfo >> pure (wishboneS2M { acknowledge = True })
     | otherwise = modify removeFifoStatusInfo >> pure wishboneS2M
 
-  removeFifoStatusInfo ((a,_),c) = ((a,Nothing),c)
+  removeFifoStatusInfo (a,_,c,d) = (a,Nothing,c,d)
 
   pushInput inpData = do
-    ((currOtpA, currOtpB), buf) <- get
-    case (currOtpA, E.last buf) of
-      (NoData, _) -> put ((Data inpData, currOtpB), buf)              >> pure (wishboneS2M { acknowledge = True })
-      (_, NoData) -> put ((currOtpA, currOtpB), Data inpData +>> buf) >> pure (wishboneS2M { acknowledge = True })
+    (currOtpA, currOtpB, numFree, buf) <- get
+    case (currOtpA, numFree == 0) of
+      (NoData, _) -> put (Data inpData, currOtpB, numFree, buf) >> pure (wishboneS2M { acknowledge = True })
+      (_, False) -> put (currOtpA, currOtpB, numFree - 1, replace (numFree-1) (Data inpData) buf) >> pure (wishboneS2M { acknowledge = True })
       _ -> pure (wishboneS2M { err = True })
-
-  rightAck ((_, otpB), buf) = ((E.head buf, otpB), buf <<+ NoData)
 
 -- | Wishbone to Df sink
 --
@@ -343,39 +341,35 @@ wishboneSink respondAddress statusAddress fifoDepth = Circuit $ unbundle . mealy
 
   machineAsFunction s i = (s',o) where (o,s') = runState (fullStateMachine i) s
 
-  s0 = (Nothing, E.replicate fifoDepth NoData)
+  s0 = (Nothing, maxBound, E.replicate fifoDepth NoData)
 
   fullStateMachine (True, _) = pure (Ack False, wishboneS2M) -- reset is on, don't output anything or change anything
   fullStateMachine (False, (inpData, m2s)) = do
     leftOtp <- leftStateMachine inpData
     rightStateMachine m2s
-    rightOtp <- gets (fromMaybe wishboneS2M . fst)
+    rightOtp <- gets (\(otp,_,_) -> fromMaybe wishboneS2M otp)
     pure (leftOtp, rightOtp)
 
   leftStateMachine NoData = pure (Ack False)
   leftStateMachine inpData@(Data _) = do
-    buf <- gets snd
-    case (E.last buf) of
-      NoData -> modify (second $ const $ inpData +>> buf) >> pure (Ack True)
-      _ -> pure (Ack False)
+    (otp, numFree, buf) <- get
+    when (numFree > 0) $ put (otp, numFree - 1, replace (numFree-1) inpData buf)
+    pure (Ack (numFree > 0))
 
   rightStateMachine m2s
     | strobe m2s && addr m2s == respondAddress && not (writeEnable m2s) = do
-        (otp, buf) <- get
-        case (otp, E.head buf) of
+        (otp, numFree, buf) <- get
+        case (otp, E.last buf) of
           (Nothing, Data toSend) ->
-            put (Just $ wishboneS2M { acknowledge = True, readData = Right toSend }, buf <<+ NoData)
+            put (Just $ wishboneS2M { acknowledge = True, readData = Right toSend }, numFree + 1, NoData +>> buf)
           (Just otp', Data toSend) ->
-            if not (err otp') then pure () else put (Just $ wishboneS2M { acknowledge = True, readData = Right toSend }, buf <<+ NoData)
+            if not (err otp') then pure () else put (Just $ wishboneS2M { acknowledge = True, readData = Right toSend }, numFree + 1, NoData +>> buf)
           (Nothing, NoData) ->
-            put (Just $ wishboneS2M { err = True }, buf)
+            put (Just $ wishboneS2M { err = True }, numFree, buf)
           _ -> pure ()
     | strobe m2s && Just (addr m2s) == statusAddress && not (writeEnable m2s) = do
-        (otp, buf) <- get
-        when (isNothing otp) $ put (Just $ wishboneS2M { acknowledge = True, readData = Left (fifoEmptySpots fifoDepth buf) }, buf)
-    | otherwise = modify $ first $ const Nothing
-
-fifoEmptySpots :: KnownNat n => SNat n -> Vec n (Data a) -> Index (n+1)
-fifoEmptySpots n vec = maybe (snatToNum n) resize (findIndex isData (reverse vec)) where
-  isData NoData = False
-  isData (Data _) = True
+        (otp, numFree, buf) <- get
+        when (isNothing otp) $ put (Just $ wishboneS2M { acknowledge = True, readData = Left numFree }, numFree, buf)
+    | otherwise = do
+        (_, x, y) <- get
+        put (Nothing, x, y)
