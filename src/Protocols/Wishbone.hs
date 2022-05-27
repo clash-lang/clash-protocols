@@ -26,7 +26,7 @@ import           Hedgehog                   (MonadTest)
 import           Prelude                    hiding (head, not, (&&), reverse)
 import           Protocols.Hedgehog         (ExpectOptions (..), Test (..))
 import           Protocols.Internal
-import           Protocols.Df               (Data(..))
+import           Protocols.Df               (Df, Data(..))
 
 -- hedgehog
 import qualified Hedgehog                   as H
@@ -38,6 +38,7 @@ import qualified Clash.Explicit.Prelude     as E
 import           Control.Monad.State        (get, gets, modify, put, runState)
 import           Control.Monad              (when)
 import           Control.Arrow              (first, second)
+import           Data.Either                (fromRight)
 import           Data.Maybe                 (isNothing, fromJust)
 
 -- | Data communicated from a Wishbone Master to a Wishbone Slave
@@ -277,10 +278,8 @@ wishboneSource ::
   -- | Depth of the FIFO
   SNat depth ->
   -- |
-  (Signal dom (WishboneM2S addressWidth selWidth dat), Signal dom Ack) ->
-  -- |
-  (Signal dom (WishboneS2M (Index (depth+1))), Signal dom (Data dat))
-wishboneSource respondAddress statusAddress fifoDepth = unbundle . mealy machineAsFunction s0 . addResetInp . bundle where
+  Circuit (Wishbone dom 'Standard addressWidth (Either (Index (depth+1)) dat)) (Df dom dat)
+wishboneSource respondAddress statusAddress fifoDepth = Circuit $ unbundle . mealy machineAsFunction s0 . addResetInp . bundle where
 
   addResetInp inp = hideReset (\(Reset r) -> bundle (r, inp))
 
@@ -296,12 +295,12 @@ wishboneSource respondAddress statusAddress fifoDepth = unbundle . mealy machine
     pure (leftOtp, rightOtp)
 
   leftStateMachine m2s
-    | strobe m2s && addr m2s == respondAddress && writeEnable m2s = modify removeFifoStatusInfo >> pushInput (writeData m2s)
+    | strobe m2s && addr m2s == respondAddress && writeEnable m2s = modify removeFifoStatusInfo >> pushInput (fromRight Clash.Prelude.undefined $ writeData m2s)
     | strobe m2s && Just (addr m2s) == statusAddress && not (writeEnable m2s) = do
         ((otpA, otpB), buf) <- get
         when (isNothing otpB) $ put ((otpA, Just (fifoEmptySpots fifoDepth buf)), buf)
         ((_, otpB'), _) <- get
-        pure (wishboneS2M { acknowledge = True, readData = fromJust otpB' })
+        pure (wishboneS2M { acknowledge = True, readData = Left (fromJust otpB') })
     | strobe m2s = modify removeFifoStatusInfo >> pure (wishboneS2M { acknowledge = True })
     | otherwise = modify removeFifoStatusInfo >> pure wishboneS2M
 
@@ -337,10 +336,8 @@ wishboneSink ::
   -- | Depth of the FIFO
   SNat depth ->
   -- |
-  (Signal dom (Data dat), Signal dom (WishboneM2S addressWidth selWidth dat)) ->
-  -- |
-  (Signal dom Ack, Signal dom (WishboneS2M (Either (Index (depth+1)) dat)))
-wishboneSink respondAddress statusAddress fifoDepth = unbundle . mealy machineAsFunction s0 . addResetInp . bundle where
+  Circuit (Df dom dat) (Reverse (Wishbone dom 'Standard addressWidth (Either (Index (depth+1)) dat)))
+wishboneSink respondAddress statusAddress fifoDepth = Circuit $ unbundle . mealy machineAsFunction s0 . addResetInp . bundle where
 
   addResetInp inp = hideReset (\(Reset r) -> bundle (r, inp))
 
