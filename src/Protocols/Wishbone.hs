@@ -14,7 +14,7 @@ Types modelling the Wishbone bus protocol.
 module Protocols.Wishbone where
 
 import           Clash.Prelude              hiding (length, sample_lazy, (||))
-import           Clash.Signal.Internal      (Signal (..), sample_lazy)
+import           Clash.Signal.Internal      (Signal (..), sample_lazy, Reset (..))
 
 import           Control.DeepSeq            (NFData)
 import qualified Data.Bifunctor             as B
@@ -264,7 +264,7 @@ wishboneS2M
 -- * Asserts stall when the FIFO is full
 wishboneSource ::
   (1 + n) ~ depth =>
-  KnownDomain dom =>
+  HiddenClockResetEnable dom =>
   KnownNat addressWidth =>
   KnownNat depth =>
   KnownNat (BitSize dat) =>
@@ -277,18 +277,16 @@ wishboneSource ::
   (Signal dom (WishboneM2S addressWidth selWidth dat), Signal dom Ack) ->
   -- |
   (Signal dom (WishboneS2M dat), Signal dom (Data dat))
-wishboneSource respondAddress fifoDepth = unbundle . mealy' machineAsFunction s0 . bundle where
+wishboneSource respondAddress fifoDepth = unbundle . mealy machineAsFunction s0 . addResetInp . bundle where
 
-  mealy' f iS =
-    \i -> let (s',o) = unbundle $ f <$> s <*> i
-              s      = withClock clockGen $ withEnable enableGen $ delay iS s'
-          in  o
+  addResetInp inp = hideReset (\(Reset r) -> bundle (r, inp))
 
   machineAsFunction s i = (s',o) where (o,s') = runState (fullStateMachine i) s
 
   s0 = (NoData, E.replicate fifoDepth NoData)
 
-  fullStateMachine (m2s, (Ack ack)) = do
+  fullStateMachine (True, _) = pure (wishboneS2M, NoData) -- reset is on, don't output anything or change anything
+  fullStateMachine (False, (m2s, (Ack ack))) = do
     leftOtp <- leftStateMachine m2s
     rightOtp <- gets fst
     when ack $ modify rightAck
@@ -316,7 +314,7 @@ wishboneSource respondAddress fifoDepth = unbundle . mealy' machineAsFunction s0
 -- * Asserts stall when the FIFO is empty
 wishboneSink ::
   (1 + n) ~ depth =>
-  KnownDomain dom =>
+  HiddenClockResetEnable dom =>
   KnownNat addressWidth =>
   KnownNat depth =>
   KnownNat (BitSize dat) =>
@@ -329,18 +327,16 @@ wishboneSink ::
   (Signal dom (Data dat), Signal dom (WishboneM2S addressWidth selWidth dat)) ->
   -- |
   (Signal dom Ack, Signal dom (WishboneS2M dat))
-wishboneSink respondAddress fifoDepth = unbundle . mealy' machineAsFunction s0 . bundle where
+wishboneSink respondAddress fifoDepth = unbundle . mealy machineAsFunction s0 . addResetInp . bundle where
 
-  mealy' f iS =
-    \i -> let (s',o) = unbundle $ f <$> s <*> i
-              s      = withClock clockGen $ withEnable enableGen $ delay iS s'
-          in  o
+  addResetInp inp = hideReset (\(Reset r) -> bundle (r, inp))
 
   machineAsFunction s i = (s',o) where (o,s') = runState (fullStateMachine i) s
 
   s0 = (Nothing, E.replicate fifoDepth NoData)
 
-  fullStateMachine (inpData, m2s) = do
+  fullStateMachine (True, _) = pure (Ack False, wishboneS2M) -- reset is on, don't output anything or change anything
+  fullStateMachine (False, (inpData, m2s)) = do
     leftOtp <- leftStateMachine inpData
     rightStateMachine m2s
     rightOtp <- gets (fromMaybe wishboneS2M . fst)
