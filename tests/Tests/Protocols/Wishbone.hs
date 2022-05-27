@@ -1,7 +1,10 @@
+{-# LANGUAGE FlexibleContexts   #-}
+{-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE RecordWildCards    #-}
 module Tests.Protocols.Wishbone where
 
 
-import           Clash.Prelude
+import           Clash.Prelude                  hiding ((&&))
 
 import           Clash.Hedgehog.Sized.BitVector
 
@@ -12,21 +15,19 @@ import           Hedgehog.Gen                   as Gen
 import           Hedgehog.Range                 as Range
 
 import           Protocols
-import           Protocols.Hedgehog             (defExpectOptions, idWithModel)
+import           Protocols.Hedgehog             (defExpectOptions)
 import           Protocols.Wishbone
+import           Protocols.Wishbone.Hedgehog
+
+-- tasty
 import           Test.Tasty
+import           Test.Tasty.Hedgehog            (HedgehogTestLimit (HedgehogTestLimit))
 import           Test.Tasty.Hedgehog.Extra      (testProperty)
-import           Test.Tasty.TH
+import           Test.Tasty.TH                  (testGroupGenerator)
 
-
-idWb :: (KnownDomain dom, KnownNat addressWidth) => Circuit (Wishbone dom mode addressWidth a) (Wishbone dom mode addressWidth a)
-idWb = Circuit (uncurry go)
-  where
-    go :: Signal dom (WishboneM2S addressWidth (BitSize a `DivRU` 8) a)
-       -> Signal dom (WishboneS2M a)
-       -> (Signal dom (WishboneS2M a), Signal dom (WishboneM2S addressWidth (BitSize a `DivRU` 8) a))
-    go m2s s2m = (s2m, m2s)
-
+data Transfer addrWidth dat
+  = Read (BitVector addrWidth)
+  | Write (BitVector addrWidth) dat
 
 smallInt :: Range Int
 smallInt = Range.linear 0 10
@@ -39,14 +40,45 @@ genData genA = do
   n <- genSmallInt
   Gen.list (Range.singleton n) genA
 
-genWishboneTransfer :: (KnownNat addressWidth) => Gen a -> Gen (WishboneTransfer addressWidth a)
+genWishboneTransfer :: (KnownNat addressWidth) => Gen a -> Gen (Transfer addressWidth a)
 genWishboneTransfer genA = do
   Gen.choice [Read <$> genBitVector, Write <$> genBitVector <*> genA]
 
+transfersToSignals
+  :: forall addressWidth a . (KnownNat addressWidth, KnownNat (BitSize a))
+  => [Transfer addressWidth a]
+  -> [WishboneM2S addressWidth (BitSize a `DivRU` 8) a]
+transfersToSignals = Prelude.concatMap $ \case
+   Read bv -> [ (wishboneM2S @addressWidth @a) { strobe = False, busCycle = False }
+              , (wishboneM2S @addressWidth @a) { strobe = True, busCycle = True, addr = bv, writeEnable = False }]
+   Write bv a -> [ wishboneM2S
+                 , (wishboneM2S @addressWidth @a) { strobe = True, busCycle = True, addr = bv, writeEnable = True, writeData = a }]
 
-prop_id :: Property
-prop_id = idWithModel defExpectOptions (genData $ genWishboneTransfer @5 genSmallInt) id (idWb @System)
+
+
+
+idWriteWb :: (BitPack a) => Circuit (Wishbone dom 'Standard selWidth a) ()
+idWriteWb = Circuit go
+  where
+    go (m2s, ()) = (reply <$> m2s, ())
+
+    reply WishboneM2S{..}
+      | busCycle && strobe && writeEnable = wishboneS2M { acknowledge = True, readData = writeData }
+      | busCycle && strobe                = wishboneS2M { acknowledge = True }
+      | otherwise                         = wishboneS2M
+
+
+
+prop_idWrite :: Property
+prop_idWrite = validateStallingCircuit @System defExpectOptions genDat idWriteWb
+  where
+    genDat = transfersToSignals <$> genData (genWishboneTransfer @10 genSmallInt)
 
 
 tests :: TestTree
-tests = $(testGroupGenerator)
+tests =
+    -- TODO: Move timeout option to hedgehog for better error messages.
+    -- TODO: Does not seem to work for combinatorial loops like @let x = x in x@??
+    localOption (mkTimeout 12_000_000 {- 12 seconds -})
+  $ localOption (HedgehogTestLimit (Just 1000))
+  $(testGroupGenerator)
