@@ -23,7 +23,7 @@ import           Data.List                  ((\\))
 import           Data.Maybe                 (catMaybes, fromMaybe, mapMaybe)
 import           GHC.Stack                  (HasCallStack)
 import           Hedgehog                   (MonadTest)
-import           Prelude                    hiding (head, not, (&&))
+import           Prelude                    hiding (head, not, (&&), reverse)
 import           Protocols.Hedgehog         (ExpectOptions (..), Test (..))
 import           Protocols.Internal
 import           Protocols.Df               (Data(..))
@@ -38,6 +38,7 @@ import qualified Clash.Explicit.Prelude     as E
 import           Control.Monad.State        (get, gets, modify, put, runState)
 import           Control.Monad              (when)
 import           Control.Arrow              (first, second)
+import           Data.Maybe                 (isNothing, fromJust)
 
 -- | Data communicated from a Wishbone Master to a Wishbone Slave
 data WishboneM2S addressWidth selWidth dat
@@ -259,9 +260,9 @@ wishboneS2M
 -- | Wishbone to Df source
 --
 -- * Writing to the given address, pushes an item onto the fifo
--- * Reading always returns zero
--- * Writing to other addresses are acknowledged, but ignored
--- * Asserts stall when the FIFO is full
+-- * Reading from statusAddress returns how much free space is left in the buffer
+-- * Reading/writing to other addresses are acknowledged, but ignored
+-- * Asserts err when the FIFO is full
 wishboneSource ::
   (1 + n) ~ depth =>
   HiddenClockResetEnable dom =>
@@ -271,47 +272,57 @@ wishboneSource ::
   NFDataX dat =>
   -- | Address to respond to
   BitVector addressWidth ->
+  -- | Optional address for asking how much space is left in the buffer
+  Maybe (BitVector addressWidth) ->
   -- | Depth of the FIFO
   SNat depth ->
   -- |
   (Signal dom (WishboneM2S addressWidth selWidth dat), Signal dom Ack) ->
   -- |
-  (Signal dom (WishboneS2M dat), Signal dom (Data dat))
-wishboneSource respondAddress fifoDepth = unbundle . mealy machineAsFunction s0 . addResetInp . bundle where
+  (Signal dom (WishboneS2M (Index (depth+1))), Signal dom (Data dat))
+wishboneSource respondAddress statusAddress fifoDepth = unbundle . mealy machineAsFunction s0 . addResetInp . bundle where
 
   addResetInp inp = hideReset (\(Reset r) -> bundle (r, inp))
 
   machineAsFunction s i = (s',o) where (o,s') = runState (fullStateMachine i) s
 
-  s0 = (NoData, E.replicate fifoDepth NoData)
+  s0 = ((NoData, Nothing), E.replicate fifoDepth NoData)
 
   fullStateMachine (True, _) = pure (wishboneS2M, NoData) -- reset is on, don't output anything or change anything
   fullStateMachine (False, (m2s, (Ack ack))) = do
     leftOtp <- leftStateMachine m2s
-    rightOtp <- gets fst
+    rightOtp <- gets (fst . fst)
     when ack $ modify rightAck
     pure (leftOtp, rightOtp)
 
   leftStateMachine m2s
-    | strobe m2s && addr m2s == respondAddress && writeEnable m2s = pushInput (writeData m2s)
-    | strobe m2s = pure (wishboneS2M { acknowledge = True })
-    | otherwise = pure wishboneS2M
+    | strobe m2s && addr m2s == respondAddress && writeEnable m2s = modify removeFifoStatusInfo >> pushInput (writeData m2s)
+    | strobe m2s && Just (addr m2s) == statusAddress && not (writeEnable m2s) = do
+        ((otpA, otpB), buf) <- get
+        when (isNothing otpB) $ put ((otpA, Just (fifoEmptySpots fifoDepth buf)), buf)
+        ((_, otpB'), _) <- get
+        pure (wishboneS2M { acknowledge = True, readData = fromJust otpB' })
+    | strobe m2s = modify removeFifoStatusInfo >> pure (wishboneS2M { acknowledge = True })
+    | otherwise = modify removeFifoStatusInfo >> pure wishboneS2M
+
+  removeFifoStatusInfo ((a,_),c) = ((a,Nothing),c)
 
   pushInput inpData = do
-    (currOtp, buf) <- get
-    case (currOtp, E.last buf) of
-      (NoData, _) -> put (Data inpData, buf)             >> pure (wishboneS2M { acknowledge = True })
-      (_, NoData) -> put (currOtp, Data inpData +>> buf) >> pure (wishboneS2M { acknowledge = True })
-      _ -> pure (wishboneS2M { stall = True })
+    ((currOtpA, currOtpB), buf) <- get
+    case (currOtpA, E.last buf) of
+      (NoData, _) -> put ((Data inpData, currOtpB), buf)              >> pure (wishboneS2M { acknowledge = True })
+      (_, NoData) -> put ((currOtpA, currOtpB), Data inpData +>> buf) >> pure (wishboneS2M { acknowledge = True })
+      _ -> pure (wishboneS2M { err = True })
 
-  rightAck (_, buf) = (E.head buf, buf <<+ NoData)
+  rightAck ((_, otpB), buf) = ((E.head buf, otpB), buf <<+ NoData)
 
 -- | Wishbone to Df sink
 --
 -- * Reading from the given address, pops an item from the fifo
 -- * Writes are acknowledged, but ignored
--- * Reads from any other address are acknowledged, but the fifo element is not popped.
--- * Asserts stall when the FIFO is empty
+-- * Reading from statusAddress returns how much free space is left in the buffer
+-- * Reading/writing to any other address is acknowledged, but the fifo element is not popped.
+-- * Asserts err when the FIFO is empty
 wishboneSink ::
   (1 + n) ~ depth =>
   HiddenClockResetEnable dom =>
@@ -321,13 +332,15 @@ wishboneSink ::
   NFDataX dat =>
   -- | Address to respond to
   BitVector addressWidth ->
+  -- | Optional address for asking how much space is left in the buffer
+  Maybe (BitVector addressWidth) ->
   -- | Depth of the FIFO
   SNat depth ->
   -- |
   (Signal dom (Data dat), Signal dom (WishboneM2S addressWidth selWidth dat)) ->
   -- |
-  (Signal dom Ack, Signal dom (WishboneS2M dat))
-wishboneSink respondAddress fifoDepth = unbundle . mealy machineAsFunction s0 . addResetInp . bundle where
+  (Signal dom Ack, Signal dom (WishboneS2M (Either (Index (depth+1)) dat)))
+wishboneSink respondAddress statusAddress fifoDepth = unbundle . mealy machineAsFunction s0 . addResetInp . bundle where
 
   addResetInp inp = hideReset (\(Reset r) -> bundle (r, inp))
 
@@ -350,11 +363,22 @@ wishboneSink respondAddress fifoDepth = unbundle . mealy machineAsFunction s0 . 
       _ -> pure (Ack False)
 
   rightStateMachine m2s
-    | not (strobe m2s && addr m2s == respondAddress && not (writeEnable m2s)) = modify $ first $ const Nothing
-    | otherwise = do
+    | strobe m2s && addr m2s == respondAddress && not (writeEnable m2s) = do
         (otp, buf) <- get
         case (otp, E.head buf) of
-          (Nothing, Data toSend) -> put (Just $ wishboneS2M { acknowledge = True, readData = toSend }, buf <<+ NoData)
-          (Just otp', Data toSend) -> if not (stall otp') then pure () else put (Just $ wishboneS2M { acknowledge = True, readData = toSend }, buf <<+ NoData)
-          (Nothing, NoData) -> put (Just $ wishboneS2M { stall = True }, buf)
+          (Nothing, Data toSend) ->
+            put (Just $ wishboneS2M { acknowledge = True, readData = Right toSend }, buf <<+ NoData)
+          (Just otp', Data toSend) ->
+            if not (err otp') then pure () else put (Just $ wishboneS2M { acknowledge = True, readData = Right toSend }, buf <<+ NoData)
+          (Nothing, NoData) ->
+            put (Just $ wishboneS2M { err = True }, buf)
           _ -> pure ()
+    | strobe m2s && Just (addr m2s) == statusAddress && not (writeEnable m2s) = do
+        (otp, buf) <- get
+        when (isNothing otp) $ put (Just $ wishboneS2M { acknowledge = True, readData = Left (fifoEmptySpots fifoDepth buf) }, buf)
+    | otherwise = modify $ first $ const Nothing
+
+fifoEmptySpots :: KnownNat n => SNat n -> Vec n (Data a) -> Index (n+1)
+fifoEmptySpots n vec = maybe (snatToNum n) resize (findIndex isData (reverse vec)) where
+  isData NoData = False
+  isData (Data _) = True
