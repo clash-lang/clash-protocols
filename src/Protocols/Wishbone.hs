@@ -6,42 +6,33 @@ Types modelling the Wishbone bus protocol.
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
 module Protocols.Wishbone where
 
-import           Clash.Prelude              hiding (length, sample_lazy, (||))
-import           Clash.Signal.Internal      (Signal (..), sample_lazy)
+import           Clash.Prelude         (DivRU, Nat, Type, (&&), (:::))
+import qualified Clash.Prelude         as C
 
-import           Control.DeepSeq            (NFData)
-import qualified Data.Bifunctor             as B
-import           Data.Data                  (Proxy (Proxy))
-import           Data.List                  ((\\))
-import           Data.Maybe                 (catMaybes, fromMaybe, mapMaybe)
-import           GHC.Stack                  (HasCallStack)
-import           Hedgehog                   (MonadTest)
-import           Prelude                    hiding (head, not, (&&))
-import           Protocols.Hedgehog         (ExpectOptions (..), Test (..))
+import           Clash.Signal.Internal (Signal (..), sample_lazy)
+
+import           Control.DeepSeq       (NFData)
+import qualified Data.Bifunctor        as B
+import           Data.Data             (Proxy (Proxy))
+import           Data.List             ((\\))
+import           Prelude               hiding (head, not, (&&))
 import           Protocols.Internal
-
--- hedgehog
-import qualified Hedgehog                   as H
-import qualified Hedgehog.Internal.Property as H
-import qualified Hedgehog.Internal.Show     as H
-import           Text.Show.Pretty           (ppShow)
 
 -- | Data communicated from a Wishbone Master to a Wishbone Slave
 data WishboneM2S addressWidth selWidth dat
   = WishboneM2S
   { -- | ADR
-    addr                :: "ADR" ::: BitVector addressWidth
+    addr                :: "ADR" ::: C.BitVector addressWidth
     -- | DAT
   , writeData           :: "DAT_MOSI" ::: dat
     -- | SEL
-  , busSelect           :: "SEL" ::: BitVector selWidth
+  , busSelect           :: "SEL" ::: C.BitVector selWidth
     -- | CYC
   , busCycle            :: "CYC" ::: Bool
     -- | STB
@@ -52,8 +43,10 @@ data WishboneM2S addressWidth selWidth dat
   , cycleTypeIdentifier :: "CTI" ::: CycleTypeIdentifier
     -- | BTE
   , burstTypeExtension  :: "BTE" ::: BurstTypeExtension
-  } deriving (NFData, Generic, NFDataX, Show, ShowX, Eq)
+  } deriving (NFData, C.Generic, C.NFDataX, C.ShowX, Eq)
 
+instance (C.ShowX dat, C.KnownNat addressWidth, C.KnownNat selWidth) => Show (WishboneM2S addressWidth selWidth dat) where
+  show = C.showX
 
 -- | Data communicated from a Wishbone Slave to a Wishbone Master
 data WishboneS2M dat
@@ -70,9 +63,12 @@ data WishboneS2M dat
 
     -- | RTY
   , retry       :: "RTY"   ::: Bool
-  } deriving (NFData, Generic, NFDataX, Show, ShowX, Eq)
+  } deriving (NFData, C.Generic, C.NFDataX, C.ShowX, Eq)
+instance (C.ShowX dat) => Show (WishboneS2M dat) where
+  show = C.showX
 
-newtype CycleTypeIdentifier = CycleTypeIdentifier (BitVector 3) deriving (NFData, Generic, NFDataX, Show, ShowX, Eq)
+newtype CycleTypeIdentifier = CycleTypeIdentifier (C.BitVector 3)
+  deriving (NFData, C.Generic, C.NFDataX, Show, C.ShowX, Eq)
 
 pattern Classic, ConstantAddressBurst, IncrementingBurst, EndOfBurst :: CycleTypeIdentifier
 pattern Classic = CycleTypeIdentifier 0
@@ -85,39 +81,39 @@ data BurstTypeExtension
   | Beat4Burst
   | Beat8Burst
   | Beat16Burst
-  deriving (NFData, Generic, NFDataX, Show, ShowX, Eq)
+  deriving (NFData, C.Generic, C.NFDataX, Show, C.ShowX, Eq)
 
 data WishboneMode
   = Standard
   | Pipelined
-  deriving (Generic, Show, Eq)
+  deriving (C.Generic, Show, Eq)
 
-data Wishbone (dom :: Domain) (mode :: WishboneMode) (addressWidth :: Nat) (userType :: Type)
+data Wishbone (dom :: C.Domain) (mode :: WishboneMode) (addressWidth :: Nat) (userType :: Type)
 
 
 instance Protocol (Wishbone dom mode addressWidth dat) where
-  type Fwd (Wishbone dom mode addressWidth dat) = Signal dom (WishboneM2S addressWidth (BitSize dat `DivRU` 8) dat)
+  type Fwd (Wishbone dom mode addressWidth dat) = Signal dom (WishboneM2S addressWidth (C.BitSize dat `DivRU` 8) dat)
 
   type Bwd (Wishbone dom mode addressWidth dat) = Signal dom (WishboneS2M dat)
 
 
 instance Backpressure (Wishbone dom mode addressWidth dat) where
-  boolsToBwd _ = fromList_lazy . Prelude.map (\b -> wishboneS2M { acknowledge = b })
+  boolsToBwd _ = C.fromList_lazy . Prelude.map (\b -> wishboneS2M { acknowledge = b })
 
 
-instance (KnownNat (BitSize dat), KnownDomain dom) => Simulate (Wishbone dom mode addressWidth dat) where
-  type SimulateFwdType (Wishbone dom mode addressWidth dat) = [WishboneM2S addressWidth (BitSize dat `DivRU` 8) dat]
+instance (C.KnownNat (C.BitSize dat), C.KnownDomain dom) => Simulate (Wishbone dom mode addressWidth dat) where
+  type SimulateFwdType (Wishbone dom mode addressWidth dat) = [WishboneM2S addressWidth (C.BitSize dat `DivRU` 8) dat]
 
   type SimulateBwdType (Wishbone dom mode addressWidth dat) = [WishboneS2M dat]
 
   type SimulateChannels (Wishbone dom mode addressWidth dat) = 1
 
-  simToSigFwd Proxy = fromList_lazy
-  simToSigBwd Proxy = fromList_lazy
+  simToSigFwd Proxy = C.fromList_lazy
+  simToSigBwd Proxy = C.fromList_lazy
   sigToSimFwd Proxy = sample_lazy
   sigToSimBwd Proxy = sample_lazy
 
-  stallC config (head -> (stallAck, stalls)) = Circuit $
+  stallC config (C.head -> (stallAck, stalls)) = Circuit $
       uncurry (go stallAcks stalls (resetCycles config))
     where
       stallAcks
@@ -125,7 +121,7 @@ instance (KnownNat (BitSize dat), KnownDomain dom) => Simulate (Wishbone dom mod
         | otherwise = [stallAck]
 
       toStallReply
-        :: WishboneM2S addressWidth (BitSize dat `DivRU` 8) dat
+        :: WishboneM2S addressWidth (C.BitSize dat `DivRU` 8) dat
         -> WishboneS2M dat
         -> StallAck
         -> WishboneS2M dat
@@ -134,7 +130,7 @@ instance (KnownNat (BitSize dat), KnownDomain dom) => Simulate (Wishbone dom mod
         | otherwise = case ack of
             StallWithNack      -> s2m { acknowledge = False }
             StallWithAck       -> s2m { acknowledge = True }
-            StallWithErrorX    -> errorX "No defined ack"
+            StallWithErrorX    -> C.errorX "No defined ack"
             StallTransparently -> s2m
             StallCycle         -> s2m { acknowledge = False } -- shouldn't happen
 
@@ -142,12 +138,12 @@ instance (KnownNat (BitSize dat), KnownDomain dom) => Simulate (Wishbone dom mod
         :: [StallAck]
         -> [Int]
         -> Int
-        -> Signal dom (WishboneM2S addressWidth (BitSize dat `DivRU` 8) dat)
+        -> Signal dom (WishboneM2S addressWidth (C.BitSize dat `DivRU` 8) dat)
         -- ^ input from master
         -> Signal dom (WishboneS2M dat)
         -- ^ reply from slave
         -> ( Signal dom (WishboneS2M dat)
-           , Signal dom (WishboneM2S addressWidth (BitSize dat `DivRU` 8) dat))
+           , Signal dom (WishboneM2S addressWidth (C.BitSize dat `DivRU` 8) dat))
       -- "refill" stall acks and continue
       go [] ss rs fwd bwd = go stallAcks ss rs fwd bwd
 
@@ -159,7 +155,7 @@ instance (KnownNat (BitSize dat), KnownDomain dom) => Simulate (Wishbone dom mod
         B.bimap (toStallReply f b sa :-) (f :-) (go sas [] 0 fwd bwd)
 
       go (sa:sas) ss _ (f :- fwd) ~(b :- bwd)
-        | not (busCycle f && strobe f)
+        | C.not (busCycle f && strobe f)
         =
           -- Left hand side does not send data, simply replicate that behavior. Right
           -- hand side might send an arbitrary acknowledgement, so we simply pass it
@@ -181,58 +177,12 @@ instance (KnownNat (BitSize dat), KnownDomain dom) => Simulate (Wishbone dom mod
           B.bimap (b1 :-) (f1 :-) (go sas s1 0 fwd bwd)
 
 
-data WishboneState
-  = Quiet
-  | InCycleNoStrobe
-  | WaitForSlave
-  -- TODO add a SlaveHolding state? Spec seems unclear
-
-data WishboneError
-  = MoreThanOneTerminationSignalAsserted
-  | TerminationSignalOutsideOfCycle
-
-
-nextStateStandard
-  :: WishboneState
-  -> WishboneM2S addressWidth (BitSize a `DivRU` 8) a
-  -> WishboneS2M a
-  -> Either WishboneError WishboneState
-nextStateStandard _ m2s s2m
-  | length (filter ($ s2m) [acknowledge, err, retry]) > 1           = Left MoreThanOneTerminationSignalAsserted
-  | not (busCycle m2s) && (acknowledge s2m || err s2m || retry s2m) = Left TerminationSignalOutsideOfCycle
-nextStateStandard Quiet m2s _
-  | busCycle m2s && not (strobe m2s)        = Right InCycleNoStrobe
-  | busCycle m2s && strobe m2s              = Right WaitForSlave
-  | otherwise                               = Right Quiet
-nextStateStandard InCycleNoStrobe m2s _
-  | not (busCycle m2s)         = Right Quiet
-  | busCycle m2s && strobe m2s = Right WaitForSlave
-  | otherwise                  = Right InCycleNoStrobe
-nextStateStandard WaitForSlave m2s s2m
-  | busCycle m2s && not (strobe m2s)        = Right InCycleNoStrobe
-  | not (busCycle m2s)                      = Right Quiet
-  | acknowledge s2m || err s2m || retry s2m = Right Quiet
-  | otherwise                               = Right WaitForSlave
-
-
--- | Validate the input/output streams of a standard wishbone interface
---
--- Returns 'Right ()' when the interactions comply with the spec.
--- Returns 'Left (cycle, err)' when a spec violation was found.
-validateStandard :: [WishboneM2S addressWidth (BitSize a `DivRU` 8) a] -> [WishboneS2M a] -> Either (Int, WishboneError) ()
-validateStandard m2s s2m = go 0 (Prelude.zip m2s s2m) Quiet
-  where
-    go _ [] _                 = Right ()
-    go n ((fwd, bwd):rest) st = case nextStateStandard st fwd bwd of
-      Left err  -> Left (n, err)
-      Right st' -> go (n + 1) rest st'
-
-wishboneM2S :: (KnownNat addressWidth, KnownNat (BitSize dat)) => WishboneM2S addressWidth (BitSize dat `DivRU` 8) dat
+wishboneM2S :: (C.KnownNat addressWidth, C.KnownNat (C.BitSize dat)) => WishboneM2S addressWidth (C.BitSize dat `DivRU` 8) dat
 wishboneM2S
   = WishboneM2S
-  { addr = Clash.Prelude.undefined
-  , writeData = Clash.Prelude.undefined
-  , busSelect = Clash.Prelude.undefined
+  { addr = C.undefined
+  , writeData = C.undefined
+  , busSelect = C.undefined
   , busCycle = False
   , strobe = False
   , writeEnable = False
@@ -243,7 +193,7 @@ wishboneM2S
 wishboneS2M :: WishboneS2M dat
 wishboneS2M
   = WishboneS2M
-  { readData = Clash.Prelude.undefined
+  { readData = C.undefined
   , acknowledge = False
   , err = False
   , retry = False
