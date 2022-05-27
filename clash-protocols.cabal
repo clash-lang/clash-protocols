@@ -86,6 +86,9 @@ common common-options
     base >= 4.14.0.0,
     Cabal,
 
+    -- TODO should this go here?
+    mtl,
+
     -- clash-prelude will set suitable version bounds for the plugins
     clash-prelude >= 1.4.0 && < 1.8,
     ghc-typelits-natnormalise,

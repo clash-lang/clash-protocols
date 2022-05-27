@@ -26,12 +26,18 @@ import           Hedgehog                   (MonadTest)
 import           Prelude                    hiding (head, not, (&&))
 import           Protocols.Hedgehog         (ExpectOptions (..), Test (..))
 import           Protocols.Internal
+import           Protocols.Df               (Data(..))
 
 -- hedgehog
 import qualified Hedgehog                   as H
 import qualified Hedgehog.Internal.Property as H
 import qualified Hedgehog.Internal.Show     as H
 import           Text.Show.Pretty           (ppShow)
+
+import qualified Clash.Explicit.Prelude     as E
+import           Control.Monad.State        (get, gets, modify, put, runState)
+import           Control.Monad              (when)
+import           Control.Arrow              (first, second)
 
 -- | Data communicated from a Wishbone Master to a Wishbone Slave
 data WishboneM2S addressWidth selWidth dat
@@ -227,7 +233,7 @@ validateStandard m2s s2m = go 0 (Prelude.zip m2s s2m) Quiet
       Left err  -> Left (n, err)
       Right st' -> go (n + 1) rest st'
 
-wishboneM2S :: (KnownNat addressWidth, KnownNat (BitSize dat)) => WishboneM2S addressWidth (BitSize dat `DivRU` 8) dat
+wishboneM2S :: WishboneM2S addressWidth selWidth dat
 wishboneM2S
   = WishboneM2S
   { addr = Clash.Prelude.undefined
@@ -249,3 +255,110 @@ wishboneS2M
   , retry = False
   , stall = False
   }
+
+-- | Wishbone to Df source
+--
+-- * Writing to the given address, pushes an item onto the fifo
+-- * Reading always returns zero
+-- * Writing to other addresses are acknowledged, but ignored
+-- * Asserts stall when the FIFO is full
+wishboneSource ::
+  (1 + n) ~ depth =>
+  KnownDomain dom =>
+  KnownNat addressWidth =>
+  KnownNat depth =>
+  KnownNat (BitSize dat) =>
+  NFDataX dat =>
+  -- | Address to respond to
+  BitVector addressWidth ->
+  -- | Depth of the FIFO
+  SNat depth ->
+  -- |
+  (Signal dom (WishboneM2S addressWidth selWidth dat), Signal dom Ack) ->
+  -- |
+  (Signal dom (WishboneS2M dat), Signal dom (Data dat))
+wishboneSource respondAddress fifoDepth = unbundle . mealy' machineAsFunction s0 . bundle where
+
+  mealy' f iS =
+    \i -> let (s',o) = unbundle $ f <$> s <*> i
+              s      = withClock clockGen $ withEnable enableGen $ delay iS s'
+          in  o
+
+  machineAsFunction s i = (s',o) where (o,s') = runState (fullStateMachine i) s
+
+  s0 = (NoData, E.replicate fifoDepth NoData)
+
+  fullStateMachine (m2s, (Ack ack)) = do
+    leftOtp <- leftStateMachine m2s
+    rightOtp <- gets fst
+    when ack $ modify rightAck
+    pure (leftOtp, rightOtp)
+
+  leftStateMachine m2s
+    | strobe m2s && addr m2s == respondAddress && writeEnable m2s = pushInput (writeData m2s)
+    | strobe m2s = pure (wishboneS2M { acknowledge = True })
+    | otherwise = pure wishboneS2M
+
+  pushInput inpData = do
+    (currOtp, buf) <- get
+    case (currOtp, E.last buf) of
+      (NoData, _) -> put (Data inpData, buf)             >> pure (wishboneS2M { acknowledge = True })
+      (_, NoData) -> put (currOtp, Data inpData +>> buf) >> pure (wishboneS2M { acknowledge = True })
+      _ -> pure (wishboneS2M { stall = True })
+
+  rightAck (_, buf) = (E.head buf, buf <<+ NoData)
+
+-- | Wishbone to Df sink
+--
+-- * Reading from the given address, pops an item from the fifo
+-- * Writes are acknowledged, but ignored
+-- * Reads from any other address are acknowledged, but the fifo element is not popped.
+-- * Asserts stall when the FIFO is empty
+wishboneSink ::
+  (1 + n) ~ depth =>
+  KnownDomain dom =>
+  KnownNat addressWidth =>
+  KnownNat depth =>
+  KnownNat (BitSize dat) =>
+  NFDataX dat =>
+  -- | Address to respond to
+  BitVector addressWidth ->
+  -- | Depth of the FIFO
+  SNat depth ->
+  -- |
+  (Signal dom (Data dat), Signal dom (WishboneM2S addressWidth selWidth dat)) ->
+  -- |
+  (Signal dom Ack, Signal dom (WishboneS2M dat))
+wishboneSink respondAddress fifoDepth = unbundle . mealy' machineAsFunction s0 . bundle where
+
+  mealy' f iS =
+    \i -> let (s',o) = unbundle $ f <$> s <*> i
+              s      = withClock clockGen $ withEnable enableGen $ delay iS s'
+          in  o
+
+  machineAsFunction s i = (s',o) where (o,s') = runState (fullStateMachine i) s
+
+  s0 = (Nothing, E.replicate fifoDepth NoData)
+
+  fullStateMachine (inpData, m2s) = do
+    leftOtp <- leftStateMachine inpData
+    rightStateMachine m2s
+    rightOtp <- gets (fromMaybe wishboneS2M . fst)
+    pure (leftOtp, rightOtp)
+
+  leftStateMachine NoData = pure (Ack False)
+  leftStateMachine inpData@(Data _) = do
+    buf <- gets snd
+    case (E.last buf) of
+      NoData -> modify (second $ const $ inpData +>> buf) >> pure (Ack True)
+      _ -> pure (Ack False)
+
+  rightStateMachine m2s
+    | not (strobe m2s && addr m2s == respondAddress && not (writeEnable m2s)) = modify $ first $ const Nothing
+    | otherwise = do
+        (otp, buf) <- get
+        case (otp, E.head buf) of
+          (Nothing, Data toSend) -> put (Just $ wishboneS2M { acknowledge = True, readData = toSend }, buf <<+ NoData)
+          (Just otp', Data toSend) -> if not (stall otp') then pure () else put (Just $ wishboneS2M { acknowledge = True, readData = toSend }, buf <<+ NoData)
+          (Nothing, NoData) -> put (Just $ wishboneS2M { stall = True }, buf)
+          _ -> pure ()
