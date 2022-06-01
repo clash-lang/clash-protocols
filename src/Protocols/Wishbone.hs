@@ -37,7 +37,6 @@ import           Text.Show.Pretty           (ppShow)
 import qualified Clash.Explicit.Prelude     as E
 import           Control.Monad.State        (get, gets, modify, put, runState)
 import           Control.Monad              (when)
-import           Control.Arrow              (first, second)
 import           Data.Either                (fromRight)
 import           Data.Maybe                 (isNothing, fromJust)
 
@@ -279,39 +278,59 @@ wishboneSource ::
   SNat depth ->
   -- |
   Circuit (Wishbone dom 'Standard addressWidth (Either (Index (depth+1)) dat)) (Df dom dat)
-wishboneSource respondAddress statusAddress fifoDepth = Circuit $ unbundle . mealy machineAsFunction s0 . addResetInp . bundle where
+wishboneSource respondAddress statusAddress fifoDepth = Circuit (hideReset circuitFunction) where
 
-  addResetInp inp = hideReset (\(Reset r) -> bundle (r, inp))
+  circuitFunction reset (inpL, inpR) = (otpL, otpR) where
+    brRead = readNew (blockRam (E.replicate fifoDepth $ errorX "wishboneSource: undefined initial fifo buffer value")) brReadAddr brWrite
+    (brReadAddr, brWrite, otpL, otpR) = unbundle $ mealy machineAsFunction s0 $ bundle (brRead, unsafeToHighPolarity reset, inpL, inpR)
 
   machineAsFunction s i = (s',o) where (o,s') = runState (fullStateMachine i) s
 
-  s0 = (NoData, Nothing, maxBound, E.replicate fifoDepth NoData)
+  -- (left status output, right data output, amount of space left, next place to read from, next place to write to)
+  s0 = let numFree = maxBound
+           nextRW = numFree * 0
+           -- extremely janky;
+           --   forces nextRead and nextWrite to have the same type (that is, Index (depth+1)) as numFree
+           --   (since ghc wouldn't be able to tell their type otherwise)
+           -- nextRW is initialized to 0, although it could take on any value and the buffer would still work
+       in
+           (Nothing, NoData, numFree, nextRW, nextRW)
 
-  fullStateMachine (True, _) = pure (wishboneS2M, NoData) -- reset is on, don't output anything or change anything
-  fullStateMachine (False, (m2s, (Ack ack))) = do
-    leftOtp <- leftStateMachine m2s
-    rightOtp <- gets (\(otp,_,_,_) -> otp)
-    when ack $ modify (\(_, otpB, numFree, buf) -> (E.last buf, otpB, numFree + 1, NoData +>> buf))
-    pure (leftOtp, rightOtp)
+  fullStateMachine (_, True, _, _) = pure (0, Nothing, wishboneS2M, NoData) -- reset is on, don't output anything or change anything
+  fullStateMachine (brRead, False, m2s, (Ack ack)) = do
+    (brReadAddr, rightOtp) <- rightStateMachine brRead
+    (brWrite, leftOtp) <- leftStateMachine m2s
+    when ack $ modify removeDataOtp
+    pure (brReadAddr, brWrite, leftOtp, rightOtp)
 
   leftStateMachine m2s
     | strobe m2s && addr m2s == respondAddress && writeEnable m2s = modify removeFifoStatusInfo >> pushInput (fromRight Clash.Prelude.undefined $ writeData m2s)
     | strobe m2s && Just (addr m2s) == statusAddress && not (writeEnable m2s) = do
-        (otpA, otpB, numFree, buf) <- get
-        when (isNothing otpB) $ put (otpA, Just numFree, numFree, buf)
-        (_, otpB', _, _) <- get
-        pure (wishboneS2M { acknowledge = True, readData = Left (fromJust otpB') })
-    | strobe m2s = modify removeFifoStatusInfo >> pure (wishboneS2M { acknowledge = True })
-    | otherwise = modify removeFifoStatusInfo >> pure wishboneS2M
-
-  removeFifoStatusInfo (a,_,c,d) = (a,Nothing,c,d)
+        (otpL, otpR, numFree, nextRead, nextWrite) <- get
+        when (isNothing otpL) $ put (Just numFree, otpR, numFree, nextRead, nextWrite)
+        (otpL', _, _, _, _) <- get
+        pure (Nothing, wishboneS2M { acknowledge = True, readData = Left (fromJust otpL') })
+    | otherwise = modify removeFifoStatusInfo >> pure (Nothing, wishboneS2M { acknowledge = strobe m2s })
 
   pushInput inpData = do
-    (currOtpA, currOtpB, numFree, buf) <- get
-    case (currOtpA, numFree == 0) of
-      (NoData, _) -> put (Data inpData, currOtpB, numFree, buf) >> pure (wishboneS2M { acknowledge = True })
-      (_, False) -> put (currOtpA, currOtpB, numFree - 1, replace (numFree-1) (Data inpData) buf) >> pure (wishboneS2M { acknowledge = True })
-      _ -> pure (wishboneS2M { err = True })
+    (currOtpL, currOtpR, numFree, nextRead, nextWrite) <- get
+    if numFree == 0 then pure (Nothing, wishboneS2M { err = True }) else do
+      put (currOtpL, currOtpR, numFree-1, nextRead, incIdxLooping nextWrite)
+      pure (Just (nextWrite, inpData), wishboneS2M { acknowledge = True })
+
+  rightStateMachine brRead = do
+    (_,rightOtp,_,_,_) <- get
+    (currOtpL, currOtpR, numFree, nextRead, nextWrite) <- get
+    case (currOtpR, numFree == maxBound) of
+      (NoData, False) -> put (currOtpL, Data brRead, numFree+1, incIdxLooping nextRead, nextWrite)
+      _ -> pure ()
+    (_,_,_,brReadAddr,_) <- get
+    pure (brReadAddr, rightOtp)
+
+  removeFifoStatusInfo (_,b,c,d,e) = (Nothing,b,c,d,e)
+  removeDataOtp (a,_,c,d,e) = (a,NoData,c,d,e)
+
+  incIdxLooping idx = if idx >= (maxBound-1) then 0 else idx+1
 
 -- | Wishbone to Df sink
 --
@@ -335,41 +354,54 @@ wishboneSink ::
   SNat depth ->
   -- |
   Circuit (Df dom dat) (Reverse (Wishbone dom 'Standard addressWidth (Either (Index (depth+1)) dat)))
-wishboneSink respondAddress statusAddress fifoDepth = Circuit $ unbundle . mealy machineAsFunction s0 . addResetInp . bundle where
+wishboneSink respondAddress statusAddress fifoDepth = Circuit (hideReset circuitFunction) where
 
-  addResetInp inp = hideReset (\(Reset r) -> bundle (r, inp))
+  circuitFunction reset (inpL, inpR) = (otpL, otpR) where
+    brRead = readNew (blockRam (E.replicate fifoDepth $ errorX "wishboneSink: undefined initial fifo buffer value")) brReadAddr brWrite
+    (brReadAddr, brWrite, otpL, otpR) = unbundle $ mealy machineAsFunction s0 $ bundle (brRead, unsafeToHighPolarity reset, inpL, inpR)
 
   machineAsFunction s i = (s',o) where (o,s') = runState (fullStateMachine i) s
 
-  s0 = (Nothing, maxBound, E.replicate fifoDepth NoData)
+  -- (right output (amt left or data), amount of space left, next place to read from, next place to write to)
+  s0 = let numFree = maxBound
+           nextRW = numFree * 0
+           -- extremely janky;
+           --   forces nextRead and nextWrite to have the same type (that is, Index (depth+1)) as numFree
+           --   (since ghc wouldn't be able to tell their type otherwise)
+           -- nextRW is initialized to 0, although it could take on any value and the buffer would still work
+       in
+           (Nothing, numFree, nextRW, nextRW)
 
-  fullStateMachine (True, _) = pure (Ack False, wishboneS2M) -- reset is on, don't output anything or change anything
-  fullStateMachine (False, (inpData, m2s)) = do
-    leftOtp <- leftStateMachine inpData
-    rightStateMachine m2s
-    rightOtp <- gets (\(otp,_,_) -> fromMaybe wishboneS2M otp)
-    pure (leftOtp, rightOtp)
+  fullStateMachine (_, True, _, _) = pure (0, Nothing, Ack False, wishboneS2M) -- reset is on, don't output anything or change anything
+  fullStateMachine (brRead, False, inpData, m2s) = do
+    rightStateMachine m2s brRead
+    (rightOtp, _, brReadAddr, _) <- get
+    (brWrite, leftOtp) <- leftStateMachine inpData
+    pure (brReadAddr, brWrite, leftOtp, fromMaybe wishboneS2M rightOtp)
 
-  leftStateMachine NoData = pure (Ack False)
-  leftStateMachine inpData@(Data _) = do
-    (otp, numFree, buf) <- get
-    when (numFree > 0) $ put (otp, numFree - 1, replace (numFree-1) inpData buf)
-    pure (Ack (numFree > 0))
+  leftStateMachine NoData = pure (Nothing, Ack False)
+  leftStateMachine (Data inpData) = do
+    (otp, numFree, nextRead, nextWrite) <- get
+    if numFree == 0 then pure (Nothing, Ack False) else do
+      put (otp, numFree-1, nextRead, incIdxLooping nextWrite)
+      pure (Just (nextWrite, inpData), Ack True)
 
-  rightStateMachine m2s
+  rightStateMachine m2s brRead
     | strobe m2s && addr m2s == respondAddress && not (writeEnable m2s) = do
-        (otp, numFree, buf) <- get
-        case (otp, E.last buf) of
-          (Nothing, Data toSend) ->
-            put (Just $ wishboneS2M { acknowledge = True, readData = Right toSend }, numFree + 1, NoData +>> buf)
-          (Just otp', Data toSend) ->
-            if not (err otp') then pure () else put (Just $ wishboneS2M { acknowledge = True, readData = Right toSend }, numFree + 1, NoData +>> buf)
-          (Nothing, NoData) ->
-            put (Just $ wishboneS2M { err = True }, numFree, buf)
+        (otp, numFree, nextRead, nextWrite) <- get
+        case (otp, numFree == maxBound) of
+          (Nothing, False) ->
+            put (Just $ wishboneS2M { acknowledge = True, readData = Right brRead }, numFree+1, incIdxLooping nextRead, nextWrite)
+          (Just otp', False) ->
+            if not (err otp') then pure () else put (Just $ wishboneS2M { acknowledge = True, readData = Right brRead }, numFree+1, incIdxLooping nextRead, nextWrite)
+          (Nothing, True) ->
+            put (Just $ wishboneS2M { err = True }, numFree, nextRead, nextWrite)
           _ -> pure ()
     | strobe m2s && Just (addr m2s) == statusAddress && not (writeEnable m2s) = do
-        (otp, numFree, buf) <- get
-        when (isNothing otp) $ put (Just $ wishboneS2M { acknowledge = True, readData = Left numFree }, numFree, buf)
+        (otp, numFree, nextRead, nextWrite) <- get
+        when (isNothing otp) $ put (Just $ wishboneS2M { acknowledge = True, readData = Left numFree }, numFree, nextRead, nextWrite)
     | otherwise = do
-        (_, x, y) <- get
-        put (Nothing, x, y)
+        (_, x, y, z) <- get
+        put (Nothing, x, y, z)
+
+  incIdxLooping idx = if idx == (maxBound-1) then 0 else idx+1
