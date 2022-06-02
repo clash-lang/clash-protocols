@@ -44,21 +44,29 @@ genWishboneTransfer :: (KnownNat addressWidth) => Gen a -> Gen (Transfer address
 genWishboneTransfer genA = do
   Gen.choice [Read <$> genBitVector, Write <$> genBitVector <*> genA]
 
-transfersToSignals
+transfersToSignalsStandard
   :: forall addressWidth a . (KnownNat addressWidth, KnownNat (BitSize a))
   => [Transfer addressWidth a]
   -> [WishboneM2S addressWidth (BitSize a `DivRU` 8) a]
-transfersToSignals = Prelude.concatMap $ \case
+transfersToSignalsStandard = Prelude.concatMap $ \case
    Read bv -> [ (wishboneM2S @addressWidth @a) { strobe = False, busCycle = False }
               , (wishboneM2S @addressWidth @a) { strobe = True, busCycle = True, addr = bv, writeEnable = False }]
    Write bv a -> [ wishboneM2S
                  , (wishboneM2S @addressWidth @a) { strobe = True, busCycle = True, addr = bv, writeEnable = True, writeData = a }]
 
+transfersToSignalsPipelined
+  :: forall addressWidth a . (KnownNat addressWidth, KnownNat (BitSize a))
+  => [[Transfer addressWidth a]]
+  -> [WishboneM2S addressWidth (BitSize a `DivRU` 8) a]
+transfersToSignalsPipelined ts = Prelude.concat $ flip Prelude.map ts $ \t ->
+    (wishboneM2S @addressWidth @a) { strobe = False, busCycle = False } : Prelude.map transferToSignal t
+  where
+    transferToSignal (Read bv)    = (wishboneM2S @addressWidth @a) { strobe = True, busCycle = True, addr = bv, writeEnable = False }
+    transferToSignal (Write bv a) = (wishboneM2S @addressWidth @a) { strobe = True, busCycle = True, addr = bv, writeEnable = True, writeData = a }
 
 
-
-idWriteWb :: (BitPack a) => Circuit (Wishbone dom 'Standard selWidth a) ()
-idWriteWb = Circuit go
+idWriteWbSt :: (BitPack a) => Circuit (Wishbone dom 'Standard selWidth a) ()
+idWriteWbSt = Circuit go
   where
     go (m2s, ()) = (reply <$> m2s, ())
 
@@ -68,11 +76,27 @@ idWriteWb = Circuit go
       | otherwise                         = wishboneS2M
 
 
-
-prop_idWrite :: Property
-prop_idWrite = validateStallingCircuit @System defExpectOptions genDat idWriteWb
+idWriteWbPip :: (BitPack a) => Circuit (Wishbone dom 'Pipelined selWidth a) ()
+idWriteWbPip = Circuit go
   where
-    genDat = transfersToSignals <$> genData (genWishboneTransfer @10 genSmallInt)
+    go (m2s, ()) = (reply <$> m2s, ())
+
+    reply WishboneM2S{..}
+      | busCycle && strobe && writeEnable = wishboneS2M { acknowledge = True, readData = writeData }
+      | busCycle && strobe                = wishboneS2M { acknowledge = True }
+      | otherwise                         = wishboneS2M
+
+
+prop_idWriteSt :: Property
+prop_idWriteSt = validateStallingStandardCircuit @System defExpectOptions genDat idWriteWbSt
+  where
+    genDat = transfersToSignalsStandard <$> genData (genWishboneTransfer @10 genSmallInt)
+
+
+prop_idWritePip :: Property
+prop_idWritePip = validateStallingPipelineCircuit @System defExpectOptions genDat idWriteWbPip
+  where
+    genDat = transfersToSignalsPipelined <$> genData (genData (genWishboneTransfer @10 genSmallInt))
 
 
 tests :: TestTree
