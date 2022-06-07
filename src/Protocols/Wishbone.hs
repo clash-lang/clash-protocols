@@ -280,12 +280,19 @@ wishboneSource ::
   Circuit (Wishbone dom 'Standard addressWidth (Either (Index (depth+1)) dat)) (Df dom dat)
 wishboneSource respondAddress statusAddress fifoDepth = Circuit (hideReset circuitFunction) where
 
+  -- implemented using a fixed-size array
+  --   write location and read location are both stored
+  --   to write, write to current location and move one to the right
+  --   to read, read from current location and move one to the right
+  --   loop around from the end to the beginning if necessary
+
   circuitFunction reset (inpL, inpR) = (otpL, otpR) where
     brRead = readNew (blockRam (E.replicate fifoDepth $ errorX "wishboneSource: undefined initial fifo buffer value")) brReadAddr brWrite
     (brReadAddr, brWrite, otpL, otpR) = unbundle $ mealy machineAsFunction s0 $ bundle (brRead, unsafeToHighPolarity reset, inpL, inpR)
 
   machineAsFunction s i = (s',o) where (o,s') = runState (fullStateMachine i) s
 
+  -- initial state
   -- (left status output, right data output, amount of space left, next place to read from, next place to write to)
   s0 = let numFree = maxBound
            nextRW = numFree * 0
@@ -303,6 +310,7 @@ wishboneSource respondAddress statusAddress fifoDepth = Circuit (hideReset circu
     when ack $ modify removeDataOtp
     pure (brReadAddr, brWrite, leftOtp, rightOtp)
 
+  -- given wishbone input, decide wishbone output
   leftStateMachine m2s
     | strobe m2s && addr m2s == respondAddress && writeEnable m2s = modify removeFifoStatusInfo >> pushInput (fromRight Clash.Prelude.undefined $ writeData m2s)
     | strobe m2s && Just (addr m2s) == statusAddress && not (writeEnable m2s) = do
@@ -318,6 +326,7 @@ wishboneSource respondAddress statusAddress fifoDepth = Circuit (hideReset circu
       put (currOtpL, currOtpR, numFree-1, nextRead, incIdxLooping nextWrite)
       pure (Just (nextWrite, inpData), wishboneS2M { acknowledge = True })
 
+  -- given df input, decide df output
   rightStateMachine brRead = do
     (_,rightOtp,_,_,_) <- get
     (currOtpL, currOtpR, numFree, nextRead, nextWrite) <- get
@@ -330,6 +339,7 @@ wishboneSource respondAddress statusAddress fifoDepth = Circuit (hideReset circu
   removeFifoStatusInfo (_,b,c,d,e) = (Nothing,b,c,d,e)
   removeDataOtp (a,_,c,d,e) = (a,NoData,c,d,e)
 
+  -- we have Index (depth+1) but we only want to access blockram up to depth-1
   incIdxLooping idx = if idx >= (maxBound-1) then 0 else idx+1
 
 -- | Wishbone to Df sink
@@ -356,12 +366,19 @@ wishboneSink ::
   Circuit (Df dom dat) (Reverse (Wishbone dom 'Standard addressWidth (Either (Index (depth+1)) dat)))
 wishboneSink respondAddress statusAddress fifoDepth = Circuit (hideReset circuitFunction) where
 
+  -- implemented using a fixed-size array
+  --   write location and read location are both stored
+  --   to write, write to current location and move one to the right
+  --   to read, read from current location and move one to the right
+  --   loop around from the end to the beginning if necessary
+
   circuitFunction reset (inpL, inpR) = (otpL, otpR) where
     brRead = readNew (blockRam (E.replicate fifoDepth $ errorX "wishboneSink: undefined initial fifo buffer value")) brReadAddr brWrite
     (brReadAddr, brWrite, otpL, otpR) = unbundle $ mealy machineAsFunction s0 $ bundle (brRead, unsafeToHighPolarity reset, inpL, inpR)
 
   machineAsFunction s i = (s',o) where (o,s') = runState (fullStateMachine i) s
 
+  -- initial state
   -- (right output (amt left or data), amount of space left, next place to read from, next place to write to)
   s0 = let numFree = maxBound
            nextRW = numFree * 0
@@ -372,13 +389,16 @@ wishboneSink respondAddress statusAddress fifoDepth = Circuit (hideReset circuit
        in
            (Nothing, numFree, nextRW, nextRW)
 
+  -- when reset is on, output blank/default and don't change any state
   fullStateMachine (_, True, _, _) = pure (0, Nothing, Ack False, wishboneS2M) -- reset is on, don't output anything or change anything
   fullStateMachine (brRead, False, inpData, m2s) = do
     rightStateMachine m2s brRead
+    -- fix some outputs before they get changed for next time later on
     (rightOtp, _, brReadAddr, _) <- get
     (brWrite, leftOtp) <- leftStateMachine inpData
     pure (brReadAddr, brWrite, leftOtp, fromMaybe wishboneS2M rightOtp)
 
+  -- given df input, decide df output
   leftStateMachine NoData = pure (Nothing, Ack False)
   leftStateMachine (Data inpData) = do
     (otp, numFree, nextRead, nextWrite) <- get
@@ -386,6 +406,7 @@ wishboneSink respondAddress statusAddress fifoDepth = Circuit (hideReset circuit
       put (otp, numFree-1, nextRead, incIdxLooping nextWrite)
       pure (Just (nextWrite, inpData), Ack True)
 
+  -- given wishbone input, decide wishbone output (store in state)
   rightStateMachine m2s brRead
     | strobe m2s && addr m2s == respondAddress && not (writeEnable m2s) = do
         (otp, numFree, nextRead, nextWrite) <- get
@@ -404,4 +425,5 @@ wishboneSink respondAddress statusAddress fifoDepth = Circuit (hideReset circuit
         (_, x, y, z) <- get
         put (Nothing, x, y, z)
 
+  -- we have Index (depth+1) but we only want to access blockram up to depth-1
   incIdxLooping idx = if idx == (maxBound-1) then 0 else idx+1
