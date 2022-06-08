@@ -262,7 +262,7 @@ wishboneS2M
 -- * Writing to the given address, pushes an item onto the fifo
 -- * Reading from statusAddress returns how much free space is left in the buffer
 -- * Reading/writing to other addresses are acknowledged, but ignored
--- * Asserts err when the FIFO is full
+-- * Asserts err and stall when the fifo is full
 wishboneSource ::
   (1 + n) ~ depth =>
   HiddenClockResetEnable dom =>
@@ -277,7 +277,7 @@ wishboneSource ::
   -- | Depth of the FIFO
   SNat depth ->
   -- |
-  Circuit (Wishbone dom 'Standard addressWidth (Either (Index (depth+1)) dat)) (Df dom dat)
+  Circuit (Wishbone dom mode addressWidth (Either (Index (depth+1)) dat)) (Df dom dat)
 wishboneSource respondAddress statusAddress fifoDepth = Circuit (hideReset circuitFunction) where
 
   -- implemented using a fixed-size array
@@ -322,7 +322,7 @@ wishboneSource respondAddress statusAddress fifoDepth = Circuit (hideReset circu
 
   pushInput inpData = do
     (currOtpL, currOtpR, numFree, nextRead, nextWrite) <- get
-    if numFree == 0 then pure (Nothing, wishboneS2M { err = True }) else do
+    if numFree == 0 then pure (Nothing, wishboneS2M { err = True, stall = True }) else do
       put (currOtpL, currOtpR, numFree-1, nextRead, incIdxLooping nextWrite)
       pure (Just (nextWrite, inpData), wishboneS2M { acknowledge = True })
 
@@ -363,7 +363,7 @@ wishboneSink ::
   -- | Depth of the FIFO
   SNat depth ->
   -- |
-  Circuit (Df dom dat) (Reverse (Wishbone dom 'Standard addressWidth (Either (Index (depth+1)) dat)))
+  Circuit (Df dom dat) (Reverse (Wishbone dom mode addressWidth (Either (Index (depth+1)) dat)))
 wishboneSink respondAddress statusAddress fifoDepth = Circuit (hideReset circuitFunction) where
 
   -- implemented using a fixed-size array
