@@ -26,7 +26,7 @@ import           Hedgehog                   (MonadTest)
 import           Prelude                    hiding (head, not, (&&), reverse)
 import           Protocols.Hedgehog         (ExpectOptions (..), Test (..))
 import           Protocols.Internal
-import           Protocols.Df               (Df, Data(..))
+import           Protocols.DfLike           (DfLike, boolToAck, ackToBool, getPayload, setPayload, noData, Data)
 
 -- hedgehog
 import qualified Hedgehog                   as H
@@ -270,6 +270,15 @@ wishboneSource ::
   KnownNat depth =>
   KnownNat (BitSize dat) =>
   NFDataX dat =>
+  DfLike dom df dat =>
+  DfLike dom df () =>
+  NFDataX (Data df dat) =>
+  -- | Proxy to our dfLike type
+  Proxy (df dat) ->
+  -- | Proxy to our dfLike type with blank data
+  Proxy (df ()) ->
+  -- | A blank payload in our dfLike type
+  Data df () ->
   -- | Address to respond to
   BitVector addressWidth ->
   -- | Optional address for asking how much space is left in the buffer
@@ -277,8 +286,8 @@ wishboneSource ::
   -- | Depth of the FIFO
   SNat depth ->
   -- |
-  Circuit (Wishbone dom mode addressWidth (Either (Index (depth+1)) dat)) (Df dom dat)
-wishboneSource respondAddress statusAddress fifoDepth = Circuit (hideReset circuitFunction) where
+  Circuit (Wishbone dom mode addressWidth (Either (Index (depth+1)) dat)) (df dat)
+wishboneSource dfProxy blankDfProxy blankPayload respondAddress statusAddress fifoDepth = Circuit (hideReset circuitFunction) where
 
   -- implemented using a fixed-size array
   --   write location and read location are both stored
@@ -301,13 +310,13 @@ wishboneSource respondAddress statusAddress fifoDepth = Circuit (hideReset circu
            --   (since ghc wouldn't be able to tell their type otherwise)
            -- nextRW is initialized to 0, although it could take on any value and the buffer would still work
        in
-           (Nothing, NoData, numFree, nextRW, nextRW)
+           (Nothing, noData dfProxy, numFree, nextRW, nextRW)
 
-  fullStateMachine (_, True, _, _) = pure (0, Nothing, wishboneS2M, NoData) -- reset is on, don't output anything or change anything
-  fullStateMachine (brRead, False, m2s, (Ack ack)) = do
+  fullStateMachine (_, True, _, _) = pure (0, Nothing, wishboneS2M, noData dfProxy) -- reset is on, don't output anything or change anything
+  fullStateMachine (brRead, False, m2s, ack) = do
     (brReadAddr, rightOtp) <- rightStateMachine brRead
     (brWrite, leftOtp) <- leftStateMachine m2s
-    when ack $ modify removeDataOtp
+    when (ackToBool dfProxy ack) $ modify removeDataOtp
     pure (brReadAddr, brWrite, leftOtp, rightOtp)
 
   -- given wishbone input, decide wishbone output
@@ -330,14 +339,14 @@ wishboneSource respondAddress statusAddress fifoDepth = Circuit (hideReset circu
   rightStateMachine brRead = do
     (_,rightOtp,_,_,_) <- get
     (currOtpL, currOtpR, numFree, nextRead, nextWrite) <- get
-    case (currOtpR, numFree == maxBound) of
-      (NoData, False) -> put (currOtpL, Data brRead, numFree+1, incIdxLooping nextRead, nextWrite)
+    case (getPayload dfProxy currOtpR, numFree == maxBound) of
+      (Nothing, False) -> put (currOtpL, setPayload blankDfProxy dfProxy blankPayload (Just brRead), numFree+1, incIdxLooping nextRead, nextWrite)
       _ -> pure ()
     (_,_,_,brReadAddr,_) <- get
     pure (brReadAddr, rightOtp)
 
   removeFifoStatusInfo (_,b,c,d,e) = (Nothing,b,c,d,e)
-  removeDataOtp (a,_,c,d,e) = (a,NoData,c,d,e)
+  removeDataOtp (a,_,c,d,e) = (a,noData dfProxy,c,d,e)
 
   -- we have Index (depth+1) but we only want to access blockram up to depth-1
   incIdxLooping idx = if idx >= (maxBound-1) then 0 else idx+1
@@ -356,6 +365,9 @@ wishboneSink ::
   KnownNat depth =>
   KnownNat (BitSize dat) =>
   NFDataX dat =>
+  DfLike dom df dat =>
+  -- | Proxy to our dfLike type
+  Proxy (df dat) ->
   -- | Address to respond to
   BitVector addressWidth ->
   -- | Optional address for asking how much space is left in the buffer
@@ -363,8 +375,8 @@ wishboneSink ::
   -- | Depth of the FIFO
   SNat depth ->
   -- |
-  Circuit (Df dom dat) (Reverse (Wishbone dom mode addressWidth (Either (Index (depth+1)) dat)))
-wishboneSink respondAddress statusAddress fifoDepth = Circuit (hideReset circuitFunction) where
+  Circuit (df dat) (Reverse (Wishbone dom mode addressWidth (Either (Index (depth+1)) dat)))
+wishboneSink dfProxy respondAddress statusAddress fifoDepth = Circuit (hideReset circuitFunction) where
 
   -- implemented using a fixed-size array
   --   write location and read location are both stored
@@ -390,7 +402,7 @@ wishboneSink respondAddress statusAddress fifoDepth = Circuit (hideReset circuit
            (Nothing, numFree, nextRW, nextRW)
 
   -- when reset is on, output blank/default and don't change any state
-  fullStateMachine (_, True, _, _) = pure (0, Nothing, Ack False, wishboneS2M) -- reset is on, don't output anything or change anything
+  fullStateMachine (_, True, _, _) = pure (0, Nothing, boolToAck dfProxy False, wishboneS2M) -- reset is on, don't output anything or change anything
   fullStateMachine (brRead, False, inpData, m2s) = do
     rightStateMachine m2s brRead
     -- fix some outputs before they get changed for next time later on
@@ -399,12 +411,13 @@ wishboneSink respondAddress statusAddress fifoDepth = Circuit (hideReset circuit
     pure (brReadAddr, brWrite, leftOtp, fromMaybe wishboneS2M rightOtp)
 
   -- given df input, decide df output
-  leftStateMachine NoData = pure (Nothing, Ack False)
-  leftStateMachine (Data inpData) = do
-    (otp, numFree, nextRead, nextWrite) <- get
-    if numFree == 0 then pure (Nothing, Ack False) else do
-      put (otp, numFree-1, nextRead, incIdxLooping nextWrite)
-      pure (Just (nextWrite, inpData), Ack True)
+  leftStateMachine d = case (getPayload dfProxy d) of
+    Nothing -> pure (Nothing, boolToAck dfProxy False)
+    (Just inpData) -> do
+      (otp, numFree, nextRead, nextWrite) <- get
+      if numFree == 0 then pure (Nothing, boolToAck dfProxy False) else do
+        put (otp, numFree-1, nextRead, incIdxLooping nextWrite)
+        pure (Just (nextWrite, inpData), boolToAck dfProxy True)
 
   -- given wishbone input, decide wishbone output (store in state)
   rightStateMachine m2s brRead
