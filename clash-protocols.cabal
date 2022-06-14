@@ -195,7 +195,8 @@ test-suite unittests
     hedgehog,
     tasty >= 1.2 && < 1.5,
     tasty-hedgehog >= 1.2,
-    tasty-th
+    tasty-th,
+    tasty-hunit
 
 test-suite doctests
   import:           common-options

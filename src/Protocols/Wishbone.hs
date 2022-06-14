@@ -102,7 +102,7 @@ instance Protocol (Wishbone dom mode addressWidth dat) where
 
 
 
-instance Backpressure (Wishbone dom 'Standard addressWidth dat) where
+instance (C.NFDataX dat) => Backpressure (Wishbone dom 'Standard addressWidth dat) where
   boolsToBwd _ = C.fromList_lazy . Prelude.map (\b ->
           if b then
             wishboneS2M { acknowledge = True }
@@ -187,7 +187,7 @@ instance (C.KnownNat (C.BitSize dat), C.KnownDomain dom) => Simulate (Wishbone d
           B.bimap (b1 :-) (f1 :-) (go sas s1 0 fwd bwd)
 
 
-instance Backpressure (Wishbone dom 'Pipelined addressWidth dat) where
+instance (C.NFDataX dat) => Backpressure (Wishbone dom 'Pipelined addressWidth dat) where
   boolsToBwd _ = C.fromList_lazy . Prelude.map
     \b -> if b then wishboneS2M { acknowledge = True } else wishboneS2M { stall = True }
 
@@ -209,12 +209,12 @@ instance (C.KnownNat (C.BitSize dat), C.KnownDomain dom) => Simulate (Wishbone d
 
 
 
-wishboneM2S :: (C.KnownNat addressWidth, C.KnownNat (C.BitSize dat)) => WishboneM2S addressWidth (C.BitSize dat `DivRU` 8) dat
+wishboneM2S :: (C.KnownNat addressWidth, C.KnownNat (C.BitSize dat), C.NFDataX dat) => WishboneM2S addressWidth (C.BitSize dat `DivRU` 8) dat
 wishboneM2S
   = WishboneM2S
-  { addr = C.undefined
-  , writeData = C.undefined
-  , busSelect = C.undefined
+  { addr = C.deepErrorX "M2S address not defined"
+  , writeData = C.deepErrorX "M2S writeData not defined"
+  , busSelect = C.deepErrorX "M2S busSelect not defined"
   , busCycle = False
   , strobe = False
   , writeEnable = False
@@ -222,10 +222,10 @@ wishboneM2S
   , burstTypeExtension = LinearBurst
   }
 
-wishboneS2M :: WishboneS2M dat
+wishboneS2M :: (C.NFDataX dat) => WishboneS2M dat
 wishboneS2M
   = WishboneS2M
-  { readData = C.undefined
+  { readData = C.deepErrorX "S2M readData not defined"
   , acknowledge = False
   , err = False
   , retry = False
