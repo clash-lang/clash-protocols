@@ -132,6 +132,8 @@ library
     , pretty-show
     , strict-tuple
 
+    , mtl
+
       -- To be removed; we need 'Test.Tasty.Hedgehog.Extra' to fix upstream issues
     , tasty >= 1.2 && < 1.5
     , tasty-hedgehog >= 1.2
@@ -149,6 +151,7 @@ library
 
     Protocols.Df
     Protocols.DfLike
+    Protocols.Fifo
     Protocols.Hedgehog
     Protocols.Hedgehog.Internal
     Protocols.Internal
