@@ -6,9 +6,8 @@ import           Prelude hiding (replicate)
 import           Control.Monad (when)
 import           Control.Monad.State (StateT(..), State, runState, get, put, gets, modify)
 import           Clash.Prelude hiding ((&&), (||), not)
-import           Data.Either (fromRight)
 import           Data.Functor.Identity (Identity(..))
-import           Data.Maybe (isJust, fromJust, isNothing, fromMaybe)
+import           Data.Maybe (isJust, fromJust, isNothing)
 import           Data.Proxy (Proxy(..))
 
 -- me
@@ -154,7 +153,8 @@ instance (NFDataX dat, KnownNat depth) => FifoOutput (Data dat) Ack dat depth wh
       (Just toSend, _) -> pure (Data toSend, False)
       (Nothing, False) -> put (Just queueItem) >> pure (Data queueItem, True)
       (Nothing, True) -> pure (NoData, False)
-    when ack $ put Nothing
+    shouldReadAck <- gets isJust -- ack might be undefined, so we shouldn't look at it unless we have to
+    when (shouldReadAck && ack) $ put Nothing
     pure retVal
 
 
