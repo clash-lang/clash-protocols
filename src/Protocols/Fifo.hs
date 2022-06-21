@@ -1,3 +1,10 @@
+{-|
+Defines a mix-and-match interface for creating fifo buffers.
+Buffers can be made from one protocol to another,
+and are parametrized on the amount of items in the buffer.
+Blockram is used to store fifo buffer items.
+-}
+
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, NamedFieldPuns, UndecidableInstances #-}
 
 module Protocols.Fifo where
@@ -21,7 +28,7 @@ import           Protocols.Df (Data(..))
 import           Protocols.Internal
 
 
--- | Protocols that can be used on the input side of a fifo buffer with a given datatype and depth
+-- | Protocols that can be used on the input side of a fifo buffer with a given datatype and depth.
 -- Parameters: forward and backward signals carried by protocols; data carried; and fifo depth
 class (NFDataX (FifoInpState fwd bwd dat depth), NFDataX dat, KnownNat depth) => FifoInput fwd bwd dat (depth :: Nat) where
   -- | State carried between clock cycles
@@ -30,19 +37,19 @@ class (NFDataX (FifoInpState fwd bwd dat depth), NFDataX dat, KnownNat depth) =>
   type FifoInpParam fwd bwd dat depth
   -- | Initial state, given depth and user params
   fifoInpS0 :: Proxy (fwd,bwd,dat) -> SNat depth -> FifoInpParam fwd bwd dat depth -> FifoInpState fwd bwd dat depth
-  -- | Blank input, used when reset is on
-  -- Doesn't look at current state, but can look at depth and user params
+  -- | Blank input, used when reset is on.
+  -- Doesn't look at current state, but can look at depth and user params.
   -- Should not acknowledge any incoming data
   fifoInpBlank :: Proxy (fwd,bwd,dat) -> SNat depth -> FifoInpParam fwd bwd dat depth -> bwd
-  -- | State machine run every clock cycle at the fifo input port
-  -- Given user-provided params; data at the input port; and current amount of space left in the buffer
-  -- Can update state using State monad
-  -- Returns data to output back to the port (usually an acknowledge signal), and Maybe an item to put into the fifo buffer
+  -- | State machine run every clock cycle at the fifo input port.
+  -- Given user-provided params; data at the input port; and current amount of space left in the buffer.
+  -- Can update state using State monad.
+  -- Returns data to output back to the port (usually an acknowledge signal), and Maybe an item to put into the fifo buffer.
   -- Do not push any data to the buffer if space left == 0;
   --   doing so will cause potential data loss and integer overflow
   fifoInpFn :: Proxy (fwd,bwd,dat) -> SNat depth -> FifoInpParam fwd bwd dat depth -> fwd -> Index (depth+1) -> State (FifoInpState fwd bwd dat depth) (bwd, Maybe dat)
 
--- | Protocols that can be used on the input side of a fifo buffer with a given datatype and depth
+-- | Protocols that can be used on the input side of a fifo buffer with a given datatype and depth.
 -- Parameters: forward and backward signals carried by protocols; data carried; and fifo depth
 class (NFDataX (FifoOtpState fwd bwd dat depth), NFDataX dat, KnownNat depth) => FifoOutput fwd bwd dat (depth :: Nat) where
   -- | State carried between clock cycles
@@ -51,20 +58,20 @@ class (NFDataX (FifoOtpState fwd bwd dat depth), NFDataX dat, KnownNat depth) =>
   type FifoOtpParam fwd bwd dat depth
   -- | Initial state, given depth and user params
   fifoOtpS0 :: Proxy (fwd,bwd,dat) -> SNat depth -> FifoOtpParam fwd bwd dat depth -> FifoOtpState fwd bwd dat depth
-  -- | Blank input, used when reset is on
-  -- Doesn't look at current state, but can look at depth and user params
+  -- | Blank input, used when reset is on.
+  -- Doesn't look at current state, but can look at depth and user params.
   -- Should not acknowledge any incoming data
   fifoOtpBlank :: Proxy (fwd,bwd,dat) -> SNat depth -> FifoOtpParam fwd bwd dat depth -> fwd
-  -- | State machine run every clock cycle at the fifo output port
-  -- Given user-provided params; data at the output port (usually an acknowledge signal); current amount of space left in the buffer; and the next data item on the buffer
-  -- Can update state using State monad
-  -- Returns data to output back to the port (usually data taken from the buffer), and whether a data item was taken from the buffer
+  -- | State machine run every clock cycle at the fifo output port.
+  -- Given user-provided params; data at the output port (usually an acknowledge signal); current amount of space left in the buffer; and the next data item on the buffer.
+  -- Can update state using State monad.
+  -- Returns data to output back to the port (usually data taken from the buffer), and whether a data item was taken from the buffer.
   -- Do not take any data from the buffer (or even read the top buffer value) if space left == maxBound;
   --   doing so will cause potential data loss, integer overflow, and reading an undefined value
   fifoOtpFn :: Proxy (fwd,bwd,dat) -> SNat depth -> FifoOtpParam fwd bwd dat depth -> bwd -> Index (depth+1) -> dat -> State (FifoOtpState fwd bwd dat depth) (fwd, Bool)
 
 
--- | Generalized fifo (see classes above)
+-- | Generalized fifo (see classes above).
 -- Uses blockram to store data
 fifo ::
   HiddenClockResetEnable dom =>
