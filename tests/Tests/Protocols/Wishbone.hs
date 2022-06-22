@@ -21,6 +21,7 @@ import           Protocols.Wishbone
 import           Protocols.Wishbone.Hedgehog
 
 -- tasty
+import           Control.Monad.IO.Class
 import           Debug.Trace                    (trace)
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -42,7 +43,8 @@ genData genA = do
 
 genWishboneTransfer :: (KnownNat addressWidth) => Gen a -> Gen (WishboneMasterRequest addressWidth a)
 genWishboneTransfer genA = do
-  Gen.choice [Read <$> genBitVector, Write <$> genBitVector <*> genA]
+  Gen.choice [
+      Read <$> genBitVector, Write <$> genBitVector <*> genA]
 
 transfersToSignalsStandard
   :: forall addressWidth a . (KnownNat addressWidth, KnownNat (BitSize a), NFDataX a)
@@ -93,11 +95,38 @@ case_ack_and_stall_1_empty_cycle =
   let val = withClockResetEnable @System clockGen resetGen enableGen $ validateStallingPipelineCircuitInner @System @Int @10 (defExpectOptions { eoTimeout = Just 500 }) [[]] [AckAndStall 1] idWriteWbPip
   in val @=? Right ()
 
+case_ack_and_stall_0_two_reads :: Assertion
+case_ack_and_stall_0_two_reads =
+  let val = withClockResetEnable @System clockGen resetGen enableGen $ validateStallingPipelineCircuitInner @System @Int @10 (defExpectOptions { eoTimeout = Just 500 }) [[ Read 0, Read 0 ]] [AckAndStall 5] idWriteWbPip
+  in val @=? Right ()
+
+case_two_ack_and_stall_0_two_reads :: Assertion
+case_two_ack_and_stall_0_two_reads =
+  let val = withClockResetEnable @System clockGen resetGen enableGen $ validateStallingPipelineCircuitInner @System @Int @10 (defExpectOptions { eoTimeout = Just 500 }) [[ Read 0, Read 0 ], [ Read 0 ]] [AckAndStall 5, AckAndStall 3] idWriteWbPip
+  in val @=? Right ()
+
+case_make_vcd :: Assertion
+case_make_vcd = do
+  let
+    stalls = [AckAndStall 5, AckAndStall 3]
+    reqs = [[ Read 0, Read 0 ], [ Read 0 ]]
+
+    resets = 50
+    simConfig = def {resetCycles = resets}
+    stalledC = withClockResetEnable @System clockGen resetGen enableGen $ stallPipelinedC simConfig stalls
+    stallingSlave = stalledC |>
+       idWriteWbPip
+    master = driveWishbonePipelinedMaster simConfig reqs
+
+  vcd <- liftIO $ observeComposedWishboneCircuitVCD @System @Int @10 (resets, 50) master stallingSlave
+  liftIO $ putStrLn vcd
+  Left () @=? Right ()
+
 
 tests :: TestTree
 tests =
     -- TODO: Move timeout option to hedgehog for better error messages.
     -- TODO: Does not seem to work for combinatorial loops like @let x = x in x@??
-    localOption (mkTimeout 30_000_000 {- 12 seconds -})
+    localOption (mkTimeout 60_000_000 {- 12 seconds -})
   $ localOption (HedgehogTestLimit (Just 1000))
   $(testGroupGenerator)
