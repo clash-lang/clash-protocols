@@ -122,7 +122,7 @@ nextStatePipelined st@WishbonePipelineState{..} m2s@WishboneM2S{..} s2m@Wishbone
 -- Returns 'Right ()' when the interactions comply with the spec.
 -- Returns 'Left (cycle, err)' when a spec violation was found.
 validatePipelined :: [WishboneM2S addressWidth (BitSize a `DivRU` 8) a] -> [WishboneS2M a] -> Either (Int, WishbonePipelineError) ()
-validatePipelined ~m2s s2m = go 0 (P.zip m2s s2m) $ WishbonePipelineState { cycle = 0, inCycle = False, requests = 0, responses = 0 }
+validatePipelined m2s s2m = go 0 (P.zip m2s s2m) $ WishbonePipelineState { cycle = 0, inCycle = False, requests = 0, responses = 0 }
   where
     go _ [] _                 = Right ()
     go n ((fwd, bwd):rest) st = case nextStatePipelined st fwd bwd of
@@ -221,7 +221,7 @@ data PipelineSlaveStallMode
     -- ^ Stall the master and wait before ACK-ing a request.
     --   - first field is the number of cycles to assert STALL
     --   - second field is the number of cycles to STALL before sending ACK
-    deriving (C.Generic, C.NFDataX, Show)
+    deriving (C.Generic, C.NFDataX, Show, C.ShowX)
 
 genPipelineSlaveStallMode :: H.Gen PipelineSlaveStallMode
 genPipelineSlaveStallMode = do
@@ -235,49 +235,51 @@ data PipelinedStallState a = PipelinedStallState
   , acked      :: Bool
   , allowedReq :: Bool
   }
-  deriving (C.Generic, C.NFDataX)
+  deriving (C.Generic, C.NFDataX, C.ShowX)
 
 stallPipelinedC
-  :: forall dom addressWidth a. (C.HiddenClockResetEnable dom, C.KnownNat addressWidth, C.NFDataX a, KnownNat (BitSize a))
+  :: forall dom addressWidth a. (C.HiddenClockResetEnable dom, C.KnownNat addressWidth, C.NFDataX a, KnownNat (BitSize a), C.ShowX a)
   => SimulationConfig
   -> [PipelineSlaveStallMode]
   -> Circuit (Wishbone dom 'Pipelined addressWidth a) (Wishbone dom 'Pipelined addressWidth a)
-stallPipelinedC config stalls = Circuit $ B.bimap (wishboneS2M :-) (wishboneM2S :-) . C.mealyB run initState
+stallPipelinedC config stalls = Circuit $ B.bimap (wishboneS2M :-) (wishboneM2S :-) . C.mealyB run' initState
   where
     initState :: PipelinedStallState a
     initState = PipelinedStallState Nothing stalls (resetCycles config) False False
 
-    run st@PipelinedStallState{..} (m2s, s2m)
-      | resetN > 0  = (st { resetN = resetN - 1 }, (s2m, m2s))
+    run' st (m2s, s2m) = let (st', s2m', m2s') = run st m2s s2m in (st', (s2m', m2s'))
+
+    run st@PipelinedStallState{..} m2s s2m
+      | resetN > 0  = (st { resetN = resetN - 1 }, s2m, m2s)
 
     -- no more stalls to perform, just pass through the signals
-    run st@PipelinedStallState{stalls = []} (m2s, s2m) = (st, (s2m, m2s))
+    run st@PipelinedStallState{stalls = []} m2s s2m = (st, s2m, m2s)
 
     -- not in a cycle, just pass through
-    run st (m2s, s2m)
-      | not (busCycle m2s) = (st, (s2m, m2s))
-
-    -- if an ACK gets encountered, save it
-    run st@PipelinedStallState{response = Nothing} (m2s, s2m)
-      | acknowledge s2m || err s2m || retry s2m = trace "2" $ run (st { response = Just s2m }) (m2s, s2m)
+    run st m2s s2m
+      | not (busCycle m2s) = (st, s2m, m2s)
 
     --
     -- AckAndStall
     --
 
-    -- request but no ack from slave yet, stall until ack is available
-    run st@PipelinedStallState{ stalls = (AckAndStall _):_, response = Nothing, acked = False } (m2s, s2m)
-      | strobe m2s = trace "3" (st, (s2m { stall = True }, m2s))
+    run st@PipelinedStallState{ stalls = (AckAndStall _):_, acked = False, .. } m2s s2m
+      -- request comes in, but no slave response yet -> stall
+      | strobe m2s && not (terminationSignal s2m) = trace "3" (st, s2m { stall = True }, m2s')
+      | strobe m2s && terminationSignal s2m       = trace "4" (st { response = Just s2m, acked = True }, s2m { stall = True }, m2s')
+      | not (strobe m2s) && not (terminationSignal s2m) = trace "5" (st, wishboneS2M { stall = True }, m2s')
+      | not (strobe m2s) && terminationSignal s2m       = trace "6" (st { response = Just s2m, acked = True }, s2m, m2s')
+      where
+        m2s' = if isJust response || terminationSignal s2m then wishboneM2S { busCycle = True } else m2s
 
-    -- ack the request, start stalling
-    run st@PipelinedStallState{ stalls = (AckAndStall n):stalls, response = Just resp, acked = False } (m2s, _)
-      | strobe m2s && n == 0 = trace "4" (st { stalls = stalls, response = Nothing, acked = False}, (resp, m2s))
-      | strobe m2s && n >  0 = trace "5" (st { stalls = AckAndStall (n-1):stalls, response = Nothing, acked = True}, (resp, m2s))
+    run st@PipelinedStallState{ stalls = (AckAndStall n):stalls, acked = True } m2s s2m
+      | n == 0 && not (strobe m2s) = trace "7" (st { stalls = stalls, acked = False, response = Nothing }, wishboneS2M, m2s)
+      | n == 0 && strobe m2s       = trace "8" (st { stalls = stalls, acked = False, response = Nothing }, wishboneS2M { stall = True }, m2s)
+      | n /= 0 && terminationSignal s2m = C.error "unexpected slave reply"
+      -- stall no matter whether STB is asserted or not
+      | n /= 0                     = trace "9" (st { stalls = AckAndStall (n - 1):stalls }, wishboneS2M { stall = True }, m2s { strobe = False })
 
-    -- already acked the request, keep stalling
-    run st@PipelinedStallState{ stalls = (AckAndStall n):stalls, acked = True } (m2s, s2m)
-      | strobe m2s && n == 0 = trace "6" (st { stalls = stalls, response = Nothing, acked = False}, (s2m { stall = True }, m2s))
-      | strobe m2s && n >  0 = trace "7" (st { stalls = AckAndStall (n-1):stalls, acked = True}, (s2m { stall = True }, m2s))
+{-
 
     --
     -- StallThenAck
@@ -285,33 +287,36 @@ stallPipelinedC config stalls = Circuit $ B.bimap (wishboneS2M :-) (wishboneM2S 
 
     -- request, no ack from slave yet, if supposed to be stalling, do that first.
     -- continue to stall until ack is available
-    run st@PipelinedStallState{ stalls = (StallThenAck n i):stalls, response = Nothing } (m2s, s2m)
+    run st@PipelinedStallState{ stalls = (StallThenAck n i):stalls, response = Nothing } m2s s2m
       -- work on remaining stalls first
-      | strobe m2s && n >  0 = trace "8" (st { stalls = StallThenAck (n - 1) i:stalls }, (s2m { stall = True }, m2s))
+      | strobe m2s && n >  0 = trace "8" (st { stalls = StallThenAck (n - 1) i:stalls }, s2m { stall = True })
       -- done with stalls? still no reply? keep stalling
-      | strobe m2s && n == 0 = trace "9" (st, (s2m { stall = True }, m2s))
+      | strobe m2s && n == 0 = trace "9" (st, s2m { stall = True })
 
     -- request, already got ack from slave, if supposed to be stalling, do that first.
     -- if not supposed to stall anymore
-    run st@PipelinedStallState{ stalls = (StallThenAck n i):stalls, response = Just resp, acked = False, .. } (m2s, s2m)
+    run st@PipelinedStallState{ stalls = (StallThenAck n i):stalls, response = Just resp, acked = False, .. } m2s s2m
       -- work on remaining stalls first
-      | strobe m2s && n > 0  = trace "10" (st { stalls = StallThenAck (n - 1) i:stalls }, (s2m { stall = True }, m2s))
+      | strobe m2s && n > 0  = trace "10" (st { stalls = StallThenAck (n - 1) i:stalls }, s2m { stall = True })
       -- done with stalls? send reply
-      | strobe m2s && n == 0 && not allowedReq = trace "11" (st { allowedReq = True }, (s2m { err = False, retry = False, acknowledge = False }, m2s))
-      | strobe m2s && n == 0 && allowedReq     = trace "12" (st { acked = True }, (resp { stall = True }, m2s))
+      | strobe m2s && n == 0 && not allowedReq = trace "11" (st { allowedReq = True }, s2m { err = False, retry = False, acknowledge = False })
+      | strobe m2s && n == 0 && allowedReq     = trace "12" (st { acked = True }, resp { stall = True })
 
     -- stalled already, ack send
     -- if not supposed to stall anymore
-    run st@PipelinedStallState{ stalls = (StallThenAck 0 i):stalls, acked = False } (m2s, s2m)
+    run st@PipelinedStallState{ stalls = (StallThenAck 0 i):stalls, acked = False } m2s s2m
       -- work on remaining stalls first
-      | strobe m2s && i > 0  = trace "13" (st { stalls = StallThenAck 0 (i - 1):stalls }, (s2m { stall = True }, m2s))
+      | strobe m2s && i > 0  = trace "13" (st { stalls = StallThenAck 0 (i - 1):stalls }, s2m { stall = True })
       -- last stall, continue
-      | strobe m2s && i == 0 = trace "14" (st { acked = False, allowedReq = False, stalls = stalls }, (s2m { stall = True }, m2s))
+      | strobe m2s && i == 0 = trace "14" (st { acked = False, allowedReq = False, stalls = stalls }, s2m { stall = True })
 
 
     -- run _ _ = C.errorX "Should not happen"
 
-    run st (m2s, s2m) = trace "other" (st, (s2m, m2s))
+    -}
+    run st m2s s2m = -- trace (printf "other:\n\t%s\n\t%s\n\t%s" (showX m2s) (showX s2m) (showX st))
+      trace "other"
+      (st, s2m, m2s)
 
 
 
@@ -336,6 +341,23 @@ observeComposedWishboneCircuit (Just n) (Circuit master) (Circuit slave) =
   let ~((), m2s) = master ((), s2m)
       ~(s2m, ()) = slave (m2s, ())
   in (sampleN_lazy n m2s, sampleN_lazy n s2m)
+
+
+observeComposedWishboneCircuitVCD
+  :: (KnownDomain dom, NFDataX a, KnownNat (BitSize a), KnownNat addressWidth)
+  => (Int, Int)
+  -> Circuit () (Wishbone dom mode addressWidth a)
+  -> Circuit (Wishbone dom mode addressWidth a) ()
+  -> IO String
+observeComposedWishboneCircuitVCD (resets, count) (Circuit master) (Circuit slave) = do
+  let ~((), m2s) = master ((), s2m)
+      ~(s2m, ()) = slave (m2s, ())
+      signal = bundle (m2s, s2m)
+  res <- dumpVCD (resets, count) signal ["CYC", "STB", "ACK", "STALL", "WE"]
+  case res of
+    Left s  -> pure s
+    Right _ -> pure "Failed to create trace"
+
 
 
 type WishbonePipelinedCycleRequests addressWidth dat = [WishboneMasterRequest addressWidth dat]
@@ -384,22 +406,21 @@ driveWishbonePipelinedMaster SimulationConfig{resetCycles} cycles = Circuit $
     -- no more cycles to work on
     go _ st [] ~(rep:replies) = wishboneM2S :- (rep `C.seqX` go 0 st [] replies)
 
-
     go _ st@WishbonePipelinedDriverState{..} ([]:cycles) ~(rep:replies)
       -- finished the cycle
-      | reqsSent == acksReceived && not (stall rep) = trace (printf "not stalling %d %d" reqsSent acksReceived) $ wishboneM2S :- (rep `C.seqX` go 0 (st { reqsSent = 0, acksReceived = 0, lastReq = Nothing}) cycles replies)
+      | reqsSent == acksReceived && not (stall rep) = wishboneM2S :- (rep `C.seqX` go 0 (st { reqsSent = 0, acksReceived = 0, lastReq = Nothing}) cycles replies)
       -- finished but slave is still stalling
-      | reqsSent == acksReceived && stall rep       = trace (printf "    stalling %d %d" reqsSent acksReceived) $ wishboneM2S { busCycle = True } :- (rep `C.seqX` go 0 (st { lastReq = Nothing }) ([]:cycles) replies)
+      | reqsSent == acksReceived && stall rep       = wishboneM2S { busCycle = True } :- (rep `C.seqX` go 0 (st { lastReq = Nothing }) ([]:cycles) replies)
 
 
     go _ st@WishbonePipelinedDriverState{lastReq = Nothing, ..} ([]:cycles) ~(rep:replies)
       -- still waiting for acks but no last request? Shouldn't be possible.
-      | reqsSent /= acksReceived = trace (printf "no last req %d %d" reqsSent acksReceived) $ wishboneM2S { busCycle = True } :- (rep `C.seqX` go 0 st ([]:cycles) replies)
+      | reqsSent /= acksReceived = wishboneM2S { busCycle = True } :- (rep `C.seqX` go 0 st ([]:cycles) replies)
 
 
     go _ st@WishbonePipelinedDriverState{lastReq = Just req, ..} ([]:cycles) ~(rep:replies)
       -- got an ack, not stalling
-      | reqsSent /= acksReceived && acknowledge rep && not (stall rep) = trace (printf "ack no stall, last req %d %d" reqsSent acksReceived) $
+      | reqsSent /= acksReceived && acknowledge rep && not (stall rep) =
           if acksReceived + 1 == reqsSent then
             -- end cycle
             wishboneM2S :- (rep `C.seqX` go 0 (st { reqsSent = 0, acksReceived = 0, lastReq = Nothing}) cycles replies)
@@ -408,7 +429,7 @@ driveWishbonePipelinedMaster SimulationConfig{resetCycles} cycles = Circuit $
             reqToSignals req :- (rep `C.seqX` go 0 (st { acksReceived = acksReceived + 1 }) ([]:cycles) replies)
 
       -- got an ack while stalling
-      | reqsSent /= acksReceived && acknowledge rep && stall rep = trace (printf "ack stall, last req %d %d" reqsSent acksReceived) $
+      | reqsSent /= acksReceived && acknowledge rep && stall rep =
           if acksReceived + 1 == reqsSent then
             -- slave acknowledged last request but is still stalling, insert wait state
             wishboneM2S { busCycle = True } :- (rep `C.seqX` go 0 (st { acksReceived = acksReceived + 1 }) ([]:cycles) replies)
@@ -417,32 +438,35 @@ driveWishbonePipelinedMaster SimulationConfig{resetCycles} cycles = Circuit $
             reqToSignals req :- (rep `C.seqX` go 0 (st { acksReceived = acksReceived + 1 }) ([]:cycles) replies)
 
       -- still waiting for acks, stalling, so keep sending last req.
-      | reqsSent /= acksReceived && stall rep       = trace (printf "stall, last req %d %d" reqsSent acksReceived) $ reqToSignals req :- (rep `C.seqX` go 0 (st { reqsSent = 0, acksReceived = 0}) ([]:cycles) replies)
+      | reqsSent /= acksReceived && stall rep       = reqToSignals req :- (rep `C.seqX` go 0 (st { reqsSent = 0, acksReceived = 0}) ([]:cycles) replies)
       -- not stalling, to prevent accidentally sending the request again insert a wait state.
-      | reqsSent /= acksReceived && not (stall rep) = trace (printf "no stall, last req %d %d" reqsSent acksReceived) $ wishboneM2S { busCycle = True } :- (rep `C.seqX` go 0 (st { reqsSent = 0, acksReceived = 0}) ([]:cycles) replies)
+      | reqsSent /= acksReceived && not (stall rep) = wishboneM2S { busCycle = True } :- (rep `C.seqX` go 0 (st { reqsSent = 0, acksReceived = 0}) ([]:cycles) replies)
 
     -- lastreq not populated, so this is the first request in the cycle
     go _ st@WishbonePipelinedDriverState{lastReq = Nothing} ((req:reqs):cycles) ~(rep:replies)
-      | stall rep || terminationSignal rep = C.error "STALL or terminating signal outside of cycle"
+      | {- stall rep || -} terminationSignal rep =
+          wishboneM2S { busCycle = True } :- (rep `C.seqX` go 0 st ((req:reqs):cycles) replies)
+          -- C.errorX "STALL or terminating signal outside of cycle"
       -- send out new request
-      | otherwise = trace "new request" $ reqToSignals req :- (rep `C.seqX` go 0 (st { reqsSent = 1, acksReceived = 0, lastReq = Just req }) (reqs:cycles) replies)
+      | otherwise = reqToSignals req :- (rep `C.seqX` go 0 (st { reqsSent = 1, acksReceived = 0, lastReq = Just req }) (reqs:cycles) replies)
 
 
     -- cycle was already started, 'last' is the request that needs to be ACKed/accepted eventually and 'req' is the next one.
     go _ st@WishbonePipelinedDriverState{lastReq = Just last, ..} ((req:reqs):cycles) ~(rep:replies)
-      | stall rep = trace "A" $ reqToSignals last :- (rep `C.seqX` go 0 st ((req:reqs):cycles) replies)
+      | stall rep = reqToSignals last :- (rep `C.seqX` go 0 st ((req:reqs):cycles) replies)
       -- not stalled but also no termination signal => "accepted" the request
-      | not (stall rep) && not (terminationSignal rep) = trace "B" $ reqToSignals last :- (rep `C.seqX` go 0 (st { reqsSent = reqsSent + 1 }) ((req:reqs):cycles) replies)
+      | not (stall rep) && not (terminationSignal rep) = reqToSignals last :- (rep `C.seqX` go 0 (st { reqsSent = reqsSent + 1 }) ((req:reqs):cycles) replies)
       -- simple stall, no termination, keep sending same request
-      | stall rep && not (terminationSignal rep) = trace "C" $ reqToSignals last :- (rep `C.seqX` go 0 st ((req:reqs):cycles) replies)
+      | stall rep && not (terminationSignal rep) = reqToSignals last :- (rep `C.seqX` go 0 st ((req:reqs):cycles) replies)
       -- stalling but sent ACK/ERR, keep sending last request
-      | stall rep && (acknowledge rep || err rep) = trace "D" $ reqToSignals last :- (rep `C.seqX` go 0 (st { acksReceived = acksReceived + 1 }) ((req:reqs):cycles) replies)
+      | stall rep && (acknowledge rep || err rep) = reqToSignals last :- (rep `C.seqX` go 0 (st { acksReceived = acksReceived + 1 }) ((req:reqs):cycles) replies)
 
       | stall rep && retry rep = C.error "HELP I don't know what to do with a RETY in pipelined mode AAAAA"
 
       -- not stalling, so accepting the next request, termination, send next request
-      | not (stall rep) && (acknowledge rep || err rep) = trace "E" $ reqToSignals req :- (rep `C.seqX` go 0 (st { acksReceived = acksReceived + 1, reqsSent = reqsSent + 1 }) (reqs:cycles) replies)
+      | not (stall rep) && (acknowledge rep || err rep) = reqToSignals req :- (rep `C.seqX` go 0 (st { acksReceived = acksReceived + 1, reqsSent = reqsSent + 1 }) (reqs:cycles) replies)
 
       | not (stall rep) && retry rep = C.error "HELP I don't know what to do with a RETY in pipelined mode AAAAA"
+
 
     go _ _ _ _ = error "not implemented"
