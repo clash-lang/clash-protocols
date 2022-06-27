@@ -20,6 +20,7 @@ import           Protocols.Wishbone
 import           Protocols.Wishbone.Hedgehog
 
 -- tasty
+import           Protocols.Wishbone.Hedgehog    (WishboneMasterRequest)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.Hedgehog            (HedgehogTestLimit (HedgehogTestLimit))
@@ -60,7 +61,7 @@ idWriteWbSt = Circuit go
 
     reply WishboneM2S{..}
       | busCycle && strobe && writeEnable = (wishboneS2M @a) { acknowledge = True, readData = writeData }
-      | busCycle && strobe                = wishboneS2M { acknowledge = True }
+      | busCycle && strobe                = wishboneS2M { err = True }
       | otherwise                         = wishboneS2M
 
 
@@ -70,6 +71,12 @@ prop_idWriteSt =  validateStallingStandardCircuit @System defExpectOptions genDa
     genDat = genData (genWishboneTransfer @10 genSmallInt)
 
 
+idWriteStModel :: WishboneMasterRequest addressWidth a -> () -> (Maybe a, ())
+idWriteStModel (Read _)    () = (Nothing, ())
+idWriteStModel (Write _ a) () = (Just a,  ())
+
+prop_idWriteSt_model :: Property
+prop_idWriteSt_model = wishboneIdWithModel @System idWriteStModel idWriteWbSt (genData $ genWishboneTransfer @10 genSmallInt) ()
 
 case_read_stall_0 :: Assertion
 case_read_stall_0 = do

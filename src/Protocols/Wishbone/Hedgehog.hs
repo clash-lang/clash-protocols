@@ -237,6 +237,56 @@ validateStallingStandardCircuit eOpts gen circ = H.property $ do
   validateStallingStandardCircuitInner eOpts dat stalls circ === Right ()
 
 
+
+wishboneIdWithModel
+  :: forall dom a addressWidth st
+  . (Eq a, C.ShowX a, Show a, C.NFDataX a, C.KnownNat addressWidth, C.KnownDomain dom, C.KnownNat (C.BitSize a))
+  => (WishboneMasterRequest addressWidth a -> st -> (Maybe a, st))
+  -> Circuit (Wishbone dom 'Standard addressWidth a) ()
+  -> H.Gen [WishboneMasterRequest addressWidth a]
+  -- ^ Inputs to the circuit and model
+  -> st
+  -> H.Property
+wishboneIdWithModel model circuit inputGen st = H.property $ do
+    input <- H.forAll inputGen
+    let
+      resets = 50
+      driver = driveStandard @dom (defExpectOptions { eoResetCycles = resets }) input
+      (_, s2m) = observeComposedWishboneCircuit Nothing driver circuit
+    matchModel 0 s2m input st === Right ()
+
+  where
+
+    matchModel
+      :: Int
+      -> [WishboneS2M a]
+      -> [WishboneMasterRequest addressWidth a]
+      -> st
+      -> Either (Int, Maybe a, Maybe a) ()
+    matchModel _ [] _  _ = C.error "S2M signal should never be empty"
+    matchModel _ _  [] _ = Right ()
+    matchModel cyc (s:s2m) (req:reqs) st
+      | err s = case model req st of
+          (Nothing, st') -> matchModel (succ cyc) s2m reqs st'
+          (modelRes,  _) -> Left (cyc, Nothing, modelRes)
+      | retry s = C.error "RETRY handling not implemented yet"
+      | acknowledge s = case model req st of
+          (Nothing,  _) -> Left (cyc, Just (readData s), Nothing)
+          (Just x, st')
+            | x == readData s -> matchModel (succ cyc) s2m reqs st'
+            | otherwise       -> Left (cyc, Just (readData s), Just x)
+      | otherwise = matchModel (succ cyc) s2m (req:reqs) st
+
+
+
+
+
+
+
+
+
+
+
 observeComposedWishboneCircuit
   :: (KnownDomain dom)
   => Maybe Int
