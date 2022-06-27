@@ -15,20 +15,16 @@ import           Hedgehog.Gen                   as Gen
 import           Hedgehog.Range                 as Range
 
 import           Protocols
-import           Protocols.Hedgehog             (ExpectOptions (eoTimeout),
-                                                 defExpectOptions)
+import           Protocols.Hedgehog             (defExpectOptions)
 import           Protocols.Wishbone
 import           Protocols.Wishbone.Hedgehog
 
 -- tasty
-import           Control.Monad.IO.Class
-import           Debug.Trace                    (trace)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.Hedgehog            (HedgehogTestLimit (HedgehogTestLimit))
 import           Test.Tasty.Hedgehog.Extra      (testProperty)
 import           Test.Tasty.TH                  (testGroupGenerator)
-import           Text.Printf                    (printf)
 
 smallInt :: Range Int
 smallInt = Range.linear 0 10
@@ -68,65 +64,22 @@ idWriteWbSt = Circuit go
       | otherwise                         = wishboneS2M
 
 
-idWriteWbPip :: forall a dom selWidth. (BitPack a, NFDataX a) => Circuit (Wishbone dom 'Pipelined selWidth a) ()
-idWriteWbPip = Circuit go
-  where
-    go (m2s, ()) = (reply <$> m2s, ())
-
-    reply m2s@WishboneM2S{..}
-      | busCycle && strobe && writeEnable = (wishboneS2M @a) { acknowledge = True, readData = writeData }
-      | busCycle && strobe                = wishboneS2M { acknowledge = True }
-      | otherwise                         = wishboneS2M
-
-
 prop_idWriteSt :: Property
 prop_idWriteSt =  validateStallingStandardCircuit @System defExpectOptions genDat idWriteWbSt
   where
-    genDat = transfersToSignalsStandard <$> genData (genWishboneTransfer @10 genSmallInt)
+    genDat = genData (genWishboneTransfer @10 genSmallInt)
 
 
-prop_idWritePip :: Property
-prop_idWritePip = withClockResetEnable @System clockGen resetGen enableGen $ validateStallingPipelineCircuit @System (defExpectOptions { eoTimeout = Just 500 }) genDat idWriteWbPip
-  where
-    genDat = genData (genData (genWishboneTransfer @10 genSmallInt))
 
-case_ack_and_stall_1_empty_cycle :: Assertion
-case_ack_and_stall_1_empty_cycle =
-  let val = withClockResetEnable @System clockGen resetGen enableGen $ validateStallingPipelineCircuitInner @System @Int @10 (defExpectOptions { eoTimeout = Just 500 }) [[]] [AckAndStall 1] idWriteWbPip
-  in val @=? Right ()
-
-case_ack_and_stall_0_two_reads :: Assertion
-case_ack_and_stall_0_two_reads =
-  let val = withClockResetEnable @System clockGen resetGen enableGen $ validateStallingPipelineCircuitInner @System @Int @10 (defExpectOptions { eoTimeout = Just 500 }) [[ Read 0, Read 0 ]] [AckAndStall 5] idWriteWbPip
-  in val @=? Right ()
-
-case_two_ack_and_stall_0_two_reads :: Assertion
-case_two_ack_and_stall_0_two_reads =
-  let val = withClockResetEnable @System clockGen resetGen enableGen $ validateStallingPipelineCircuitInner @System @Int @10 (defExpectOptions { eoTimeout = Just 500 }) [[ Read 0, Read 0 ], [ Read 0 ]] [AckAndStall 5, AckAndStall 3] idWriteWbPip
-  in val @=? Right ()
-
-case_make_vcd :: Assertion
-case_make_vcd = do
-  let
-    stalls = [AckAndStall 5, AckAndStall 3]
-    reqs = [[ Read 0, Read 0 ], [ Read 0 ]]
-
-    resets = 50
-    simConfig = def {resetCycles = resets}
-    stalledC = withClockResetEnable @System clockGen resetGen enableGen $ stallPipelinedC simConfig stalls
-    stallingSlave = stalledC |>
-       idWriteWbPip
-    master = driveWishbonePipelinedMaster simConfig reqs
-
-  vcd <- liftIO $ observeComposedWishboneCircuitVCD @System @Int @10 (resets, 50) master stallingSlave
-  liftIO $ putStrLn vcd
-  Left () @=? Right ()
+case_read_stall_0 :: Assertion
+case_read_stall_0 = do
+  validateStallingStandardCircuitInner @System @Int @10 defExpectOptions [Read 0, Read 0] [0, 0] idWriteWbSt @=? Right ()
 
 
 tests :: TestTree
 tests =
     -- TODO: Move timeout option to hedgehog for better error messages.
     -- TODO: Does not seem to work for combinatorial loops like @let x = x in x@??
-    localOption (mkTimeout 60_000_000 {- 12 seconds -})
+    localOption (mkTimeout 12_000_000 {- 12 seconds -})
   $ localOption (HedgehogTestLimit (Just 1000))
   $(testGroupGenerator)

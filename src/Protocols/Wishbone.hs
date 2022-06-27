@@ -11,6 +11,8 @@ Types modelling the Wishbone bus protocol.
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
+{-# OPTIONS_GHC -fconstraint-solver-iterations=0 #-}
+
 module Protocols.Wishbone where
 
 import           Clash.Prelude         (DivRU, Nat, Type, (&&), (:::))
@@ -19,10 +21,10 @@ import qualified Clash.Prelude         as C
 import           Clash.Signal.Internal (Signal (..), sample_lazy)
 
 import           Control.DeepSeq       (NFData)
-import           Control.Monad.State
 import qualified Data.Bifunctor        as B
 import           Data.Data             (Proxy (Proxy))
 import           Data.List             ((\\))
+import           Debug.Trace
 import           Prelude               hiding (head, not, (&&))
 import           Protocols.Internal
 
@@ -45,7 +47,7 @@ data WishboneM2S addressWidth selWidth dat
   , cycleTypeIdentifier :: "CTI" ::: CycleTypeIdentifier
     -- | BTE
   , burstTypeExtension  :: "BTE" ::: BurstTypeExtension
-  } deriving (NFData, C.Generic, C.NFDataX, C.ShowX, Eq)
+  } deriving (NFData, C.Generic, C.NFDataX, C.ShowX, Eq, C.BitPack)
 
 instance (C.ShowX dat, C.KnownNat addressWidth, C.KnownNat selWidth) => Show (WishboneM2S addressWidth selWidth dat) where
   show = C.showX
@@ -65,12 +67,12 @@ data WishboneS2M dat
 
     -- | RTY
   , retry       :: "RTY"   ::: Bool
-  } deriving (NFData, C.Generic, C.NFDataX, C.ShowX, Eq)
+  } deriving (NFData, C.Generic, C.NFDataX, C.ShowX, Eq, C.BitPack)
 instance (C.ShowX dat) => Show (WishboneS2M dat) where
   show = C.showX
 
 newtype CycleTypeIdentifier = CycleTypeIdentifier (C.BitVector 3)
-  deriving (NFData, C.Generic, C.NFDataX, Show, C.ShowX, Eq)
+  deriving (NFData, C.Generic, C.NFDataX, Show, C.ShowX, Eq, C.BitPack)
 
 pattern Classic, ConstantAddressBurst, IncrementingBurst, EndOfBurst :: CycleTypeIdentifier
 pattern Classic = CycleTypeIdentifier 0
@@ -83,7 +85,7 @@ data BurstTypeExtension
   | Beat4Burst
   | Beat8Burst
   | Beat16Burst
-  deriving (NFData, C.Generic, C.NFDataX, Show, C.ShowX, Eq)
+  deriving (NFData, C.Generic, C.NFDataX, Show, C.ShowX, Eq, C.BitPack)
 
 data WishboneMode
   = Standard
@@ -111,7 +113,7 @@ instance (C.NFDataX dat) => Backpressure (Wishbone dom 'Standard addressWidth da
         )
 
 
-instance (C.KnownNat (C.BitSize dat), C.KnownDomain dom) => Simulate (Wishbone dom 'Standard addressWidth dat) where
+instance (C.KnownNat (C.BitSize dat), C.KnownDomain dom, C.NFDataX dat, C.KnownNat addressWidth) => Simulate (Wishbone dom 'Standard addressWidth dat) where
   type SimulateFwdType (Wishbone dom 'Standard addressWidth dat) = [WishboneM2S addressWidth (C.BitSize dat `DivRU` 8) dat]
 
   type SimulateBwdType (Wishbone dom 'Standard addressWidth dat) = [WishboneS2M dat]
@@ -137,6 +139,7 @@ instance (C.KnownNat (C.BitSize dat), C.KnownDomain dom) => Simulate (Wishbone d
         -> WishboneS2M dat
       toStallReply WishboneM2S{..} s2m ack
         | strobe && busCycle = s2m
+        | C.not busCycle = s2m
         | otherwise = case ack of
             StallWithNack      -> s2m { err = True }
             StallWithAck       -> s2m { acknowledge = True }
@@ -157,22 +160,21 @@ instance (C.KnownNat (C.BitSize dat), C.KnownDomain dom) => Simulate (Wishbone d
       -- "refill" stall acks and continue
       go [] ss rs fwd bwd = go stallAcks ss rs fwd bwd
 
-      -- perform resets
+      -- resets, just pass through
       go (_:sas) _ resetN (f :- fwd) ~(b :- bwd) | resetN > 0 =
         B.bimap (b :-) (f :-) (go sas stalls (resetN - 1) fwd bwd)
 
-      go (sa:sas) [] _ (f :- fwd) ~(b :- bwd) =
-        B.bimap (toStallReply f b sa :-) (f :-) (go sas [] 0 fwd bwd)
+      -- no more cycles to stall, just pass through
+      go (s:sas) [] _ (f :- fwd) ~(b :- bwd) =
+        trace ("no stalls " ++ show s ++ " : " ++ show sas) $ B.bimap (toStallReply f b s :-) (f :-) (go sas [] 0 fwd bwd)
 
-      go (sa:sas) ss _ (f :- fwd) ~(b :- bwd)
-        | C.not (busCycle f && strobe f)
-        =
-          -- Left hand side does not send data, simply replicate that behavior. Right
-          -- hand side might send an arbitrary acknowledgement, so we simply pass it
-          -- through.
-
-          -- `f` does not signal/send any data, so it's an "empty" reply.
-          B.bimap (toStallReply f b sa :-) (f :-) (go sas ss 0 fwd bwd)
+      go (_:sas) ss _ (f :- fwd) ~(b :- bwd)
+        | C.not (busCycle f) =
+          -- Not in a transaction, just pass through
+          trace "!CYC" $ B.bimap (wishboneS2M :-) (wishboneM2S :-) (go sas ss 0 fwd bwd)
+        | busCycle f && C.not (strobe f) =
+          -- LHS doesn't send any data, RHS might send a reply though, so pass it through
+          trace " CYC !STB" $ B.bimap (b :-) (f :-) (go sas ss 0 fwd bwd)
 
       go (_sa:sas) (s:ss) _ (f0 :- fwd) ~(b0 :- bwd) =
         let
@@ -180,32 +182,11 @@ instance (C.KnownNat (C.BitSize dat), C.KnownDomain dom) => Simulate (Wishbone d
           -- the data. As long as RHS does not acknowledge the data, we keep sending
           -- the same data.
           (f1, b1, s1) = case compare 0 s of
-            LT -> (f0 { strobe = False, busCycle = False }, b0 { err = True }, pred s:ss)    -- s > 0
+            LT -> (f0 { strobe = False, busCycle = True }, b0 { err = True }, pred s:ss)    -- s > 0
             EQ -> (f0, b0, if acknowledge b0 then ss else s:ss) -- s ~ 0
             GT -> error ("Unexpected negative stall: " <> show s) -- s < 0
         in
-          B.bimap (b1 :-) (f1 :-) (go sas s1 0 fwd bwd)
-
-
-instance (C.NFDataX dat) => Backpressure (Wishbone dom 'Pipelined addressWidth dat) where
-  boolsToBwd _ = C.fromList_lazy . Prelude.map
-    \b -> if b then wishboneS2M { acknowledge = True } else wishboneS2M { stall = True }
-
-
-instance (C.KnownNat (C.BitSize dat), C.KnownDomain dom) => Simulate (Wishbone dom 'Pipelined addressWidth dat) where
-  type SimulateFwdType (Wishbone dom 'Pipelined addressWidth dat) = [WishboneM2S addressWidth (C.BitSize dat `DivRU` 8) dat]
-
-  type SimulateBwdType (Wishbone dom 'Pipelined addressWidth dat) = [WishboneS2M dat]
-
-  type SimulateChannels (Wishbone dom 'Pipelined addressWidth dat) = 1
-
-  simToSigFwd Proxy = C.fromList_lazy
-  simToSigBwd Proxy = C.fromList_lazy
-  sigToSimFwd Proxy = sample_lazy
-  sigToSimBwd Proxy = sample_lazy
-
-  stallC = C.undefined
-
+          trace "stalling" $ B.bimap (b1 :-) (f1 :-) (go sas s1 0 fwd bwd)
 
 
 
