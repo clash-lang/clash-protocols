@@ -20,7 +20,8 @@ import           Protocols.Wishbone
 import           Protocols.Wishbone.Hedgehog
 
 -- tasty
-import           Protocols.Wishbone.Hedgehog    (WishboneMasterRequest)
+import           Control.DeepSeq                (NFData)
+import           Data.Either                    (isLeft)
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.Hedgehog            (HedgehogTestLimit (HedgehogTestLimit))
@@ -61,7 +62,7 @@ idWriteWbSt = Circuit go
 
     reply WishboneM2S{..}
       | busCycle && strobe && writeEnable = (wishboneS2M @a) { acknowledge = True, readData = writeData }
-      | busCycle && strobe                = wishboneS2M { err = True }
+      | busCycle && strobe                = wishboneS2M { acknowledge = True }
       | otherwise                         = wishboneS2M
 
 
@@ -71,16 +72,30 @@ prop_idWriteSt =  validateStallingStandardCircuit @System defExpectOptions genDa
     genDat = genData (genWishboneTransfer @10 genSmallInt)
 
 
-idWriteStModel :: WishboneMasterRequest addressWidth a -> () -> (Maybe a, ())
-idWriteStModel (Read _)    () = (Nothing, ())
-idWriteStModel (Write _ a) () = (Just a,  ())
+idWriteStModel :: (NFData a, Eq a, ShowX a) => WishboneMasterRequest addressWidth a -> WishboneS2M a -> () -> Either String ()
+idWriteStModel (Read _)    s@WishboneS2M{..} ()
+  | acknowledge && isLeft (hasX readData) = Right ()
+  | otherwise                             = Left $ "Read should have been acknowledged with no DAT " <> showX s
+idWriteStModel (Write _ a) s@WishboneS2M{..} ()
+  | acknowledge && hasX readData == Right a = Right ()
+  | otherwise                               = Left $ "Write should have been acknowledged with write-data as DAT " <> showX s
+
 
 prop_idWriteSt_model :: Property
-prop_idWriteSt_model = wishboneIdWithModel @System idWriteStModel idWriteWbSt (genData $ genWishboneTransfer @10 genSmallInt) ()
+prop_idWriteSt_model = wishbonePropWithModel @System idWriteStModel idWriteWbSt (genData $ genWishboneTransfer @10 genSmallInt) ()
+
 
 case_read_stall_0 :: Assertion
 case_read_stall_0 = do
   validateStallingStandardCircuitInner @System @Int @10 defExpectOptions [Read 0, Read 0] [0, 0] idWriteWbSt @=? Right ()
+
+case_model_read_stall_1 :: Assertion
+case_model_read_stall_1 = do
+  wishbonePropWithModelInner @System @Int @10 idWriteStModel idWriteWbSt [1] [Read 0] () @=? Right ()
+
+case_model_read_write_stall_0 :: Assertion
+case_model_read_write_stall_0 = do
+  wishbonePropWithModelInner @System @Int @10 idWriteStModel idWriteWbSt [0, 0] [Read 0, Write 0 0] () @=? Right ()
 
 
 tests :: TestTree
