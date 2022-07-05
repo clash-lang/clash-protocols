@@ -1,7 +1,16 @@
+{-|
+Types and functions to aid with testing Wishbone circuits.
+-}
+
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards  #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
-module Protocols.Wishbone.Hedgehog where
+module Protocols.Wishbone.Hedgehog
+  ( WishboneMasterRequest(..)
+  , stallStandard
+  , driveStandard
+  , wishbonePropWithModel
+  ) where
 
 import           Clash.Prelude         as C hiding (cycle, not, (&&), (||))
 import           Clash.Signal.Internal (Signal ((:-)))
@@ -21,7 +30,6 @@ import           Hedgehog              ((===))
 import           Protocols
 import           Protocols.Hedgehog
 import           Protocols.Wishbone
-
 
 
 
@@ -79,10 +87,11 @@ validateStandard m2s s2m = go 0 (P.zip m2s s2m) WSSQuiet
       Right st' -> go (n + 1) rest st'
 
 
+-- | Create a stalling wishbone 'Standard' circuit.
 stallStandard
   :: forall dom a addressWidth
   . (C.ShowX a, Show a, C.NFDataX a, C.KnownNat addressWidth, C.KnownDomain dom, C.KnownNat (C.BitSize a))
-  => [Int] -- number of cycles for a slave to stall
+  => [Int] -- ^ number of cycles to stall the master for
   -> Circuit (Wishbone dom 'Standard addressWidth a) (Wishbone dom 'Standard addressWidth a)
 stallStandard stalls = Circuit $ B.second (wishboneM2S :-) . uncurry (go stalls Nothing)
   where
@@ -152,11 +161,12 @@ stallStandard stalls = Circuit $ B.second (wishboneM2S :-) . uncurry (go stalls 
       | otherwise = trace "S master cancelled cycle (got reply)" $ B.bimap (wishboneS2M :-) (m :-) (go stalls Nothing m2s s2m)
 
 
+-- | Create a wishbone 'Standard' circuit to drive other circuits.
 driveStandard
   :: forall dom a addressWidth
   . (C.ShowX a, Show a, C.NFDataX a, C.KnownNat addressWidth, C.KnownDomain dom, C.KnownNat (C.BitSize a))
   => ExpectOptions
-  -> [WishboneMasterRequest addressWidth a]
+  -> [WishboneMasterRequest addressWidth a] -- ^ Requests to send out
   -> Circuit () (Wishbone dom 'Standard addressWidth a)
 driveStandard ExpectOptions{..} dat = Circuit $ ((),) . C.fromList_lazy . (wishboneM2S:) . go eoResetCycles dat . C.sample_lazy . snd
   where
@@ -190,7 +200,7 @@ driveStandard ExpectOptions{..} dat = Circuit $ ((),) . C.fromList_lazy . (wishb
           transferToSignals d : (rep `C.seqX` go 0 (d:dat) replies)
 
 
-
+-- | Test a wishbone 'Standard' circuit against a pure model.
 wishbonePropWithModel
   :: forall dom a addressWidth st
   . (Eq a, C.ShowX a, Show a, C.NFDataX a, C.KnownNat addressWidth, C.KnownDomain dom, C.KnownNat (C.BitSize a))
@@ -198,10 +208,13 @@ wishbonePropWithModel
   -> (WishboneMasterRequest addressWidth a -> WishboneS2M a -> st -> Either String st)
   -- ^ Check whether a S2M signal for a given request is matching a pure model using 'st' as its
   --   state.
+  --   Return an error message 'Left' or the updated state 'Right'
   -> Circuit (Wishbone dom 'Standard addressWidth a) ()
+  -- ^ The circuit to run the test against.
   -> H.Gen [WishboneMasterRequest addressWidth a]
   -- ^ Inputs to the circuit and model
   -> st
+  -- ^ Initial state of the model
   -> H.Property
 wishbonePropWithModel eOpts model circuit inputGen st = H.property $ do
     input <- H.forAll inputGen
@@ -240,13 +253,6 @@ wishbonePropWithModel eOpts model circuit inputGen st = H.property $ do
               reqs'
                 | retry s   = req:reqs
                 | otherwise = reqs
-
-
-
-
-
-
-
 
 
 observeComposedWishboneCircuit

@@ -40,6 +40,7 @@ data WishboneM2S addressWidth selWidth dat
   , burstTypeExtension  :: "BTE" ::: BurstTypeExtension
   } deriving (NFData, C.Generic, C.NFDataX, C.ShowX, Eq, C.BitPack)
 
+-- M2S signals can contain undefined values, hence 'Show' is implemented through 'ShowX'
 instance (C.ShowX dat, C.KnownNat addressWidth, C.KnownNat selWidth) => Show (WishboneM2S addressWidth selWidth dat) where
   show = C.showX
 
@@ -59,6 +60,8 @@ data WishboneS2M dat
     -- | RTY
   , retry       :: "RTY"   ::: Bool
   } deriving (NFData, C.Generic, C.NFDataX, C.ShowX, Eq, C.BitPack)
+
+-- S2M signals can contain undefined values, hence 'Show' is implemented through 'ShowX'
 instance (C.ShowX dat) => Show (WishboneS2M dat) where
   show = C.showX
 
@@ -83,6 +86,7 @@ data WishboneMode
   | Pipelined
   deriving (C.Generic, Show, Eq)
 
+-- | The Wishbone protocol (http://cdn.opencores.org/downloads/wbspec_b4.pdf)
 data Wishbone (dom :: C.Domain) (mode :: WishboneMode) (addressWidth :: Nat) (userType :: Type)
 
 
@@ -90,8 +94,6 @@ instance Protocol (Wishbone dom mode addressWidth dat) where
   type Fwd (Wishbone dom mode addressWidth dat) = Signal dom (WishboneM2S addressWidth (C.BitSize dat `DivRU` 8) dat)
 
   type Bwd (Wishbone dom mode addressWidth dat) = Signal dom (WishboneS2M dat)
-
-
 
 
 

@@ -135,7 +135,7 @@ prop_memoryWb_model =  withClockResetEnable clockGen resetGen enableGen $ wishbo
   memoryWbModel
   (memoryWb @256)
   (genData (genWishboneTransfer @8 genSmallInt))
-  []
+  [] -- initial state
 
 
 tests :: TestTree
