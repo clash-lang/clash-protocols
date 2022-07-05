@@ -16,7 +16,6 @@ import qualified Hedgehog.Range        as Range
 
 -- me
 import qualified Data.Bifunctor        as B
-import           Data.Maybe            (fromMaybe)
 import           Debug.Trace
 import           Hedgehog              ((===))
 import           Protocols
@@ -191,80 +190,37 @@ driveStandard ExpectOptions{..} dat = Circuit $ ((),) . C.fromList_lazy . (wishb
           transferToSignals d : (rep `C.seqX` go 0 (d:dat) replies)
 
 
-validateStandardCircuit
-  :: forall dom a addressWidth
-  . (C.ShowX a, Show a, C.KnownNat addressWidth, C.KnownDomain dom, C.KnownNat (C.BitSize a))
-  => Int
-  -> Circuit () (Wishbone dom 'Standard addressWidth a)
-  -> Circuit (Wishbone dom 'Standard addressWidth a) ()
-  -> Either (Int, WishboneStandardError) ()
-validateStandardCircuit cycles master slave =
-  let (m2s, _:s2m) = observeComposedWishboneCircuit (Just cycles) master slave
-  in validateStandard m2s s2m
 
-
-validateStallingStandardCircuitInner
-  :: forall dom a addressWidth
-  . (C.ShowX a, Show a, C.NFDataX a, C.KnownNat addressWidth, C.KnownDomain dom, C.KnownNat (C.BitSize a))
-  => ExpectOptions
-  -> [WishboneMasterRequest addressWidth a]
-  -> [Int]
-  -> Circuit (Wishbone dom 'Standard addressWidth a) ()
-  -> Either (Int, WishboneStandardError) ()
-validateStallingStandardCircuitInner eOpts reqs stalls slave =
-  let
-    driveCirc = driveStandard eOpts reqs
-    lhsStallC = stallStandard stalls
-    stalledProtocol = lhsStallC |>
-      slave
-  in
-
-  validateStandardCircuit (fromMaybe 50 $ eoTimeout eOpts) driveCirc stalledProtocol
-
-validateStallingStandardCircuit
-  :: forall dom a addressWidth
-  . (C.ShowX a, Show a, C.NFDataX a, C.KnownNat addressWidth, C.KnownDomain dom, C.KnownNat (C.BitSize a))
-  => ExpectOptions
-  -> H.Gen [WishboneMasterRequest addressWidth a]
-  -> Circuit (Wishbone dom 'Standard addressWidth a) ()
-  -> H.Property
-validateStallingStandardCircuit eOpts gen circ = H.property $ do
-  dat <- H.forAll gen
-  let n = P.length dat
-
-  -- TODO: Different distributions?
-  let genStall = Gen.integral (Range.linear 0 10)
-
-  -- Generate stalls for LHS part of the protocol. The first line determines
-  -- whether to stall or not. The second determines how many cycles to stall
-  -- on each _valid_ cycle.
-  stalls <- H.forAll (Gen.list (Range.singleton n) genStall)
-
-  validateStallingStandardCircuitInner eOpts dat stalls circ === Right ()
-
-
-
-wishbonePropWithModelInner
+wishbonePropWithModel
   :: forall dom a addressWidth st
   . (Eq a, C.ShowX a, Show a, C.NFDataX a, C.KnownNat addressWidth, C.KnownDomain dom, C.KnownNat (C.BitSize a))
-  => (WishboneMasterRequest addressWidth a -> WishboneS2M a -> st -> Either String st)
+  => ExpectOptions
+  -> (WishboneMasterRequest addressWidth a -> WishboneS2M a -> st -> Either String st)
   -- ^ Check whether a S2M signal for a given request is matching a pure model using 'st' as its
   --   state.
   -> Circuit (Wishbone dom 'Standard addressWidth a) ()
-  -> [Int]
-  -- ^ Stalls
-  -> [WishboneMasterRequest addressWidth a]
+  -> H.Gen [WishboneMasterRequest addressWidth a]
   -- ^ Inputs to the circuit and model
   -> st
-  -> Either (Int, String) ()
-wishbonePropWithModelInner model circuit stalls input st =
+  -> H.Property
+wishbonePropWithModel eOpts model circuit inputGen st = H.property $ do
+    input <- H.forAll inputGen
+
+    let n = P.length input
+    let genStall = Gen.integral (Range.linear 0 10)
+
+    stalls <- H.forAll (Gen.list (Range.singleton n) genStall)
+
     let
       resets = 50
       driver = driveStandard @dom (defExpectOptions { eoResetCycles = resets }) input
       stallC = stallStandard stalls
       circuit' = stallC |> circuit
-      (_, _:s2m) = observeComposedWishboneCircuit Nothing driver circuit'
-    in matchModel 0 s2m input st
+      (m2s, _:s2m) = observeComposedWishboneCircuit (eoTimeout eOpts) driver circuit'
+
+    validateStandard m2s s2m === Right ()
+
+    matchModel 0 s2m input st === Right ()
 
   where
     matchModel
@@ -273,7 +229,7 @@ wishbonePropWithModelInner model circuit stalls input st =
       -> [WishboneMasterRequest addressWidth a]
       -> st
       -> Either (Int, String) ()
-    matchModel _ [] _  _ = C.error "S2M signal should never be empty"
+    matchModel _ [] _  _ = Right () -- so far everything is good but the sampling stopped
     matchModel _ _  [] _ = Right ()
     matchModel cyc (s:s2m) (req:reqs) st
       | not (terminationSignal s) = s `C.seqX` matchModel (succ cyc) s2m (req:reqs) st
@@ -284,28 +240,6 @@ wishbonePropWithModelInner model circuit stalls input st =
               reqs'
                 | retry s   = req:reqs
                 | otherwise = reqs
-
-
-wishbonePropWithModel
-  :: forall dom a addressWidth st
-  . (Eq a, C.ShowX a, Show a, C.NFDataX a, C.KnownNat addressWidth, C.KnownDomain dom, C.KnownNat (C.BitSize a))
-  => (WishboneMasterRequest addressWidth a -> WishboneS2M a -> st -> Either String st)
-  -- ^ Check whether a S2M signal for a given request is matching a pure model using 'st' as its
-  --   state.
-  -> Circuit (Wishbone dom 'Standard addressWidth a) ()
-  -> H.Gen [WishboneMasterRequest addressWidth a]
-  -- ^ Inputs to the circuit and model
-  -> st
-  -> H.Property
-wishbonePropWithModel model circuit inputGen st = H.property $ do
-    input <- H.forAll inputGen
-
-    let n = P.length input
-    let genStall = Gen.integral (Range.linear 0 10)
-
-    stalls <- H.forAll (Gen.list (Range.singleton n) genStall)
-
-    wishbonePropWithModelInner model circuit stalls input st === Right ()
 
 
 

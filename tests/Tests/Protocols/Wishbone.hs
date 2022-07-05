@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE NumericUnderscores  #-}
 {-# LANGUAGE RecordWildCards     #-}
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-} -- The exhaustiveness-checker doesn't work well with ViewPatterns
 module Tests.Protocols.Wishbone where
 
 
@@ -26,7 +27,6 @@ import           Control.DeepSeq                (NFData)
 import           Data.Either                    (isLeft)
 import           Prelude                        hiding (undefined)
 import           Test.Tasty
-import           Test.Tasty.HUnit
 import           Test.Tasty.Hedgehog            (HedgehogTestLimit (HedgehogTestLimit))
 import           Test.Tasty.Hedgehog.Extra      (testProperty)
 import           Test.Tasty.TH                  (testGroupGenerator)
@@ -38,9 +38,7 @@ genSmallInt :: Gen Int
 genSmallInt = Gen.integral smallInt
 
 genData :: Gen a -> Gen [a]
-genData genA = do
-  n <- genSmallInt
-  Gen.list (Range.singleton n) genA
+genData = Gen.list (Range.linear 0 150)
 
 genWishboneTransfer :: (KnownNat addressWidth) => Gen a -> Gen (WishboneMasterRequest addressWidth a)
 genWishboneTransfer genA = do
@@ -84,14 +82,8 @@ idWriteStModel (Write _ a) s@WishboneS2M{..} ()
   | otherwise                               = Left $ "Write should have been acknowledged with write-data as DAT " <> showX s
 
 
-prop_idWriteSt :: Property
-prop_idWriteSt =  validateStallingStandardCircuit @System defExpectOptions genDat idWriteWbSt
-  where
-    genDat = genData (genWishboneTransfer @10 genSmallInt)
-
-
 prop_idWriteSt_model :: Property
-prop_idWriteSt_model = wishbonePropWithModel @System idWriteStModel idWriteWbSt (genData $ genWishboneTransfer @10 genSmallInt) ()
+prop_idWriteSt_model = wishbonePropWithModel @System defExpectOptions idWriteStModel idWriteWbSt (genData $ genWishboneTransfer @10 genSmallInt) ()
 
 
 --
@@ -136,36 +128,14 @@ memoryWbModel (Write addr a) s st
   | acknowledge s = Right ((addr, a):st)
   | otherwise     = Left $ "Write should be acked : " <> showX s
 
-prop_memoryWb_valid :: Property
-prop_memoryWb_valid =  withClockResetEnable clockGen resetGen enableGen $ validateStallingStandardCircuit @System
-  defExpectOptions
-  (genData (genWishboneTransfer @8 genSmallInt))
-  (memoryWb @256)
-
 
 prop_memoryWb_model :: Property
 prop_memoryWb_model =  withClockResetEnable clockGen resetGen enableGen $ wishbonePropWithModel @System
+  defExpectOptions
   memoryWbModel
   (memoryWb @256)
   (genData (genWishboneTransfer @8 genSmallInt))
   []
-
-
---
--- Regression tests for cases that came up during development
---
-
-case_read_stall_0 :: Assertion
-case_read_stall_0 = do
-  validateStallingStandardCircuitInner @System @Int @10 defExpectOptions [Read 0, Read 0] [0, 0] idWriteWbSt @=? Right ()
-
-case_model_read_stall_1 :: Assertion
-case_model_read_stall_1 = do
-  wishbonePropWithModelInner @System @Int @10 idWriteStModel idWriteWbSt [1] [Read 0] () @=? Right ()
-
-case_model_read_write_stall_0 :: Assertion
-case_model_read_write_stall_0 = do
-  wishbonePropWithModelInner @System @Int @10 idWriteStModel idWriteWbSt [0, 0] [Read 0, Write 0 0] () @=? Right ()
 
 
 tests :: TestTree
@@ -173,5 +143,5 @@ tests =
     -- TODO: Move timeout option to hedgehog for better error messages.
     -- TODO: Does not seem to work for combinatorial loops like @let x = x in x@??
     localOption (mkTimeout 12_000_000 {- 12 seconds -})
-  $ localOption (HedgehogTestLimit (Just 5000))
+  $ localOption (HedgehogTestLimit (Just 1000))
   $(testGroupGenerator)
