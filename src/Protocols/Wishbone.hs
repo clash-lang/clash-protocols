@@ -16,6 +16,7 @@ import qualified Clash.Prelude         as C
 import           Clash.Signal.Internal (Signal (..))
 
 import           Control.DeepSeq       (NFData)
+import qualified Data.Bifunctor        as B
 import           Prelude               hiding (head, not, (&&))
 import           Protocols.Internal
 
@@ -122,3 +123,28 @@ wishboneS2M
 
 terminationSignal :: WishboneS2M dat -> Bool
 terminationSignal s2m = acknowledge s2m || err s2m || retry s2m
+
+
+
+sharedBus
+  :: forall n m dom addressWidth a
+  . (C.KnownNat n, C.KnownNat m, C.KnownDomain dom, C.KnownNat addressWidth)
+  => Circuit (C.Vec n (Wishbone dom 'Standard addressWidth a)) (C.Vec m (Wishbone dom 'Standard addressWidth a))
+sharedBus = Circuit $ go . B.first C.bundle
+  where
+    go = undefined
+
+crossbarSwitch
+  :: forall n m dom addressWidth a
+  . (C.KnownNat n, C.KnownNat m, C.KnownDomain dom, C.KnownNat addressWidth, C.NFDataX a, C.KnownNat (C.BitSize a))
+  => Circuit
+    -- route                              masters
+      (CSignal dom (C.Vec n (C.Index m)), C.Vec n (Wishbone dom 'Standard addressWidth a))
+    -- slaves
+      (C.Vec m (Wishbone dom 'Standard addressWidth a))
+crossbarSwitch = Circuit go
+  where
+    go ((CSignal route, C.bundle -> m2ss), C.bundle -> s2ms) = ((CSignal (pure ()), C.unbundle s2ms'), C.unbundle m2ss')
+      where
+        m2ss' = C.scatter @_ @_ @_ @_ @0 (C.repeat @m wishboneM2S) <$> route <*> m2ss
+        s2ms' = C.gather <$> s2ms <*> route
