@@ -18,6 +18,7 @@ import           Clash.Signal.Internal (Signal (..))
 import           Control.DeepSeq       (NFData)
 import qualified Data.Bifunctor        as B
 import           Prelude               hiding (head, not, (&&))
+import           Protocols
 import           Protocols.Internal
 
 -- | Data communicated from a Wishbone Master to a Wishbone Slave
@@ -29,6 +30,8 @@ data WishboneM2S addressWidth selWidth dat
   , writeData           :: "DAT_MOSI" ::: dat
     -- | SEL
   , busSelect           :: "SEL" ::: C.BitVector selWidth
+    -- | LOCK
+  , lock                :: "LOCK" ::: Bool
     -- | CYC
   , busCycle            :: "CYC" ::: Bool
     -- | STB
@@ -104,6 +107,7 @@ wishboneM2S
   { addr = C.deepErrorX "M2S address not defined"
   , writeData = C.deepErrorX "M2S writeData not defined"
   , busSelect = C.deepErrorX "M2S busSelect not defined"
+  , lock = False
   , busCycle = False
   , strobe = False
   , writeEnable = False
@@ -125,14 +129,44 @@ terminationSignal :: WishboneS2M dat -> Bool
 terminationSignal s2m = acknowledge s2m || err s2m || retry s2m
 
 
+roundrobin
+  :: forall n dom addressWidth a
+  . (C.KnownNat n, C.HiddenClockResetEnable dom, C.KnownNat addressWidth, C.KnownNat (C.BitSize a), C.NFDataX a, 1 C.<= n)
+  => Circuit (Wishbone dom 'Standard addressWidth a) (C.Vec n (Wishbone dom 'Standard addressWidth a))
+roundrobin = Circuit $ \(m2s, s2ms) -> B.first C.head $ fn (C.singleton m2s, s2ms)
+  where
+    Circuit fn = sharedBus selectFn
+    selectFn (C.unbundle -> (mIdx, sIdx, _)) = C.liftA2 (,) mIdx (C.satSucc C.SatWrap <$> sIdx)
+
 
 sharedBus
   :: forall n m dom addressWidth a
-  . (C.KnownNat n, C.KnownNat m, C.KnownDomain dom, C.KnownNat addressWidth)
-  => Circuit (C.Vec n (Wishbone dom 'Standard addressWidth a)) (C.Vec m (Wishbone dom 'Standard addressWidth a))
-sharedBus = Circuit $ go . B.first C.bundle
+  . (C.KnownNat n, C.KnownNat m, C.HiddenClockResetEnable dom, C.KnownNat addressWidth, C.KnownNat (C.BitSize a), C.NFDataX a)
+  => (C.Signal dom (C.Index n, C.Index m, C.Vec n (WishboneM2S addressWidth (C.BitSize a `DivRU` 8) a)) -> C.Signal dom (C.Index n, C.Index m))
+  -- ^ Funcion to select which M-S pair should be connected next.
+  -> Circuit
+      (C.Vec n (Wishbone dom 'Standard addressWidth a))
+      (C.Vec m (Wishbone dom 'Standard addressWidth a))
+sharedBus selectFn = Circuit go
   where
-    go = undefined
+    go :: (C.Vec n (Signal dom (WishboneM2S addressWidth (C.Div (C.BitSize a C.+ 7) 8) a)), C.Vec m (Signal dom (WishboneS2M a)))
+       -> (C.Vec n (Signal dom (WishboneS2M a)), C.Vec m (Signal dom (WishboneM2S addressWidth (C.Div (C.BitSize a C.+ 7) 8) a)))
+    go (C.bundle -> m2ss, C.bundle -> s2ms) = (C.unbundle s2ms', C.unbundle m2ss')
+      where
+        mIdx = C.regEn (0 :: C.Index n) acceptIdx mIdx'
+        sIdx = C.regEn (0 :: C.Index m) acceptIdx sIdx'
+
+        (mIdx', sIdx') = C.unbundle $ selectFn (C.liftA3 (,,) mIdx sIdx m2ss)
+
+        m2s = C.liftA2 (C.!!) m2ss mIdx
+        s2m = C.liftA2 (C.!!) s2ms sIdx
+
+        acceptIdx = (C.not . busCycle <$> m2s) C..&&. (C.not . lock <$> m2s)
+
+        m2ss' = C.liftA3 C.replace sIdx m2s $ pure (C.repeat wishboneM2S)
+        s2ms' = C.liftA3 C.replace mIdx s2m $ pure (C.repeat wishboneS2M)
+
+
 
 crossbarSwitch
   :: forall n m dom addressWidth a
@@ -146,5 +180,5 @@ crossbarSwitch = Circuit go
   where
     go ((CSignal route, C.bundle -> m2ss), C.bundle -> s2ms) = ((CSignal (pure ()), C.unbundle s2ms'), C.unbundle m2ss')
       where
-        m2ss' = C.scatter @_ @_ @_ @_ @0 (C.repeat @m wishboneM2S) <$> route <*> m2ss
+        m2ss' = C.scatter @_ @_ @_ @_ @0 (C.repeat wishboneM2S) <$> route <*> m2ss
         s2ms' = C.gather <$> s2ms <*> route
