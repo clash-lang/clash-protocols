@@ -20,6 +20,7 @@ import qualified Clash.Explicit.Prelude as CE
 import           Control.Applicative (Const(..))
 import           Data.Coerce (coerce)
 import           Data.Default (Default(def))
+import           Data.Functor.Identity (Identity(..), runIdentity)
 import           Data.Kind (Type)
 import           Data.Tuple (swap)
 import           GHC.Generics (Generic)
@@ -712,3 +713,37 @@ circuit =
 (-<) =
   error "(-<) called: did you forget to enable \"Protocols.Plugin\"?"
 
+-- | Allows for optional data.
+-- Depending on the value of @keep@, the data can either be included or left out.
+-- When left out, the data is represented instead as type @()@.
+type family KeepType (keep :: Bool) (optionalType :: Type) = t | t -> keep optionalType where
+  KeepType 'True optionalType = Identity optionalType
+  KeepType 'False optionalType = Proxy optionalType
+
+-- | We want to define operations on 'KeepType' that work for both possibilities
+-- (@keep = 'True@ and @keep = 'False@), but we can't pattern match directly.
+-- Instead we need to define a class and instantiate
+-- the class for both @'True@ and @'False@.
+class KeepTypeClass (keep :: Bool) where
+  -- | Get the value of @keep@ at the term level.
+  getKeep :: KeepType keep optionalType -> Bool
+  -- | Convert an optional value to a normal value,
+  -- or Nothing if the field is turned off.
+  fromKeepType :: KeepType keep optionalType -> Maybe optionalType
+  -- | Convert a normal value to an optional value.
+  -- Either preserves the value or returns @Proxy@.
+  toKeepType :: optionalType -> KeepType keep optionalType
+  -- | Map a function over an optional value
+  mapKeepType :: (optionalType -> optionalType) -> KeepType keep optionalType -> KeepType keep optionalType
+
+instance KeepTypeClass 'True where
+  getKeep _ = True
+  fromKeepType i = Just (runIdentity i)
+  toKeepType v = Identity v
+  mapKeepType = fmap
+
+instance KeepTypeClass 'False where
+  getKeep _ = False
+  fromKeepType _ = Nothing
+  toKeepType _ = Proxy
+  mapKeepType = fmap
