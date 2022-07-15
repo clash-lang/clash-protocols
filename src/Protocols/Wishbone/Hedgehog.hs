@@ -93,7 +93,7 @@ stallStandard
   . (C.ShowX a, Show a, C.NFDataX a, C.KnownNat addressWidth, C.KnownDomain dom, C.KnownNat (C.BitSize a))
   => [Int] -- ^ number of cycles to stall the master for
   -> Circuit (Wishbone dom 'Standard addressWidth a) (Wishbone dom 'Standard addressWidth a)
-stallStandard stalls = Circuit $ B.second (wishboneM2S :-) . uncurry (go stalls Nothing)
+stallStandard stalls = Circuit $ B.second (emptyWishboneM2S :-) . uncurry (go stalls Nothing)
   where
     go
       :: [Int]
@@ -103,62 +103,62 @@ stallStandard stalls = Circuit $ B.second (wishboneM2S :-) . uncurry (go stalls 
       -> ( Signal dom (WishboneS2M a)
          , Signal dom (WishboneM2S addressWidth (BitSize a `DivRU` 8) a))
 
-    go [] lastRep (_:-m2s) ~(_:-s2m) = B.bimap (wishboneS2M :-) (wishboneM2S :-) $ go [] lastRep m2s s2m
+    go [] lastRep (_:-m2s) ~(_:-s2m) = B.bimap (emptyWishboneS2M :-) (emptyWishboneM2S :-) $ go [] lastRep m2s s2m
 
     go (st:stalls) lastRep (m:-m2s) ~(_:-s2m)
       -- not in a bus cycle, just pass through
-      | not (busCycle m) = B.bimap (wishboneS2M:-) (wishboneM2S:-) $ go (st:stalls) lastRep m2s s2m
+      | not (busCycle m) = B.bimap (emptyWishboneS2M:-) (emptyWishboneM2S:-) $ go (st:stalls) lastRep m2s s2m
     go (st:stalls) Nothing (m:-m2s) ~(s:-s2m)
       -- received a reply but still need to stall
-      | busCycle m && strobe m && st > 0 && terminationSignal s =
+      | busCycle m && strobe m && st > 0 && hasTerminateFlag s =
           B.bimap
             -- tell the master that the slave has no reply yet
-            (wishboneS2M :-)
+            (emptyWishboneS2M :-)
             -- tell the slave that the cycle is over
-            (wishboneM2S :- )
+            (emptyWishboneM2S :- )
             (go (st - 1:stalls) (Just s) m2s s2m)
 
       -- received a reply but still need to stall
-      | busCycle m && strobe m && st > 0 && not (terminationSignal s) =
+      | busCycle m && strobe m && st > 0 && not (hasTerminateFlag s) =
           B.bimap
             -- tell the master that the slave has no reply yet
-            (wishboneS2M :-)
+            (emptyWishboneS2M :-)
             -- tell the slave that the cycle is over
             (m :- )
             (go (st - 1:stalls) Nothing m2s s2m)
 
       -- done stalling, got a reply last second, pass through
-      | busCycle m && strobe m && st == 0 && terminationSignal s =
+      | busCycle m && strobe m && st == 0 && hasTerminateFlag s =
           B.bimap
             (s :-)
             (m :-)
             (go stalls Nothing m2s s2m)
       -- done stalling but no termination signal yet, just pass through to give the slave
       -- the chance to reply
-      | busCycle m && strobe m && st == 0 && not (terminationSignal s) =
+      | busCycle m && strobe m && st == 0 && not (hasTerminateFlag s) =
           B.bimap
-            (wishboneS2M :-)
+            (emptyWishboneS2M :-)
             (m :-)
             (go (0:stalls) Nothing m2s s2m)
       -- master cancelled cycle
-      | otherwise = trace "S master cancelled cycle (no reply)" $ B.bimap (wishboneS2M :-) (m :-) (go stalls Nothing m2s s2m)
+      | otherwise = trace "S master cancelled cycle (no reply)" $ B.bimap (emptyWishboneS2M :-) (m :-) (go stalls Nothing m2s s2m)
     go (st:stalls) (Just rep) (m:-m2s) ~(_:-s2m)
       -- need to keep stalling, already got the reply
       | busCycle m && strobe m && st > 0 =
           B.bimap
             -- keep stalling
-            (wishboneS2M :-)
+            (emptyWishboneS2M :-)
             -- tell the slave that the cycle is over
-            (wishboneM2S :-)
+            (emptyWishboneM2S :-)
             (go (st - 1:stalls) (Just rep) m2s s2m)
       -- done stalling, give reply
       | busCycle m && strobe m && st == 0 =
           B.bimap
             (rep :-)
-            (wishboneM2S :-)
+            (emptyWishboneM2S :-)
             (go stalls Nothing m2s s2m)
       -- master cancelled cycle
-      | otherwise = trace "S master cancelled cycle (got reply)" $ B.bimap (wishboneS2M :-) (m :-) (go stalls Nothing m2s s2m)
+      | otherwise = trace "S master cancelled cycle (got reply)" $ B.bimap (emptyWishboneS2M :-) (m :-) (go stalls Nothing m2s s2m)
 
 
 -- | Create a wishbone 'Standard' circuit to drive other circuits.
@@ -168,7 +168,7 @@ driveStandard
   => ExpectOptions
   -> [WishboneMasterRequest addressWidth a] -- ^ Requests to send out
   -> Circuit () (Wishbone dom 'Standard addressWidth a)
-driveStandard ExpectOptions{..} dat = Circuit $ ((),) . C.fromList_lazy . (wishboneM2S:) . go eoResetCycles dat . C.sample_lazy . snd
+driveStandard ExpectOptions{..} dat = Circuit $ ((),) . C.fromList_lazy . (emptyWishboneM2S:) . go eoResetCycles dat . C.sample_lazy . snd
   where
 
     transferToSignals
@@ -176,8 +176,8 @@ driveStandard ExpectOptions{..} dat = Circuit $ ((),) . C.fromList_lazy . (wishb
       . (C.ShowX a, Show a, C.NFDataX a, C.KnownNat addressWidth, C.KnownNat (C.BitSize a))
       => WishboneMasterRequest addressWidth a
       -> WishboneM2S addressWidth (BitSize a `DivRU` 8) a
-    transferToSignals (Read addr) = (wishboneM2S @addressWidth @a) { busCycle = True, strobe = True, addr = addr, writeEnable = False }
-    transferToSignals (Write addr dat) = (wishboneM2S @addressWidth @a) { busCycle = True, strobe = True, addr = addr, writeEnable = True, writeData = dat }
+    transferToSignals (Read addr) = (emptyWishboneM2S @addressWidth @a) { busCycle = True, strobe = True, addr = addr, writeEnable = False }
+    transferToSignals (Write addr dat) = (emptyWishboneM2S @addressWidth @a) { busCycle = True, strobe = True, addr = addr, writeEnable = True, writeData = dat }
 
     go
       :: Int
@@ -185,16 +185,16 @@ driveStandard ExpectOptions{..} dat = Circuit $ ((),) . C.fromList_lazy . (wishb
       -> [WishboneS2M a]
       -> [WishboneM2S addressWidth (BitSize a `DivRU` 8) a]
     go nResets dat ~(rep:replies)
-      | nResets > 0 = wishboneM2S : (rep `C.seqX` go (nResets - 1) dat replies)
+      | nResets > 0 = emptyWishboneM2S : (rep `C.seqX` go (nResets - 1) dat replies)
 
     -- no more data to send
-    go _ [] ~(rep:replies) = wishboneM2S : (rep `C.seqX` go 0 [] replies)
+    go _ [] ~(rep:replies) = emptyWishboneM2S : (rep `C.seqX` go 0 [] replies)
 
     go _ (d:dat) ~(rep:replies)
       -- the sent data was acknowledged, end the cycle before continuing
-      | acknowledge rep || err rep = wishboneM2S : (rep `C.seqX` go 0 dat replies)
+      | acknowledge rep || err rep = emptyWishboneM2S : (rep `C.seqX` go 0 dat replies)
       -- end cycle, continue but send the previous request again
-      | retry rep = wishboneM2S : (rep `C.seqX` go 0 (d:dat) replies)
+      | retry rep = emptyWishboneM2S : (rep `C.seqX` go 0 (d:dat) replies)
       -- not a termination signal, so keep sending the data
       | otherwise = -- trace "D in-cycle wait for ACK" $
           transferToSignals d : (rep `C.seqX` go 0 (d:dat) replies)
@@ -245,7 +245,7 @@ wishbonePropWithModel eOpts model circuit inputGen st = H.property $ do
     matchModel _ [] _  _ = Right () -- so far everything is good but the sampling stopped
     matchModel _ _  [] _ = Right ()
     matchModel cyc (s:s2m) (req:reqs) st
-      | not (terminationSignal s) = s `C.seqX` matchModel (succ cyc) s2m (req:reqs) st
+      | not (hasTerminateFlag s) = s `C.seqX` matchModel (succ cyc) s2m (req:reqs) st
       | otherwise                 = case model req s st of
           Left err -> Left (cyc, err)
           Right st' -> s `C.seqX` matchModel (succ cyc) s2m reqs' st'

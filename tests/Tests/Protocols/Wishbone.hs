@@ -50,10 +50,10 @@ transfersToSignalsStandard
   => [WishboneMasterRequest addressWidth a]
   -> [WishboneM2S addressWidth (BitSize a `DivRU` 8) a]
 transfersToSignalsStandard = Prelude.concatMap $ \case
-   Read bv -> [ (wishboneM2S @addressWidth @a) { strobe = False, busCycle = False }
-              , (wishboneM2S @addressWidth @a) { strobe = True, busCycle = True, addr = bv, writeEnable = False }]
-   Write bv a -> [ wishboneM2S
-                 , (wishboneM2S @addressWidth @a) { strobe = True, busCycle = True, addr = bv, writeEnable = True, writeData = a }]
+   Read bv -> [ (emptyWishboneM2S @addressWidth @a) { strobe = False, busCycle = False }
+              , (emptyWishboneM2S @addressWidth @a) { strobe = True, busCycle = True, addr = bv, writeEnable = False }]
+   Write bv a -> [ emptyWishboneM2S
+                 , (emptyWishboneM2S @addressWidth @a) { strobe = True, busCycle = True, addr = bv, writeEnable = True, writeData = a }]
 
 
 
@@ -68,9 +68,9 @@ idWriteWbSt = Circuit go
     go (m2s, ()) = (reply <$> m2s, ())
 
     reply WishboneM2S{..}
-      | busCycle && strobe && writeEnable = (wishboneS2M @a) { acknowledge = True, readData = writeData }
-      | busCycle && strobe                = wishboneS2M { acknowledge = True }
-      | otherwise                         = wishboneS2M
+      | busCycle && strobe && writeEnable = (emptyWishboneS2M @a) { acknowledge = True, readData = writeData }
+      | busCycle && strobe                = emptyWishboneS2M { acknowledge = True }
+      | otherwise                         = emptyWishboneS2M
 
 
 idWriteStModel :: (NFData a, Eq a, ShowX a) => WishboneMasterRequest addressWidth a -> WishboneS2M a -> () -> Either String ()
@@ -103,7 +103,7 @@ memoryWb = Circuit go
     reply request = do
       ack' <- ack .&&. (strobe <$> request) .&&. (busCycle <$> request)
       val <- readValue
-      pure $ (wishboneS2M @a) { acknowledge = ack', readData = val }
+      pure $ (emptyWishboneS2M @a) { acknowledge = ack', readData = val }
       where
         read' = addr <$> request
         writeData' = writeData <$> request
