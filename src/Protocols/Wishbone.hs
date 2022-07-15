@@ -69,24 +69,38 @@ data WishboneS2M dat
 instance (C.ShowX dat) => Show (WishboneS2M dat) where
   show = C.showX
 
+-- | Identifier for different types of cycle-modes, used to potentially
+--   increase throughput by reducing handshake-overhead
 newtype CycleTypeIdentifier = CycleTypeIdentifier (C.BitVector 3)
   deriving (NFData, C.Generic, C.NFDataX, Show, C.ShowX, Eq, C.BitPack)
 
 pattern Classic, ConstantAddressBurst, IncrementingBurst, EndOfBurst :: CycleTypeIdentifier
+-- ^ Classic Wishbone cycle type
 pattern Classic = CycleTypeIdentifier 0
+-- ^ Burst Wishbone cycle using a constant address (and operation)
 pattern ConstantAddressBurst = CycleTypeIdentifier 1
+-- ^ Burst incrementing the address based on burst-types
 pattern IncrementingBurst = CycleTypeIdentifier 2
+-- ^ Cycle-Type-Identifier signalling the end of a non-classic cycle
 pattern EndOfBurst = CycleTypeIdentifier 7
 
+-- | Burst-mode types when 'IncrementingBurst' cycle type is used
 data BurstTypeExtension
+  -- | Linear address-increase
   = LinearBurst
+  -- | Wrap-4, address LSBs are modulo 4
   | Beat4Burst
+  -- | Wrap-8, address LSBs are modulo 8
   | Beat8Burst
+  -- | Wrap-16, address LSBs are modulo 16
   | Beat16Burst
   deriving (NFData, C.Generic, C.NFDataX, Show, C.ShowX, Eq, C.BitPack)
 
+-- | Wishbone protocol mode that a component operates in
 data WishboneMode
+  -- | Standard mode, generally using a "wait-for-ack" approach
   = Standard
+  -- | Pipelines mode, generally allowing for more asynchronous requests
   | Pipelined
   deriving (C.Generic, Show, Eq)
 
@@ -100,7 +114,7 @@ instance Protocol (Wishbone dom mode addressWidth dat) where
   type Bwd (Wishbone dom mode addressWidth dat) = Signal dom (WishboneS2M dat)
 
 
-
+-- | Construct "default" Wishbone M2S signals
 wishboneM2S :: (C.KnownNat addressWidth, C.KnownNat (C.BitSize dat), C.NFDataX dat) => WishboneM2S addressWidth (C.BitSize dat `DivRU` 8) dat
 wishboneM2S
   = WishboneM2S
@@ -115,6 +129,7 @@ wishboneM2S
   , burstTypeExtension = LinearBurst
   }
 
+-- | Construct "default" Wishbone S2M signals
 wishboneS2M :: (C.NFDataX dat) => WishboneS2M dat
 wishboneS2M
   = WishboneS2M
@@ -125,10 +140,12 @@ wishboneS2M
   , stall = False
   }
 
+-- | Helper function to determine whether a Slave signals the termination of a cycle.
 terminationSignal :: WishboneS2M dat -> Bool
 terminationSignal s2m = acknowledge s2m || err s2m || retry s2m
 
 
+-- | Distribute requests amongst N slave circuits
 roundrobin
   :: forall n dom addressWidth a
   . (C.KnownNat n, C.HiddenClockResetEnable dom, C.KnownNat addressWidth, C.KnownNat (C.BitSize a), C.NFDataX a, 1 C.<= n)
@@ -138,7 +155,9 @@ roundrobin = Circuit $ \(m2s, s2ms) -> B.first C.head $ fn (C.singleton m2s, s2m
     Circuit fn = sharedBus selectFn
     selectFn (C.unbundle -> (mIdx, sIdx, _)) = C.liftA2 (,) mIdx (C.satSucc C.SatWrap <$> sIdx)
 
-
+-- | General-purpose shared-bus with N masters and M slaves.
+--
+--   A selector signal is used to compute the next M-S pair.
 sharedBus
   :: forall n m dom addressWidth a
   . (C.KnownNat n, C.KnownNat m, C.HiddenClockResetEnable dom, C.KnownNat addressWidth, C.KnownNat (C.BitSize a), C.NFDataX a)
@@ -167,7 +186,7 @@ sharedBus selectFn = Circuit go
         s2ms' = C.liftA3 C.replace mIdx s2m $ pure (C.repeat wishboneS2M)
 
 
-
+-- | Crossbar-Switch circuit, allowing to dynamically route N masters to N slaves
 crossbarSwitch
   :: forall n m dom addressWidth a
   . (C.KnownNat n, C.KnownNat m, C.KnownDomain dom, C.KnownNat addressWidth, C.NFDataX a, C.KnownNat (C.BitSize a))

@@ -32,7 +32,7 @@ import           Protocols.Hedgehog
 import           Protocols.Wishbone
 
 
-
+-- | Datatype representing a single transaction request sent from a Wishbone Master to a Wishbone Slave
 data WishboneMasterRequest addressWidth dat
   = Read (BitVector addressWidth)
   | Write (BitVector addressWidth) dat
