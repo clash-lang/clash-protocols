@@ -14,7 +14,6 @@ module Protocols.Axi4.WriteAddress
   ( M2S_WriteAddress(..)
   , S2M_WriteAddress(..)
   , Axi4WriteAddress
-  , mapFull
 
     -- * configuration
   , Axi4WriteAddressConfig(..)
@@ -34,7 +33,6 @@ module Protocols.Axi4.WriteAddress
 -- base
 import Data.Coerce (coerce)
 import Data.Kind (Type)
-import Data.Proxy
 import GHC.Generics (Generic)
 
 -- clash-prelude
@@ -43,8 +41,6 @@ import qualified Clash.Prelude as C
 -- me
 import Protocols.Axi4.Common
 import Protocols.Internal
-import Protocols.DfLike (DfLike)
-import qualified Protocols.DfLike as DfLike
 
 -- | Configuration options for 'Axi4WriteAddress'.
 data Axi4WriteAddressConfig = Axi4WriteAddressConfig
@@ -135,50 +131,6 @@ instance Protocol (Axi4WriteAddress dom conf userType) where
 instance Backpressure (Axi4WriteAddress dom conf userType) where
   boolsToBwd _ = C.fromList_lazy . coerce
 
-instance DfLike dom (Axi4WriteAddress dom conf) userType where
-  type Data (Axi4WriteAddress dom conf) userType =
-    M2S_WriteAddress conf userType
-
-  type Payload userType = userType
-
-  type Ack (Axi4WriteAddress dom conf) userType =
-    S2M_WriteAddress
-
-  getPayload _ (M2S_WriteAddress{_awuser}) = Just _awuser
-  getPayload _ M2S_NoWriteAddress = Nothing
-  {-# INLINE getPayload #-}
-
-  setPayload _ _ dat (Just b) = dat{_awuser=b}
-  setPayload _ dfB _ Nothing = DfLike.noData dfB
-  {-# INLINE setPayload #-}
-
-  noData _ = M2S_NoWriteAddress
-  {-# INLINE noData #-}
-
-  boolToAck _ = coerce
-  {-# INLINE boolToAck #-}
-
-  ackToBool _ = coerce
-  {-# INLINE ackToBool #-}
-
-instance (C.KnownDomain dom, C.NFDataX userType, C.ShowX userType, Show userType) =>
-  Simulate (Axi4WriteAddress dom conf userType) where
-
-  type SimulateFwdType (Axi4WriteAddress dom conf userType) =
-    [M2S_WriteAddress conf userType]
-
-  type SimulateBwdType (Axi4WriteAddress dom conf userType) =
-    [S2M_WriteAddress]
-
-  type SimulateChannels (Axi4WriteAddress dom conf userType) = 1
-
-  simToSigFwd Proxy = C.fromList_lazy
-  simToSigBwd Proxy = C.fromList_lazy
-  sigToSimFwd Proxy = C.sample_lazy
-  sigToSimBwd Proxy = C.sample_lazy
-
-  stallC conf (C.head -> (stallAck, stalls)) =
-    DfLike.stall Proxy conf stallAck stalls
 
 -- | See Table A2-2 "Write address channel signals"
 data M2S_WriteAddress
@@ -303,18 +255,3 @@ deriving instance
   , C.NFDataX userType
   ) =>
   C.NFDataX (M2S_WriteAddress conf userType)
-
--- | Circuit that transforms the LHS 'Axi4WriteAddress' protocol to a
--- version using different type parameters according to two functions
--- that can transform the data and ack signal to and from the other protocol.
-mapFull ::
-  forall dom
-    conf1 userType1
-    conf2 userType2 .
-  (M2S_WriteAddress conf1 userType1 ->
-    M2S_WriteAddress conf2 userType2) ->
-  (S2M_WriteAddress -> S2M_WriteAddress) ->
-  Circuit
-    (Axi4WriteAddress dom conf1 userType1)
-    (Axi4WriteAddress dom conf2 userType2)
-mapFull = DfLike.mapDfLike Proxy Proxy

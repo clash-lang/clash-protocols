@@ -18,6 +18,7 @@ import qualified Clash.Prelude as C
 import qualified Clash.Explicit.Prelude as CE
 
 import           Control.Applicative (Const(..))
+import           Control.Arrow ((***))
 import           Data.Coerce (coerce)
 import           Data.Default (Default(def))
 import           Data.Functor.Identity (Identity(..), runIdentity)
@@ -144,7 +145,7 @@ newtype Circuit a b =
 
 -- | Protocol-agnostic acknowledgement
 newtype Ack = Ack Bool
-  deriving (Generic, C.NFDataX, Show)
+  deriving (Generic, C.NFDataX, Show, C.Bundle)
 
 -- | Acknowledge. Used in circuit-notation plugin to drive ignore components.
 instance Default Ack where
@@ -747,3 +748,42 @@ instance KeepTypeClass 'False where
   fromKeepType _ = Nothing
   toKeepType _ = Proxy
   mapKeepType = fmap
+
+-- | Protocol to reverse a circuit.
+-- 'Fwd' becomes 'Bwd' and vice versa.
+-- No changes are made otherwise.
+data Reverse a
+
+instance Protocol a => Protocol (Reverse a) where
+  type Fwd (Reverse a) = Bwd a
+  type Bwd (Reverse a) = Fwd a
+
+-- | Apply 'Reverse' both sides of a circuit, and then switch them.
+-- Input and output of the underlying circuit are the same,
+-- but with the order of the tuple switched in both cases.
+reverseCircuit :: Circuit a b -> Circuit (Reverse b) (Reverse a)
+reverseCircuit ckt = Circuit (swap . toSignals ckt . swap)
+
+-- | If two protocols, @a@ and @a'@, have the same 'Fwd' and 'Bwd' values,
+-- convert a @Circuit a@ to a @Circuit a'@ without changing the underlying function at all.
+coerceCircuit :: (Fwd a ~ Fwd a', Bwd a ~ Bwd a', Fwd b ~ Fwd b', Bwd b ~ Bwd b') => Circuit a b -> Circuit a' b'
+coerceCircuit (Circuit f) = Circuit f
+
+-- | Change a circuit by changing its underlying function's inputs and outputs.
+-- It takes 4 functions as input: @ia@, @oa@, @ob@, and @ib@.
+-- @ia@ modifies the 'Bwd' input, @ib@ modifies the 'Fwd' input,
+-- @oa@ modifies the 'Bwd' output, and @ob@ modifies the 'Fwd' output.
+mapCircuit :: (Fwd a' -> Fwd a) -> (Bwd a -> Bwd a') -> (Fwd b -> Fwd b') -> (Bwd b' -> Bwd b) -> Circuit a b -> Circuit a' b'
+mapCircuit ia oa ob ib (Circuit f) = Circuit ((oa *** ob) . f . (ia *** ib))
+
+-- | "Bundle" together a 'C.Vec' of 'Circuit's into a 'Circuit' with 'C.Vec' input and output.
+-- The 'Circuit's all run in parallel.
+vecCircuits :: (C.KnownNat n) => C.Vec n (Circuit a b) -> Circuit (C.Vec n a) (C.Vec n b)
+vecCircuits fs = Circuit (\inps -> C.unzip $ f <$> fs <*> uncurry C.zip inps) where
+  f (Circuit ff) x = ff x
+
+-- | "Bundle" together a pair of 'Circuit's into a 'Circuit' with two inputs and outputs.
+-- The 'Circuit's run in parallel.
+tupCircuits :: Circuit a b -> Circuit c d -> Circuit (a,c) (b,d)
+tupCircuits (Circuit f) (Circuit g) = Circuit (reorder . (f *** g) . reorder) where
+  reorder ((a,b),(c,d)) = ((a,c),(b,d))
