@@ -25,19 +25,16 @@ import qualified Hedgehog.Range        as Range
 
 -- me
 import qualified Data.Bifunctor        as B
-import           Debug.Trace
 import           Hedgehog              ((===))
 import           Protocols
 import           Protocols.Hedgehog
 import           Protocols.Wishbone
-
 
 -- | Datatype representing a single transaction request sent from a Wishbone Master to a Wishbone Slave
 data WishboneMasterRequest addressWidth dat
   = Read (BitVector addressWidth)
   | Write (BitVector addressWidth) dat
   deriving (Show)
-
 
 data WishboneStandardState
   = WSSQuiet
@@ -50,15 +47,16 @@ data WishboneStandardError
   | WSETerminationSignalOutsideOfCycle
   deriving (NFData, Generic, NFDataX, Show, ShowX, Eq)
 
-
 nextStateStandard
   :: WishboneStandardState
   -> WishboneM2S addressWidth (BitSize a `DivRU` 8) a
   -> WishboneS2M a
   -> Either WishboneStandardError WishboneStandardState
 nextStateStandard _ m2s s2m
-  | P.length (filter ($ s2m) [acknowledge, err, retry]) > 1         = Left WSEMoreThanOneTerminationSignalAsserted
-  | not (busCycle m2s) && (acknowledge s2m || err s2m || retry s2m) = Left WSETerminationSignalOutsideOfCycle
+  | P.length (filter ($ s2m) [acknowledge, err, retry]) > 1         =
+      Left WSEMoreThanOneTerminationSignalAsserted
+  | not (busCycle m2s) && (acknowledge s2m || err s2m || retry s2m) =
+      Left WSETerminationSignalOutsideOfCycle
 nextStateStandard WSSQuiet m2s _
   | busCycle m2s && P.not (strobe m2s)      = Right WSSInCycleNoStrobe
   | busCycle m2s && strobe m2s              = Right WSSWaitForSlave
@@ -73,12 +71,13 @@ nextStateStandard WSSWaitForSlave m2s s2m
   | acknowledge s2m || err s2m || retry s2m = Right WSSQuiet
   | otherwise                               = Right WSSWaitForSlave
 
-
 -- | Validate the input/output streams of a standard wishbone interface
 --
 -- Returns 'Right ()' when the interactions comply with the spec.
 -- Returns 'Left (cycle, err)' when a spec violation was found.
-validateStandard :: [WishboneM2S addressWidth (BitSize a `DivRU` 8) a] -> [WishboneS2M a] -> Either (Int, WishboneStandardError) ()
+validateStandard :: [WishboneM2S addressWidth (BitSize a `DivRU` 8) a]
+                 -> [WishboneS2M a]
+                 -> Either (Int, WishboneStandardError) ()
 validateStandard m2s s2m = go 0 (P.zip m2s s2m) WSSQuiet
   where
     go _ [] _                 = Right ()
@@ -86,14 +85,17 @@ validateStandard m2s s2m = go 0 (P.zip m2s s2m) WSSQuiet
       Left e    -> Left (n, e)
       Right st' -> go (n + 1) rest st'
 
-
 -- | Create a stalling wishbone 'Standard' circuit.
 stallStandard
   :: forall dom a addressWidth
-  . (C.ShowX a, Show a, C.NFDataX a, C.KnownNat addressWidth, C.KnownDomain dom, C.KnownNat (C.BitSize a))
+  . ( C.ShowX a, Show a, C.NFDataX a, C.KnownNat addressWidth, C.KnownDomain dom
+    , C.KnownNat (C.BitSize a) )
   => [Int] -- ^ number of cycles to stall the master for
-  -> Circuit (Wishbone dom 'Standard addressWidth a) (Wishbone dom 'Standard addressWidth a)
-stallStandard stalls = Circuit $ B.second (emptyWishboneM2S :-) . uncurry (go stalls Nothing)
+  -> Circuit (Wishbone dom 'Standard addressWidth a)
+             (Wishbone dom 'Standard addressWidth a)
+stallStandard stalls = Circuit $
+      B.second (emptyWishboneM2S :-)
+    . uncurry (go stalls Nothing)
   where
     go
       :: [Int]
@@ -103,11 +105,14 @@ stallStandard stalls = Circuit $ B.second (emptyWishboneM2S :-) . uncurry (go st
       -> ( Signal dom (WishboneS2M a)
          , Signal dom (WishboneM2S addressWidth (BitSize a `DivRU` 8) a))
 
-    go [] lastRep (_:-m2s) ~(_:-s2m) = B.bimap (emptyWishboneS2M :-) (emptyWishboneM2S :-) $ go [] lastRep m2s s2m
+    go [] lastRep (_:-m2s) ~(_:-s2m) =
+        B.bimap (emptyWishboneS2M :-) (emptyWishboneM2S :-) $ go [] lastRep m2s s2m
 
     go (st:stalls) lastRep (m:-m2s) ~(_:-s2m)
       -- not in a bus cycle, just pass through
-      | not (busCycle m) = B.bimap (emptyWishboneS2M:-) (emptyWishboneM2S:-) $ go (st:stalls) lastRep m2s s2m
+      | not (busCycle m) =
+          B.bimap (emptyWishboneS2M:-) (emptyWishboneM2S:-)
+            (go (st:stalls) lastRep m2s s2m)
     go (st:stalls) Nothing (m:-m2s) ~(s:-s2m)
       -- received a reply but still need to stall
       | busCycle m && strobe m && st > 0 && hasTerminateFlag s =
@@ -141,7 +146,7 @@ stallStandard stalls = Circuit $ B.second (emptyWishboneM2S :-) . uncurry (go st
             (m :-)
             (go (0:stalls) Nothing m2s s2m)
       -- master cancelled cycle
-      | otherwise = trace "S master cancelled cycle (no reply)" $ B.bimap (emptyWishboneS2M :-) (m :-) (go stalls Nothing m2s s2m)
+      | otherwise = B.bimap (emptyWishboneS2M :-) (m :-) (go stalls Nothing m2s s2m)
     go (st:stalls) (Just rep) (m:-m2s) ~(_:-s2m)
       -- need to keep stalling, already got the reply
       | busCycle m && strobe m && st > 0 =
@@ -158,26 +163,40 @@ stallStandard stalls = Circuit $ B.second (emptyWishboneM2S :-) . uncurry (go st
             (emptyWishboneM2S :-)
             (go stalls Nothing m2s s2m)
       -- master cancelled cycle
-      | otherwise = trace "S master cancelled cycle (got reply)" $ B.bimap (emptyWishboneS2M :-) (m :-) (go stalls Nothing m2s s2m)
-
+      | otherwise = B.bimap (emptyWishboneS2M :-) (m :-) (go stalls Nothing m2s s2m)
 
 -- | Create a wishbone 'Standard' circuit to drive other circuits.
 driveStandard
   :: forall dom a addressWidth
-  . (C.ShowX a, Show a, C.NFDataX a, C.KnownNat addressWidth, C.KnownDomain dom, C.KnownNat (C.BitSize a))
+  . ( C.ShowX a, Show a, C.NFDataX a, C.KnownNat addressWidth, C.KnownDomain dom
+    , C.KnownNat (C.BitSize a) )
   => ExpectOptions
   -> [WishboneMasterRequest addressWidth a] -- ^ Requests to send out
   -> Circuit () (Wishbone dom 'Standard addressWidth a)
-driveStandard ExpectOptions{..} dat = Circuit $ ((),) . C.fromList_lazy . (emptyWishboneM2S:) . go eoResetCycles dat . C.sample_lazy . snd
+driveStandard ExpectOptions{..} dat = Circuit $ ((),)
+    . C.fromList_lazy
+    . (emptyWishboneM2S:)
+    . go eoResetCycles dat
+    . C.sample_lazy
+    . snd
   where
-
     transferToSignals
       :: forall a addressWidth
-      . (C.ShowX a, Show a, C.NFDataX a, C.KnownNat addressWidth, C.KnownNat (C.BitSize a))
+      . ( C.ShowX a, Show a, C.NFDataX a, C.KnownNat addressWidth
+        , C.KnownNat (C.BitSize a) )
       => WishboneMasterRequest addressWidth a
       -> WishboneM2S addressWidth (BitSize a `DivRU` 8) a
-    transferToSignals (Read addr) = (emptyWishboneM2S @addressWidth @a) { busCycle = True, strobe = True, addr = addr, writeEnable = False }
-    transferToSignals (Write addr dat) = (emptyWishboneM2S @addressWidth @a) { busCycle = True, strobe = True, addr = addr, writeEnable = True, writeData = dat }
+    transferToSignals (Read addr)      = (emptyWishboneM2S @addressWidth @a)
+                                         { busCycle = True
+                                         , strobe = True
+                                         , addr = addr
+                                         , writeEnable = False }
+    transferToSignals (Write addr dat) = (emptyWishboneM2S @addressWidth @a)
+                                         { busCycle = True
+                                         , strobe = True
+                                         , addr = addr
+                                         , writeEnable = True
+                                         , writeData = dat }
 
     go
       :: Int
@@ -203,11 +222,12 @@ driveStandard ExpectOptions{..} dat = Circuit $ ((),) . C.fromList_lazy . (empty
 -- | Test a wishbone 'Standard' circuit against a pure model.
 wishbonePropWithModel
   :: forall dom a addressWidth st
-  . (Eq a, C.ShowX a, Show a, C.NFDataX a, C.KnownNat addressWidth, C.KnownDomain dom, C.KnownNat (C.BitSize a))
+  . ( Eq a, C.ShowX a, Show a, C.NFDataX a, C.KnownNat addressWidth, C.KnownDomain dom
+    , C.KnownNat (C.BitSize a) )
   => ExpectOptions
   -> (WishboneMasterRequest addressWidth a -> WishboneS2M a -> st -> Either String st)
-  -- ^ Check whether a S2M signal for a given request is matching a pure model using 'st' as its
-  --   state.
+  -- ^ Check whether a S2M signal for a given request is matching a pure model using 'st'
+  --   as its state.
   --   Return an error message 'Left' or the updated state 'Right'
   -> Circuit (Wishbone dom 'Standard addressWidth a) ()
   -- ^ The circuit to run the test against.
@@ -244,9 +264,9 @@ wishbonePropWithModel eOpts model circuit inputGen st = H.property $ do
       -> Either (Int, String) ()
     matchModel _ [] _  _ = Right () -- so far everything is good but the sampling stopped
     matchModel _ _  [] _ = Right ()
-    matchModel cyc (s:s2m) (req:reqs) st
-      | not (hasTerminateFlag s) = s `C.seqX` matchModel (succ cyc) s2m (req:reqs) st
-      | otherwise                 = case model req s st of
+    matchModel cyc (s:s2m) (req:reqs) state
+      | not (hasTerminateFlag s) = s `C.seqX` matchModel (succ cyc) s2m (req:reqs) state
+      | otherwise                 = case model req s state of
           Left err -> Left (cyc, err)
           Right st' -> s `C.seqX` matchModel (succ cyc) s2m reqs' st'
             where

@@ -3,7 +3,8 @@
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE NumericUnderscores  #-}
 {-# LANGUAGE RecordWildCards     #-}
-{-# OPTIONS_GHC -Wno-incomplete-patterns #-} -- The exhaustiveness-checker doesn't work well with ViewPatterns
+-- The exhaustiveness-checker doesn't work well with ViewPatterns
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 module Tests.Protocols.Wishbone where
 
 
@@ -40,51 +41,56 @@ genSmallInt = Gen.integral smallInt
 genData :: Gen a -> Gen [a]
 genData = Gen.list (Range.linear 0 150)
 
-genWishboneTransfer :: (KnownNat addressWidth) => Gen a -> Gen (WishboneMasterRequest addressWidth a)
-genWishboneTransfer genA = do
-  Gen.choice [
-      Read <$> genDefinedBitVector, Write <$> genDefinedBitVector <*> genA]
-
-transfersToSignalsStandard
-  :: forall addressWidth a . (KnownNat addressWidth, KnownNat (BitSize a), NFDataX a)
-  => [WishboneMasterRequest addressWidth a]
-  -> [WishboneM2S addressWidth (BitSize a `DivRU` 8) a]
-transfersToSignalsStandard = Prelude.concatMap $ \case
-   Read bv -> [ (emptyWishboneM2S @addressWidth @a) { strobe = False, busCycle = False }
-              , (emptyWishboneM2S @addressWidth @a) { strobe = True, busCycle = True, addr = bv, writeEnable = False }]
-   Write bv a -> [ emptyWishboneM2S
-                 , (emptyWishboneM2S @addressWidth @a) { strobe = True, busCycle = True, addr = bv, writeEnable = True, writeData = a }]
-
-
+genWishboneTransfer
+  :: (KnownNat addressWidth)
+  => Gen a
+  -> Gen (WishboneMasterRequest addressWidth a)
+genWishboneTransfer genA = Gen.choice
+  [ Read <$> genDefinedBitVector
+  , Write <$> genDefinedBitVector <*> genA ]
 
 --
 -- 'id' circuit
 --
 
-
-idWriteWbSt :: forall a dom addressWidth. (BitPack a, NFDataX a) => Circuit (Wishbone dom 'Standard addressWidth a) ()
+idWriteWbSt
+  :: forall a dom addressWidth
+  . (BitPack a, NFDataX a)
+  => Circuit (Wishbone dom 'Standard addressWidth a) ()
 idWriteWbSt = Circuit go
   where
     go (m2s, ()) = (reply <$> m2s, ())
 
     reply WishboneM2S{..}
-      | busCycle && strobe && writeEnable = (emptyWishboneS2M @a) { acknowledge = True, readData = writeData }
+      | busCycle && strobe && writeEnable =
+          (emptyWishboneS2M @a) { acknowledge = True
+                                , readData = writeData }
       | busCycle && strobe                = emptyWishboneS2M { acknowledge = True }
       | otherwise                         = emptyWishboneS2M
 
-
-idWriteStModel :: (NFData a, Eq a, ShowX a) => WishboneMasterRequest addressWidth a -> WishboneS2M a -> () -> Either String ()
+idWriteStModel
+  :: (NFData a, Eq a, ShowX a)
+  => WishboneMasterRequest addressWidth a
+  -> WishboneS2M a
+  -> () -- ^ pure state
+  -> Either String ()
 idWriteStModel (Read _)    s@WishboneS2M{..} ()
   | acknowledge && isLeft (hasX readData) = Right ()
-  | otherwise                             = Left $ "Read should have been acknowledged with no DAT " <> showX s
+  | otherwise                             =
+      Left $ "Read should have been acknowledged with no DAT " <> showX s
 idWriteStModel (Write _ a) s@WishboneS2M{..} ()
   | acknowledge && hasX readData == Right a = Right ()
-  | otherwise                               = Left $ "Write should have been acknowledged with write-data as DAT " <> showX s
-
+  | otherwise                               =
+      Left $ "Write should have been acknowledged with write-data as DAT " <> showX s
 
 prop_idWriteSt_model :: Property
-prop_idWriteSt_model = wishbonePropWithModel @System defExpectOptions idWriteStModel idWriteWbSt (genData $ genWishboneTransfer @10 genSmallInt) ()
-
+prop_idWriteSt_model =
+  wishbonePropWithModel @System
+    defExpectOptions
+    idWriteStModel
+    idWriteWbSt
+    (genData $ genWishboneTransfer @10 genSmallInt)
+    ()
 
 --
 -- memory element circuit
@@ -92,14 +98,16 @@ prop_idWriteSt_model = wishbonePropWithModel @System defExpectOptions idWriteStM
 
 memoryWb
   :: forall ramSize dom a addressWidth
-  . (BitPack a, NFDataX a, 1 <= ramSize, KnownDomain dom, KnownNat addressWidth, HiddenClockResetEnable dom, KnownNat ramSize)
+  . ( BitPack a, NFDataX a, 1 <= ramSize, KnownDomain dom, KnownNat addressWidth
+    , HiddenClockResetEnable dom, KnownNat ramSize )
   => Circuit (Wishbone dom 'Standard addressWidth a) ()
 memoryWb = Circuit go
   where
-    go :: (Signal dom (WishboneM2S addressWidth (BitSize a `DivRU` 8) a), ()) -> (Signal dom (WishboneS2M a), ())
     go (m2s, ()) = (reply m2s, ())
 
-    reply :: Signal dom (WishboneM2S addressWidth (BitSize a `DivRU` 8) a) -> Signal dom (WishboneS2M a)
+    reply
+      :: Signal dom (WishboneM2S addressWidth (BitSize a `DivRU` 8) a)
+      -> Signal dom (WishboneS2M a)
     reply request = do
       ack' <- ack .&&. (strobe <$> request) .&&. (busCycle <$> request)
       val <- readValue
@@ -107,35 +115,40 @@ memoryWb = Circuit go
       where
         read' = addr <$> request
         writeData' = writeData <$> request
-        write = mux ((writeEnable <$> request) .&&. (strobe <$> request) .&&. (busCycle <$> request)) (Just <$> ((,) <$> read' <*> writeData')) (pure Nothing)
+        write = mux ((\WishboneM2S{..} -> writeEnable && strobe && busCycle) <$> request)
+                    (Just <$> ((,) <$> read' <*> writeData'))
+                    (pure Nothing)
 
         readValue = blockRamU ClearOnReset (SNat @ramSize) (const undefined) read' write
         ack = register False $ (strobe <$> request) .&&. (busCycle <$> request)
 
 memoryWbModel
-  :: (KnownNat addressWidth, Eq a, ShowX a, NFDataX a)
+  :: (KnownNat addressWidth, Eq a, ShowX a, NFDataX a, NFData a)
   => WishboneMasterRequest addressWidth a
   -> WishboneS2M a
   -> [(BitVector addressWidth, a)]
   -> Either String [(BitVector addressWidth, a)]
 memoryWbModel (Read addr) s st@(lookup addr -> Just x )
   | readData s == x && acknowledge s = Right st
-  | otherwise                        = Left $ "Read from a known address did not yield the same value " <> showX x <> " : " <> showX s
+  | otherwise                        =
+      Left $ "Read from a known address did not yield the same value "
+              <> showX x <> " : " <> showX s
 memoryWbModel (Read addr) s st@(lookup addr -> Nothing)
-  | acknowledge s && isLeft (isX (readData s)) = Right st
-  | otherwise                                  = Left $ "Read from unknown address did no ACK with undefined result : " <> showX s
+  | acknowledge s && isLeft (hasX (readData s)) = Right st
+  | otherwise                                   =
+      Left $ "Read from unknown address did no ACK with undefined result : " <> showX s
 memoryWbModel (Write addr a) s st
   | acknowledge s = Right ((addr, a):st)
   | otherwise     = Left $ "Write should be acked : " <> showX s
 
-
 prop_memoryWb_model :: Property
-prop_memoryWb_model =  withClockResetEnable clockGen resetGen enableGen $ wishbonePropWithModel @System
-  defExpectOptions
-  memoryWbModel
-  (memoryWb @256)
-  (genData (genWishboneTransfer @8 genSmallInt))
-  [] -- initial state
+prop_memoryWb_model =  withClockResetEnable clockGen resetGen enableGen $
+  wishbonePropWithModel @System
+    defExpectOptions
+    memoryWbModel
+    (memoryWb @256)
+    (genData (genWishboneTransfer @8 genSmallInt))
+    [] -- initial state
 
 
 tests :: TestTree
