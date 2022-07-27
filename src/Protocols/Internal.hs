@@ -6,9 +6,12 @@ Internal module to prevent hs-boot files (breaks Haddock)
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-} -- NFDataX and ShowX for Identity and Proxy
 
 module Protocols.Internal where
 
+import           Control.DeepSeq (NFData)
+import           Data.Hashable (Hashable)
 import           Data.Proxy
 import           GHC.Base (Any)
 import           Prelude hiding (map, const)
@@ -721,11 +724,24 @@ type family KeepType (keep :: Bool) (optionalType :: Type) = t | t -> keep optio
   KeepType 'True optionalType = Identity optionalType
   KeepType 'False optionalType = Proxy optionalType
 
+-- TODO this should go into Clash.Prelude (?)
+deriving instance (C.ShowX t) => (C.ShowX (Identity t))
+deriving instance (C.ShowX t) => (C.ShowX (Proxy t))
+deriving instance (C.NFDataX t) => (C.NFDataX (Identity t))
+deriving instance (C.NFDataX t) => (C.NFDataX (Proxy t))
+
 -- | We want to define operations on 'KeepType' that work for both possibilities
 -- (@keep = 'True@ and @keep = 'False@), but we can't pattern match directly.
 -- Instead we need to define a class and instantiate
 -- the class for both @'True@ and @'False@.
-class KeepTypeClass (keep :: Bool) where
+class
+  ( Eq (KeepType keep Bool)
+  , Show (KeepType keep Bool)
+  , C.ShowX (KeepType keep Bool)
+  , NFData (KeepType keep Bool)
+  , C.NFDataX (KeepType keep Bool)
+  , Hashable (KeepType keep Bool)
+  ) => KeepTypeClass (keep :: Bool) where
   -- | Get the value of @keep@ at the term level.
   getKeep :: KeepType keep optionalType -> Bool
   -- | Convert an optional value to a normal value,
