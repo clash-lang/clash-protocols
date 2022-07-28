@@ -1,6 +1,6 @@
 {-# LANGUAGE NumericUnderscores #-}
 
-module Tests.Protocols.DfLike where
+module Tests.Protocols.DfConv where
 
 -- base
 import Prelude
@@ -33,7 +33,7 @@ import Test.Tasty.TH (testGroupGenerator)
 import Protocols
 import Protocols.Internal
 import Protocols.Hedgehog
-import qualified Protocols.DfLike as DfLike
+import qualified Protocols.DfConv as DfConv
 
 -- tests
 import Util
@@ -47,25 +47,25 @@ undoDoubleReverseInp = coerceCircuit
 ---------------------------------------------------------------
 
 -- test a small selection of dflike functions on df
--- this is moreso to test @instance DfLike Df@,
--- as well as @dfToDfLikeInp@ etc,
+-- this is moreso to test @instance DfConv Df@,
+-- as well as @dfToDfConvInp@ etc,
 -- rather than the functions themselves,
 -- since we know they work from @Tests.Protocols.Df@
 
 prop_df_map_inc :: Property
 prop_df_map_inc = DfTest.idWithModelDf' (fmap (+ 1)) (C.withClockResetEnable C.clockGen C.resetGen C.enableGen ckt) where
   ckt :: (C.HiddenClockResetEnable dom) => Circuit (Df dom Int) (Df dom Int)
-  ckt = undoDoubleReverseInp $ DfLike.map (Proxy, ()) (Proxy, ()) (+1)
+  ckt = undoDoubleReverseInp $ DfConv.map Proxy Proxy (+1)
 
 prop_df_filter_over_5 :: Property
 prop_df_filter_over_5 = DfTest.idWithModelDf' (filter (> 5)) (C.withClockResetEnable C.clockGen C.resetGen C.enableGen ckt) where
   ckt :: (C.HiddenClockResetEnable dom) => Circuit (Df dom Int) (Df dom Int)
-  ckt = undoDoubleReverseInp $ DfLike.filter (Proxy, ()) (Proxy, ()) (> 5)
+  ckt = undoDoubleReverseInp $ DfConv.filter Proxy Proxy (> 5)
 
 prop_df_mapmaybe_inc_over_5 :: Property
 prop_df_mapmaybe_inc_over_5 = DfTest.idWithModelDf' (map (+ 1) . filter (> 5)) (C.withClockResetEnable C.clockGen C.resetGen C.enableGen ckt) where
   ckt :: (C.HiddenClockResetEnable dom) => Circuit (Df dom Int) (Df dom Int)
-  ckt = undoDoubleReverseInp $ DfLike.mapMaybe (Proxy, ()) (Proxy, ()) (\n -> if n > 5 then Just (n+1) else Nothing)
+  ckt = undoDoubleReverseInp $ DfConv.mapMaybe Proxy Proxy (\n -> if n > 5 then Just (n+1) else Nothing)
 
 prop_df_zipwith_add :: Property
 prop_df_zipwith_add =
@@ -80,7 +80,7 @@ prop_df_zipwith_add =
     (C.withClockResetEnable @C.System C.clockGen C.resetGen C.enableGen ckt)
   where
   ckt_ :: (C.HiddenClockResetEnable dom) => Circuit (Reverse (Reverse (Df dom Int), Reverse (Df dom Int))) (Df dom Int)
-  ckt_ = DfLike.zipWith ((Proxy, ()), (Proxy, ())) (Proxy, ()) (+)
+  ckt_ = DfConv.zipWith (Proxy, Proxy) Proxy (+)
   ckt :: (C.HiddenClockResetEnable dom) => Circuit (Df dom Int, Df dom Int) (Df dom Int)
   ckt = coerceCircuit ckt_
 
@@ -94,7 +94,7 @@ prop_df_fanout1 =
     (C.exposeClockResetEnable ckt)
   where
   ckt :: (C.HiddenClockResetEnable dom) => Circuit (Df dom Int) (C.Vec 1 (Df dom Int))
-  ckt = undoDoubleReverseInp $ DfLike.fanout (Proxy, ()) (C.repeat (Proxy, ()))
+  ckt = undoDoubleReverseInp $ DfConv.fanout Proxy (C.repeat Proxy)
 
 prop_df_fanout2 :: Property
 prop_df_fanout2 =
@@ -106,7 +106,7 @@ prop_df_fanout2 =
     (C.exposeClockResetEnable ckt)
   where
   ckt :: (C.HiddenClockResetEnable dom) => Circuit (Df dom Int) (C.Vec 2 (Df dom Int))
-  ckt = undoDoubleReverseInp $ DfLike.fanout (Proxy, ()) (C.repeat (Proxy, ()))
+  ckt = undoDoubleReverseInp $ DfConv.fanout Proxy (C.repeat Proxy)
 
 prop_df_fanout7 :: Property
 prop_df_fanout7 =
@@ -118,7 +118,7 @@ prop_df_fanout7 =
     (C.exposeClockResetEnable ckt)
   where
   ckt :: (C.HiddenClockResetEnable dom) => Circuit (Df dom Int) (C.Vec 7 (Df dom Int))
-  ckt = undoDoubleReverseInp $ DfLike.fanout (Proxy, ()) (C.repeat (Proxy, ()))
+  ckt = undoDoubleReverseInp $ DfConv.fanout Proxy (C.repeat Proxy)
 
 prop_df_partition :: Property
 prop_df_partition =
@@ -130,7 +130,7 @@ prop_df_partition =
     (C.exposeClockResetEnable ckt)
   where
   ckt :: (C.HiddenClockResetEnable dom) => Circuit (Df dom Int) (Df dom Int, Df dom Int)
-  ckt = undoDoubleReverseInp $ DfLike.partition (Proxy, ()) ((Proxy, ()), (Proxy, ())) (> 5)
+  ckt = undoDoubleReverseInp $ DfConv.partition Proxy (Proxy, Proxy) (> 5)
 
 prop_df_fanin :: Property
 prop_df_fanin =
@@ -142,7 +142,7 @@ prop_df_fanin =
     (C.exposeClockResetEnable ckt)
   where
   ckt_ :: (C.HiddenClockResetEnable dom) => Circuit (C.Vec 3 (Reverse (Reverse (Df dom Int)))) (Df dom Int)
-  ckt_ = DfLike.fanin (C.repeat (Proxy, ())) (Proxy, ()) (+)
+  ckt_ = DfConv.fanin (C.repeat Proxy) Proxy (+)
   ckt :: (C.HiddenClockResetEnable dom) => Circuit (C.Vec 3 (Df dom Int)) (Df dom Int)
   ckt = coerceCircuit ckt_
 
@@ -156,7 +156,7 @@ prop_df_fifo_id = propWithModelSingleDomain
                (\a b -> tally a === tally b)
   where
   ckt :: (C.HiddenClockResetEnable dom) => Circuit (Df dom Int) (Df dom Int)
-  ckt = undoDoubleReverseInp $ DfLike.fifo (Proxy, ()) (Proxy, ()) (C.SNat @10)
+  ckt = undoDoubleReverseInp $ DfConv.fifo Proxy Proxy (C.SNat @10)
 
 prop_select :: Property
 prop_select =
@@ -167,7 +167,7 @@ prop_select =
     (C.withClockResetEnable @C.System C.clockGen C.resetGen C.enableGen ckt)
  where
   ckt :: (C.HiddenClockResetEnable dom) => Circuit (C.Vec 3 (Df dom Int), Df dom (C.Index 3)) (Df dom Int)
-  ckt = coerceCircuit $ DfLike.select (C.repeat (Proxy @(Reverse (Df _ Int)), ()), (Proxy @(Reverse (Df _ (C.Index 3))), ())) (Proxy @(Df _ Int), ())
+  ckt = coerceCircuit $ DfConv.select (C.repeat (Proxy @(Reverse (Df _ Int))), (Proxy @(Reverse (Df _ (C.Index 3))))) (Proxy @(Df _ Int))
 
   goModel :: C.Vec 3 [Int] -> C.Index 3 -> (C.Vec 3 [Int], Int)
   goModel vec ix = let (i:is) = vec C.!! ix in (C.replace ix is vec, i)

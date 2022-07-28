@@ -150,8 +150,7 @@ library
     Protocols.Axi4.WriteResponse
 
     Protocols.Df
-    -- Protocols.DfLike
-    Protocols.DfLike
+    Protocols.DfConv
     Protocols.Hedgehog
     Protocols.Hedgehog.Internal
     Protocols.Internal
@@ -178,7 +177,7 @@ test-suite unittests
   other-modules:
     Tests.Protocols
     Tests.Protocols.Df
-    Tests.Protocols.DfLike
+    Tests.Protocols.DfConv
     Tests.Protocols.Plugin
 
     Util

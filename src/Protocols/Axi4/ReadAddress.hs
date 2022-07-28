@@ -6,6 +6,7 @@ to the AXI4 specification.
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wno-missing-fields #-}
@@ -28,6 +29,11 @@ module Protocols.Axi4.ReadAddress
   , ARKeepCache
   , ARKeepPermissions
   , ARKeepQos
+
+    -- * read address info
+  , Axi4ReadAddressInfo(..)
+  , axi4ReadAddrMsgToReadAddrInfo
+  , axi4ReadAddrMsgFromReadAddrInfo
   ) where
 
 -- base
@@ -256,3 +262,94 @@ deriving instance
   , C.NFDataX userType
   ) =>
   C.NFDataX (M2S_ReadAddress conf userType)
+
+-- | Mainly for use in @DfConv@.
+--
+-- Data carried along 'Axi4ReadAddress' channel which is put in control of
+-- the user, rather than being managed by the @DfConv@ instances. Matches up
+-- one-to-one with the fields of 'M2S_ReadAddress' except for '_arlen',
+-- '_arsize', and '_arburst'.
+data Axi4ReadAddressInfo (conf :: Axi4ReadAddressConfig) (userType :: Type)
+  = Axi4ReadAddressInfo
+  { -- | Id
+    _ariid :: !(C.BitVector (ARIdWidth conf))
+
+    -- | Address
+  , _ariaddr :: !(C.BitVector (ARAddrWidth conf))
+
+    -- | Region
+  , _ariregion :: !(RegionType (ARKeepRegion conf))
+
+    -- | Burst length
+  , _arilen :: !(BurstLengthType (ARKeepBurstLength conf))
+
+    -- | Burst size
+  , _arisize :: !(SizeType (ARKeepSize conf))
+
+    -- | Burst type
+  , _ariburst :: !(BurstType (ARKeepBurst conf))
+
+    -- | Lock type
+  , _arilock :: !(LockType (ARKeepLock conf))
+
+    -- | Cache type
+  , _aricache :: !(CacheType (ARKeepCache conf))
+
+    -- | Protection type
+  , _ariprot :: !(PermissionsType (ARKeepPermissions conf))
+
+    -- | QoS value
+  , _ariqos :: !(QosType (ARKeepQos conf))
+
+    -- | User data
+  , _ariuser :: !userType
+  }
+  deriving (Generic)
+
+deriving instance
+  ( GoodAxi4ReadAddressConfig conf
+  , Show userType ) =>
+  Show (Axi4ReadAddressInfo conf userType)
+
+deriving instance
+  ( GoodAxi4ReadAddressConfig conf
+  , C.NFDataX userType ) =>
+  C.NFDataX (Axi4ReadAddressInfo conf userType)
+
+-- | Convert 'M2S_ReadAddress' to 'Axi4ReadAddressInfo', dropping some info
+axi4ReadAddrMsgToReadAddrInfo
+  :: M2S_ReadAddress conf userType
+  -> Axi4ReadAddressInfo conf userType
+axi4ReadAddrMsgToReadAddrInfo M2S_NoReadAddress = C.errorX "Expected ReadAddress"
+axi4ReadAddrMsgToReadAddrInfo M2S_ReadAddress{..}
+  = Axi4ReadAddressInfo
+  { _ariid     = _arid
+  , _ariaddr   = _araddr
+  , _ariregion = _arregion
+  , _arilen    = _arlen
+  , _arisize   = _arsize
+  , _ariburst  = _arburst
+  , _arilock   = _arlock
+  , _aricache  = _arcache
+  , _ariprot   = _arprot
+  , _ariqos    = _arqos
+  , _ariuser   = _aruser
+  }
+
+-- | Convert 'Axi4ReadAddressInfo' to 'M2S_ReadAddress', adding some info
+axi4ReadAddrMsgFromReadAddrInfo
+  :: Axi4ReadAddressInfo conf userType -> M2S_ReadAddress conf userType
+axi4ReadAddrMsgFromReadAddrInfo Axi4ReadAddressInfo{..}
+  = M2S_ReadAddress
+  { _arid     = _ariid
+  , _araddr   = _ariaddr
+  , _arregion = _ariregion
+  , _arlen    = _arilen
+  , _arsize   = _arisize
+  , _arburst  = _ariburst
+  , _arlock   = _arilock
+  , _arcache  = _aricache
+  , _arprot   = _ariprot
+  , _arqos    = _ariqos
+  , _aruser   = _ariuser
+  }

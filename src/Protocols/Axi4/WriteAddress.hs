@@ -6,6 +6,7 @@ to the AXI4 specification.
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wno-missing-fields #-}
@@ -28,6 +29,11 @@ module Protocols.Axi4.WriteAddress
   , AWKeepCache
   , AWKeepPermissions
   , AWKeepQos
+
+    -- * write address info
+  , Axi4WriteAddressInfo(..)
+  , axi4WriteAddrMsgToWriteAddrInfo
+  , axi4WriteAddrMsgFromWriteAddrInfo
   ) where
 
 -- base
@@ -255,3 +261,88 @@ deriving instance
   , C.NFDataX userType
   ) =>
   C.NFDataX (M2S_WriteAddress conf userType)
+
+-- | Mainly for use in @DfConv@.
+--
+-- Data carried along 'Axi4WriteAddress' channel which is put in control of
+-- the user, rather than being managed by the @DfConv@ instances. Matches up
+-- one-to-one with the fields of 'M2S_WriteAddress' except for '_awlen',
+-- '_awsize', and '_awburst'.
+data Axi4WriteAddressInfo (conf :: Axi4WriteAddressConfig) (userType :: Type)
+  = Axi4WriteAddressInfo
+  { -- | Id
+    _awiid :: !(C.BitVector (AWIdWidth conf))
+
+    -- | Address
+  , _awiaddr :: !(C.BitVector (AWAddrWidth conf))
+
+    -- | Region
+  , _awiregion :: !(RegionType (AWKeepRegion conf))
+
+    -- | Burst size
+  , _awisize :: !(SizeType (AWKeepSize conf))
+
+    -- | Lock type
+  , _awilock :: !(LockType (AWKeepLock conf))
+
+    -- | Cache type
+  , _awicache :: !(CacheType (AWKeepCache conf))
+
+    -- | Protection type
+  , _awiprot :: !(PermissionsType (AWKeepPermissions conf))
+
+    -- | QoS value
+  , _awiqos :: !(QosType (AWKeepQos conf))
+
+    -- | User data
+  , _awiuser :: !userType
+  }
+  deriving (Generic)
+
+deriving instance
+  ( GoodAxi4WriteAddressConfig conf
+  , Show userType ) =>
+  Show (Axi4WriteAddressInfo conf userType)
+
+deriving instance
+  ( GoodAxi4WriteAddressConfig conf
+  , C.NFDataX userType ) =>
+  C.NFDataX (Axi4WriteAddressInfo conf userType)
+
+-- | Convert 'M2S_WriteAddress' to 'Axi4WriteAddressInfo', dropping some info
+axi4WriteAddrMsgToWriteAddrInfo
+  :: M2S_WriteAddress conf userType
+  -> Axi4WriteAddressInfo conf userType
+axi4WriteAddrMsgToWriteAddrInfo M2S_NoWriteAddress = C.errorX "Expected WriteAddress"
+axi4WriteAddrMsgToWriteAddrInfo M2S_WriteAddress{..}
+  = Axi4WriteAddressInfo
+  { _awiid     = _awid
+  , _awiaddr   = _awaddr
+  , _awiregion = _awregion
+  , _awisize   = _awsize
+  , _awilock   = _awlock
+  , _awicache  = _awcache
+  , _awiprot   = _awprot
+  , _awiqos    = _awqos
+  , _awiuser   = _awuser
+  }
+
+-- | Convert 'Axi4WriteAddressInfo' to 'M2S_WriteAddress', adding some info
+axi4WriteAddrMsgFromWriteAddrInfo
+  :: BurstLengthType (AWKeepBurstLength conf)
+  -> BurstType (AWKeepBurst conf)
+  -> Axi4WriteAddressInfo conf userType
+  -> M2S_WriteAddress conf userType
+axi4WriteAddrMsgFromWriteAddrInfo _awlen _awburst Axi4WriteAddressInfo{..}
+  = M2S_WriteAddress
+  { _awid     = _awiid
+  , _awaddr   = _awiaddr
+  , _awregion = _awiregion
+  , _awsize   = _awisize
+  , _awlock   = _awilock
+  , _awcache  = _awicache
+  , _awprot   = _awiprot
+  , _awqos    = _awiqos
+  , _awuser   = _awiuser
+  , _awlen, _awburst
+  }

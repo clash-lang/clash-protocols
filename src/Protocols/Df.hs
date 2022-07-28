@@ -626,6 +626,7 @@ registerFwd
 -- | Place register on /backward/ part of a circuit. This is implemented using a
 -- in-logic two-element shift register.
 registerBwd ::
+  forall dom a .
   (C.NFDataX a, C.HiddenClockResetEnable dom) =>
   Circuit (Df dom a) (Df dom a)
 registerBwd
@@ -638,11 +639,11 @@ registerBwd
      ra1 = if oAck then iDat else ra0
      s = if Maybe.isNothing (dataToMaybe rb) || iAck then (NoData, ra1) else (ra1, rb)
 
--- | A fifo buffer with user-provided depth.
--- Uses blockram to store data
+-- | A fifo buffer with user-provided depth. Uses blockram to store data. Can
+-- handle simultaneous write and read (full throughput rate).
 fifo ::
   forall dom a depth.
-  (C.HiddenClockResetEnable dom, C.KnownNat depth, C.NFDataX a) =>
+  (C.HiddenClockResetEnable dom, C.KnownNat depth, C.NFDataX a, 1 C.<= depth) =>
   C.SNat depth ->
   Circuit (Df dom a) (Df dom a)
 fifo fifoDepth = Circuit $ C.hideReset circuitFunction where
@@ -655,9 +656,8 @@ fifo fifoDepth = Circuit $ C.hideReset circuitFunction where
 
   circuitFunction reset (inpA, inpB) = (otpA, otpB) where
     -- initialize bram
-    errMsg = "fifo: undefined initial fifo buffer value"
     brRead = C.readNew
-             (C.blockRam (C.replicate fifoDepth $ C.errorX errMsg))
+             (C.blockRamU C.NoClearOnReset fifoDepth (C.errorX "No reset function"))
              brReadAddr brWrite
     -- run the state machine (a mealy machine)
     (brReadAddr, brWrite, otpA, otpB)
@@ -671,9 +671,10 @@ fifo fifoDepth = Circuit $ C.hideReset circuitFunction where
     let -- potentially push an item onto blockram
         maybePush = if amtLeft > 0 then dataToMaybe pushData else Nothing
         brWrite = (wAddr,) <$> maybePush
-        -- adjust write address and amount left (output state machine doesn't see amountLeft')
+        -- adjust write address and amount left
+        --   (output state machine doesn't see amountLeft')
         (wAddr', amtLeft') = if (Maybe.isJust maybePush)
-                             then (incIdxLooping wAddr, amtLeft-1)
+                             then (C.satSucc C.SatWrap wAddr, amtLeft-1)
                              else (wAddr, amtLeft)
         -- if we're about to push onto an empty queue, we can pop immediately instead
         (brRead_, amtLeft_) = if (amtLeft == maxBound && Maybe.isJust maybePush)
@@ -681,7 +682,7 @@ fifo fifoDepth = Circuit $ C.hideReset circuitFunction where
                               else (brRead, amtLeft)
         -- adjust blockram read address and amount left
         (rAddr', amtLeft'') = if (amtLeft_ < maxBound && popped)
-                              then (incIdxLooping rAddr, amtLeft'+1)
+                              then (C.satSucc C.SatWrap rAddr, amtLeft'+1)
                               else (rAddr, amtLeft')
         brReadAddr = rAddr'
         -- return our new state and outputs
@@ -690,21 +691,12 @@ fifo fifoDepth = Circuit $ C.hideReset circuitFunction where
     in  ((rAddr', wAddr', amtLeft''), (brReadAddr, brWrite, Ack otpAck, otpDat))
 
   -- initial state
-  -- (s0 for input port (taken from class), s0 for output port (taken from class), next read address, next write address, space left in bram)
-  s0 = (_0 fifoDepth, _0 fifoDepth, _maxBound fifoDepth)
-
-  -- type level hack
-  -- make sure we have the right Index number
-  _0 :: (C.KnownNat n) => C.SNat n -> C.Index n
-  _0 = P.const 0
-
-  -- type level hack
-  -- make sure we have the right Index number
-  _maxBound :: (C.KnownNat n) => C.SNat n -> C.Index (n C.+ 1)
-  _maxBound = P.const maxBound
-
-  -- loop around to 0 if we're about to overflow, otherwise increment
-  incIdxLooping idx = if idx == maxBound then 0 else idx+1
+  -- (next read address in bram, next write address in bram, space left in bram)
+  -- Addresses only go from 0 to depth-1.
+  -- Space left goes from 0 to depth because the fifo could be empty
+  -- (space left = depth) or full (space left = 0).
+  s0 :: (C.Index depth, C.Index depth, C.Index (depth C.+ 1))
+  s0 = (0, 0, maxBound)
 
 --------------------------------- SIMULATE -------------------------------------
 
