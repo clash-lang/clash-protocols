@@ -31,6 +31,7 @@ import Test.Tasty.TH (testGroupGenerator)
 
 -- clash-protocols (me!)
 import Protocols
+import Protocols.Axi4.Stream.Axi4Stream
 import Protocols.Hedgehog
 import qualified Protocols.DfConv as DfConv
 
@@ -171,6 +172,33 @@ prop_select =
     let tall i = fromMaybe 0 (HashMap.lookup i (tally ixs))
     dats <- mapM (\i -> Gen.list (Range.singleton (tall i)) DfTest.genSmallInt) C.indicesI
     pure (dats, ixs)
+
+-- also test out the DfConv instance for Axi4Stream
+
+prop_axi4_stream_fifo_id :: Property
+prop_axi4_stream_fifo_id =
+  propWithModelSingleDomain
+    @C.System
+    defExpectOptions
+    (DfTest.genData ((,) <$> genExtraInfo <*> genVec genByte))
+    (C.exposeClockResetEnable id)
+    (C.exposeClockResetEnable @C.System ckt)
+    (\a b -> tally a === tally b)
+ where
+  ckt :: (C.HiddenClockResetEnable dom) =>
+    Circuit
+      (Axi4Stream dom ('Axi4StreamConfig 5 2 2) Int)
+      (Axi4Stream dom ('Axi4StreamConfig 5 2 2) Int)
+  ckt = DfConv.fifo Proxy Proxy (C.SNat @10)
+
+  genExtraInfo =
+    Axi4StreamExtraInfo <$>
+    Gen.enumBounded <*>
+    Gen.enumBounded <*>
+    Gen.enumBounded <*>
+    DfTest.genSmallInt
+
+  genByte = (DataByte <$> Gen.enumBounded) C.<|> pure PositionByte C.<|> pure NullByte
 
 
 tests :: TestTree

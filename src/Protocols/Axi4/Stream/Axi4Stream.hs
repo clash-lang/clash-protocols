@@ -14,7 +14,7 @@ module Protocols.Axi4.Stream.Axi4Stream where
 
 -- base
 import           Control.DeepSeq (NFData)
-import           Data.Hashable (Hashable)
+import           Data.Hashable (Hashable, hashWithSalt)
 import qualified Data.Maybe as Maybe
 import           Data.Proxy
 import qualified Prelude as P
@@ -31,6 +31,8 @@ import           Protocols.Hedgehog.Internal
 
 
 instance (KnownNat n) => Hashable (Unsigned n)
+instance (KnownNat n, Hashable a) => Hashable (Vec n a) where
+  hashWithSalt s v = hashWithSalt s (toList v)
 
 -- | Configuration for AXI4 Stream protocol. Determines the width of some
 -- fields in 'Axi4StreamM2S'.
@@ -56,17 +58,11 @@ type family DestWidth (conf :: Axi4StreamConfig) where
 -- | Shorthand for a "well-behaved" config, so that we don't need to write out
 -- a bunch of type constraints later. Holds for every configuration; don't worry
 -- about implementing this class.
-class
+type GoodAxi4StreamConfig conf =
   ( KnownNat (DataWidth conf)
   , KnownNat (IdWidth conf)
   , KnownNat (DestWidth conf)
-  ) => GoodAxi4StreamConfig conf
-
-instance
-  ( KnownNat (DataWidth conf)
-  , KnownNat (IdWidth conf)
-  , KnownNat (DestWidth conf)
-  ) => GoodAxi4StreamConfig conf
+  )
 
 -- | A byte sent along an AXI4 Stream. Each byte can either be a data byte, a
 -- position byte, or a null byte. The value of position and null bytes should
@@ -122,6 +118,11 @@ deriving instance
   , Eq userType
   ) => Eq (Axi4StreamExtraInfo conf userType)
 
+deriving instance
+  ( GoodAxi4StreamConfig conf
+  , Hashable userType
+  ) => Hashable (Axi4StreamExtraInfo conf userType)
+
 -- | Combine "important" data and "unimportant" extra info to make an 'Axi4StreamM2S'.
 axi4StreamDataToM2S
   :: Maybe (Axi4StreamExtraInfo conf userType, Vec (DataWidth conf) Axi4StreamByte)
@@ -166,29 +167,23 @@ instance Protocol (Axi4Stream dom conf userType) where
 instance Backpressure (Axi4Stream dom conf userType) where
   boolsToBwd _ = C.fromList_lazy . fmap Axi4StreamS2M
 
-instance (GoodAxi4StreamConfig conf) =>
-  DfConv.DfConv   (Reverse (Axi4Stream dom conf userType)) where
-  type Dom        (Reverse (Axi4Stream dom conf userType)) = dom
-  type BwdPayload (Reverse (Axi4Stream dom conf userType))
-    = (Axi4StreamExtraInfo conf userType, Vec (DataWidth conf) Axi4StreamByte)
-
-  toDfCircuit _ = DfConv.toDfCircuitHelper s0 blankOtp stateFn where
-    s0 = ()
-    blankOtp = Axi4StreamS2M { _tready = False }
-    stateFn m2s ack _
-      = pure (Axi4StreamS2M { _tready = ack }, axi4StreamM2SToData m2s, False)
-
 instance (GoodAxi4StreamConfig conf, NFDataX userType) =>
   DfConv.DfConv    (Axi4Stream dom conf userType) where
   type Dom         (Axi4Stream dom conf userType) = dom
   type FwdPayload  (Axi4Stream dom conf userType)
     = (Axi4StreamExtraInfo conf userType, Vec (DataWidth conf) Axi4StreamByte)
 
-  toDfCircuit _ = DfConv.toDfCircuitHelper s0 blankOtp stateFn where
+  toDfCircuit proxy = DfConv.toDfCircuitHelper proxy s0 blankOtp stateFn where
     s0 = ()
     blankOtp = NoAxi4StreamM2S
     stateFn ack _ otpItem
       = pure (axi4StreamDataToM2S otpItem, Nothing, Maybe.isJust otpItem && _tready ack)
+
+  fromDfCircuit proxy = DfConv.fromDfCircuitHelper proxy s0 blankOtp stateFn where
+    s0 = ()
+    blankOtp = Axi4StreamS2M { _tready = False }
+    stateFn m2s ack _
+      = pure (Axi4StreamS2M { _tready = ack }, axi4StreamM2SToData m2s, False)
 
 instance (GoodAxi4StreamConfig conf, NFDataX userType, KnownDomain dom) =>
   Simulate (Axi4Stream dom conf userType) where
@@ -203,7 +198,6 @@ instance (GoodAxi4StreamConfig conf, NFDataX userType, KnownDomain dom) =>
 
   stallC conf (head -> (stallAck, stalls))
     = withClockResetEnable clockGen resetGen enableGen
-    $ (coerceCircuit :: Circuit (Reverse (Reverse a)) b -> Circuit a b)
     $ DfConv.stall Proxy Proxy conf stallAck stalls
 
 instance (GoodAxi4StreamConfig conf, NFDataX userType, KnownDomain dom) =>
@@ -221,7 +215,6 @@ instance (GoodAxi4StreamConfig conf, NFDataX userType, KnownDomain dom) =>
     = withClockResetEnable clockGen resetGen enableGen
     $ fmap axi4StreamDataToM2S
     $ DfConv.sample Proxy conf
-    $ (coerceCircuit :: Circuit a b -> Circuit a (Reverse (Reverse b)))
     $ ckt
 
 instance
