@@ -99,7 +99,7 @@ prop_idWriteSt_model =
 memoryWb
   :: forall ramSize dom a addressWidth
   . ( BitPack a, NFDataX a, 1 <= ramSize, KnownDomain dom, KnownNat addressWidth
-    , HiddenClockResetEnable dom, KnownNat ramSize )
+    , HiddenClockResetEnable dom, KnownNat ramSize, Default a )
   => Circuit (Wishbone dom 'Standard addressWidth a) ()
 memoryWb = Circuit go
   where
@@ -109,21 +109,28 @@ memoryWb = Circuit go
       :: Signal dom (WishboneM2S addressWidth (BitSize a `DivRU` 8) a)
       -> Signal dom (WishboneS2M a)
     reply request = do
-      ack' <- ack .&&. (strobe <$> request) .&&. (busCycle <$> request)
-      val <- readValue
-      pure $ (emptyWishboneS2M @a) { acknowledge = ack', readData = val }
+        ack <- writeAck .||. readAck
+        val <- readValue
+        pure $ (emptyWishboneS2M @a) { acknowledge = ack, readData = val }
       where
-        read' = addr <$> request
+        addr' = addr <$> request
         writeData' = writeData <$> request
-        write = mux ((\WishboneM2S{..} -> writeEnable && strobe && busCycle) <$> request)
-                    (Just <$> ((,) <$> read' <*> writeData'))
+        isWriteRequest = (\WishboneM2S{..} -> writeEnable && strobe && busCycle) <$> request
+        write = mux isWriteRequest
+                    (Just <$> ((,) <$> addr' <*> writeData'))
                     (pure Nothing)
 
-        readValue = blockRamU ClearOnReset (SNat @ramSize) (const undefined) read' write
-        ack = register False $ (strobe <$> request) .&&. (busCycle <$> request)
+        writeAck = isRising False isWriteRequest
+
+        isReadRequest = (\WishboneM2S{..} -> writeEnable && strobe && busCycle) <$> request
+        justReadRequest = isRising False isReadRequest
+
+        readAck = register False justReadRequest
+
+        readValue = blockRamU ClearOnReset (SNat @ramSize) (const def) addr' write
 
 memoryWbModel
-  :: (KnownNat addressWidth, Eq a, ShowX a, NFDataX a, NFData a)
+  :: (KnownNat addressWidth, Eq a, ShowX a, NFDataX a, NFData a, Default a)
   => WishboneMasterRequest addressWidth a
   -> WishboneS2M a
   -> [(BitVector addressWidth, a)]
@@ -134,7 +141,7 @@ memoryWbModel (Read addr) s st@(lookup addr -> Just x )
       Left $ "Read from a known address did not yield the same value "
               <> showX x <> " : " <> showX s
 memoryWbModel (Read addr) s st@(lookup addr -> Nothing)
-  | acknowledge s && isLeft (hasX (readData s)) = Right st
+  | acknowledge s && hasX (readData s) == Right def = Right st
   | otherwise                                   =
       Left $ "Read from unknown address did no ACK with undefined result : " <> showX s
 memoryWbModel (Write addr a) s st
