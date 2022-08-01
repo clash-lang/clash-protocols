@@ -94,7 +94,7 @@ stallStandard ::
     C.KnownDomain dom,
     C.KnownNat (C.BitSize a)
   ) =>
-  -- | number of cycles to stall the master for
+  -- | Number of cycles to stall the master for on each valid bus-cycle
   [Int] ->
   Circuit
     (Wishbone dom 'Standard addressWidth a)
