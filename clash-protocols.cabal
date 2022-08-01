@@ -157,6 +157,7 @@ library
     Protocols.Avalon.MemMap
 
     Protocols.Wishbone
+    Protocols.Wishbone.Standard
     Protocols.Wishbone.Standard.Hedgehog
 
     Protocols.Df

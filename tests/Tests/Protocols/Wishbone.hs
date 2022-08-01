@@ -19,6 +19,7 @@ import qualified Hedgehog.Range as Range
 import Protocols
 import Protocols.Hedgehog (defExpectOptions)
 import Protocols.Wishbone
+import Protocols.Wishbone.Standard
 import Protocols.Wishbone.Standard.Hedgehog
 import Test.Tasty
 import Test.Tasty.Hedgehog (HedgehogTestLimit (HedgehogTestLimit))
@@ -95,48 +96,6 @@ prop_idWriteSt_model =
 -- memory element circuit
 --
 
-memoryWb ::
-  forall ramSize dom a addressWidth.
-  ( BitPack a,
-    NFDataX a,
-    1 <= ramSize,
-    KnownDomain dom,
-    KnownNat addressWidth,
-    HiddenClockResetEnable dom,
-    KnownNat ramSize,
-    Default a
-  ) =>
-  Circuit (Wishbone dom 'Standard addressWidth a) ()
-memoryWb = Circuit go
-  where
-    go (m2s, ()) = (reply m2s, ())
-
-    reply ::
-      Signal dom (WishboneM2S addressWidth (BitSize a `DivRU` 8) a) ->
-      Signal dom (WishboneS2M a)
-    reply request = do
-      ack <- writeAck .||. readAck
-      val <- readValue
-      pure $ (emptyWishboneS2M @a) {acknowledge = ack, readData = val}
-      where
-        addr' = addr <$> request
-        writeData' = writeData <$> request
-        isWriteRequest = (\WishboneM2S {..} -> writeEnable && strobe && busCycle) <$> request
-        write =
-          mux
-            isWriteRequest
-            (Just <$> ((,) <$> addr' <*> writeData'))
-            (pure Nothing)
-
-        writeAck = isRising False isWriteRequest
-
-        isReadRequest = (\WishboneM2S {..} -> writeEnable && strobe && busCycle) <$> request
-        justReadRequest = isRising False isReadRequest
-
-        readAck = register False justReadRequest
-
-        readValue = blockRamU ClearOnReset (SNat @ramSize) (const def) addr' write
-
 memoryWbModel ::
   (KnownNat addressWidth, Eq a, ShowX a, NFDataX a, NFData a, Default a) =>
   WishboneMasterRequest addressWidth a ->
@@ -165,7 +124,7 @@ prop_memoryWb_model =
     wishbonePropWithModel @System
       defExpectOptions
       memoryWbModel
-      (memoryWb @256)
+      (memoryWb (blockRamU ClearOnReset (SNat @256) (const def)))
       (genData (genWishboneTransfer @8 genSmallInt))
       [] -- initial state
 

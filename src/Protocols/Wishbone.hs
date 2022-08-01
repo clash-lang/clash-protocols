@@ -11,9 +11,7 @@ import Clash.Prelude (DivRU, Nat, Type, (:::))
 import qualified Clash.Prelude as C
 import Clash.Signal.Internal (Signal (..))
 import Control.DeepSeq (NFData)
-import qualified Data.Bifunctor as B
 import Protocols
-import Protocols.Internal
 import Prelude hiding (head, not, (&&))
 
 -- | Data communicated from a Wishbone Master to a Wishbone Slave
@@ -190,86 +188,3 @@ emptyWishboneS2M =
 -- | Helper function to determine whether a Slave signals the termination of a cycle.
 hasTerminateFlag :: WishboneS2M dat -> Bool
 hasTerminateFlag s2m = acknowledge s2m || err s2m || retry s2m
-
--- | Distribute requests amongst N slave circuits
-roundrobin ::
-  forall n dom addressWidth a.
-  ( C.KnownNat n,
-    C.HiddenClockResetEnable dom,
-    C.KnownNat addressWidth,
-    C.KnownNat (C.BitSize a),
-    C.NFDataX a,
-    1 C.<= n
-  ) =>
-  Circuit
-    (Wishbone dom 'Standard addressWidth a)
-    (C.Vec n (Wishbone dom 'Standard addressWidth a))
-roundrobin = Circuit $ \(m2s, s2ms) -> B.first C.head $ fn (C.singleton m2s, s2ms)
-  where
-    Circuit fn = sharedBus selectFn
-    selectFn (C.unbundle -> (mIdx, sIdx, _)) =
-      C.liftA2 (,) mIdx (C.satSucc C.SatWrap <$> sIdx)
-
--- | General-purpose shared-bus with N masters and M slaves.
---
---   A selector signal is used to compute the next M-S pair.
-sharedBus ::
-  forall n m dom addressWidth a.
-  ( C.KnownNat n,
-    C.KnownNat m,
-    C.HiddenClockResetEnable dom,
-    C.KnownNat addressWidth,
-    C.KnownNat (C.BitSize a),
-    C.NFDataX a
-  ) =>
-  -- | Funcion to select which M-S pair should be connected next.
-  ( C.Signal
-      dom
-      ( C.Index n,
-        C.Index m,
-        C.Vec n (WishboneM2S addressWidth (C.BitSize a `DivRU` 8) a)
-      ) ->
-    C.Signal dom (C.Index n, C.Index m)
-  ) ->
-  Circuit
-    (C.Vec n (Wishbone dom 'Standard addressWidth a))
-    (C.Vec m (Wishbone dom 'Standard addressWidth a))
-sharedBus selectFn = Circuit go
-  where
-    go (C.bundle -> m2ss, C.bundle -> s2ms) = (C.unbundle s2ms', C.unbundle m2ss')
-      where
-        mIdx = C.regEn (0 :: C.Index n) acceptIds mIdx'
-        sIdx = C.regEn (0 :: C.Index m) acceptIds sIdx'
-
-        (mIdx', sIdx') = C.unbundle $ selectFn (C.liftA3 (,,) mIdx sIdx m2ss)
-
-        m2s = C.liftA2 (C.!!) m2ss mIdx
-        s2m = C.liftA2 (C.!!) s2ms sIdx
-
-        acceptIds = (C.not . busCycle <$> m2s) C..&&. (C.not . lock <$> m2s)
-
-        m2ss' = C.liftA3 C.replace sIdx m2s $ pure (C.repeat emptyWishboneM2S)
-        s2ms' = C.liftA3 C.replace mIdx s2m $ pure (C.repeat emptyWishboneS2M)
-
--- | Crossbar-Switch circuit, allowing to dynamically route N masters to N slaves
-crossbarSwitch ::
-  forall n m dom addressWidth a.
-  ( C.KnownNat n,
-    C.KnownNat m,
-    C.KnownDomain dom,
-    C.KnownNat addressWidth,
-    C.NFDataX a,
-    C.KnownNat (C.BitSize a)
-  ) =>
-  Circuit
-    ( CSignal dom (C.Vec n (C.Index m)), -- route
-      C.Vec n (Wishbone dom 'Standard addressWidth a) -- masters
-    )
-    (C.Vec m (Wishbone dom 'Standard addressWidth a)) -- slaves
-crossbarSwitch = Circuit go
-  where
-    go ((CSignal route, C.bundle -> m2ss), C.bundle -> s2ms) =
-      ((CSignal (pure ()), C.unbundle s2ms'), C.unbundle m2ss')
-      where
-        m2ss' = C.scatter @_ @_ @_ @_ @0 (C.repeat emptyWishboneM2S) <$> route <*> m2ss
-        s2ms' = C.gather <$> s2ms <*> route
