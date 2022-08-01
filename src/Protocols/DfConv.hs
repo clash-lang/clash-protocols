@@ -22,22 +22,17 @@ module Protocols.DfConv
   , BwdPayload
   , FwdPayload
   , toDfCircuit
+  , fromDfCircuit
 
     -- * Helper functions
-  , fromDfCircuit
   , toDfCircuitHelper
-
-    -- * Associated with Axi4 instance
-  , Axi4WriteAddressInfo
-  , axi4WriteAddrMsgToWriteAddrInfo
-  , axi4WriteAddrMsgFromWriteAddrInfo
-  , Axi4ReadAddressInfo
-  , axi4ReadAddrMsgToReadAddrInfo
-  , axi4ReadAddrMsgFromReadAddrInfo
-
-    -- * Utilities to use DfConv one-way
+  , fromDfCircuitHelper
   , dfToDfConvInp
   , dfToDfConvOtp
+  , vecToDfConv
+  , vecFromDfConv
+  , tupToDfConv
+  , tupFromDfConv
 
     -- * Df functions generalized to Dflike
   , convert
@@ -137,46 +132,46 @@ class (Protocol df) => DfConv df where
   -- should stay the same between clock cycles unless acknowledged.
   toDfCircuit :: (HiddenClockResetEnable (Dom df)) =>
     Proxy df ->
-    Circuit (Df (Dom df) (FwdPayload df), Reverse (Df (Dom df) (BwdPayload df))) df
+    Circuit
+      (Df (Dom df) (FwdPayload df), Reverse (Df (Dom df) (BwdPayload df)))
+      df
+  -- | 'toDfCircuit', but in reverse: the @df@ port is on the left side instead
+  -- of the right side.
+  fromDfCircuit :: (HiddenClockResetEnable (Dom df)) =>
+    Proxy df ->
+    Circuit
+      df
+      (Df (Dom df) (FwdPayload df), Reverse (Df (Dom df) (BwdPayload df)))
 
   -- defaults
   type BwdPayload df = ()
   type FwdPayload df = ()
 
--- | 'toDfCircuit', but 'Df' is on the other side. 'BwdPayload' remains the
--- input data, and 'FwdPayload' remains the output data. All the functionality
--- from 'toDfCircuit' is preserved.
-fromDfCircuit ::
-  (DfConv df, HiddenClockResetEnable (Dom df)) =>
-  Proxy df ->
-  Circuit (Reverse df)
-          (Df (Dom df) (BwdPayload df), Reverse (Df (Dom df) (FwdPayload df)))
-fromDfCircuit = mapCircuit id id swap swap . reverseCircuit . toDfCircuit
-
--- | Helper function to make it easier to implement 'DfConv'. 'Ack's are
--- automatically converted to/from 'Bool's, and 'Df.Data's to/from 'Maybe'. A
--- default @otpMsg@ value is given for if reset is currently on. The 'State'
--- machine is run every clock cycle. Parameters: initial state, default
+-- | Helper function to make it easier to implement 'toDfCircuit' in 'DfConv'.
+-- 'Ack's are automatically converted to/from 'Bool's, and 'Df.Data's to/from
+-- 'Maybe'. A default @otpMsg@ value is given for if reset is currently on. The
+-- 'State' machine is run every clock cycle. Parameters: initial state, default
 -- @otpMsg@, and 'State' machine function
 toDfCircuitHelper ::
-  ( HiddenClockResetEnable (Dom df)
+  ( HiddenClockResetEnable dom
   , Protocol df
-  , Bwd df ~ Unbundled (Dom df) inpMsg
-  , Fwd df ~ Unbundled (Dom df) otpMsg
+  , Bwd df ~ Unbundled dom inpMsg
+  , Fwd df ~ Unbundled dom otpMsg
   , NFDataX state
   , Bundle inpMsg
   , Bundle otpMsg ) =>
+  Proxy df ->
   state ->
   otpMsg ->
   ( inpMsg ->
     Bool ->
-    Maybe (FwdPayload df) ->
-    State state (otpMsg, Maybe (BwdPayload df), Bool)
+    Maybe fwdPayload ->
+    State state (otpMsg, Maybe bwdPayload, Bool)
     ) ->
-  Circuit ( Df (Dom df) (FwdPayload df)
-          , Reverse (Df (Dom df) (BwdPayload df)))
+  Circuit ( Df dom fwdPayload
+          , Reverse (Df dom bwdPayload))
           df
-toDfCircuitHelper s0 blankOtp stateFn
+toDfCircuitHelper _ s0 blankOtp stateFn
   = Circuit
   $ (unbundle *** unbundle)
   . unbundle
@@ -192,6 +187,36 @@ toDfCircuitHelper s0 blankOtp stateFn
                                     s
     in (s', ((Ack otpAck, Df.maybeToData inputted), otp))
 
+-- | Helper function to make it easier to implement 'fromDfCircuit' in 'DfConv'.
+-- 'Ack's are automatically converted to/from 'Bool's, and 'Df.Data's to/from
+-- 'Maybe'. A default @otpMsg@ value is given for if reset is currently on. The
+-- 'State' machine is run every clock cycle. Parameters: initial state, default
+-- @otpMsg@, and 'State' machine function
+fromDfCircuitHelper ::
+  ( HiddenClockResetEnable dom
+  , Protocol df
+  , Fwd df ~ Unbundled dom inpMsg
+  , Bwd df ~ Unbundled dom otpMsg
+  , NFDataX state
+  , Bundle inpMsg
+  , Bundle otpMsg ) =>
+  Proxy df ->
+  state ->
+  otpMsg ->
+  ( inpMsg ->
+    Bool ->
+    Maybe bwdPayload ->
+    State state (otpMsg, Maybe fwdPayload, Bool)
+    ) ->
+  Circuit df (Df dom fwdPayload, Reverse (Df dom bwdPayload))
+fromDfCircuitHelper df s0 blankOtp stateFn
+  = mapCircuit id id swap swap
+  $ reverseCircuit
+  $ toDfCircuitHelper (reverseProxy df) s0 blankOtp stateFn
+ where
+  reverseProxy :: Proxy df -> Proxy (Reverse df)
+  reverseProxy Proxy = Proxy
+
 
 -- Trivial DfConv instance for (Df, Reverse Df)
 
@@ -200,25 +225,24 @@ instance DfConv (Df dom a, Reverse (Df dom b)) where
   type BwdPayload (Df dom a, Reverse (Df dom b)) = b
   type FwdPayload (Df dom a, Reverse (Df dom b)) = a
   toDfCircuit _ = Circuit swap
+  fromDfCircuit _ = Circuit swap
 
 
 -- DfConv instances for Df
-
-instance (NFDataX dat) => DfConv (Reverse (Df dom dat)) where
-  type Dom        (Reverse (Df dom dat)) = dom
-  type BwdPayload (Reverse (Df dom dat)) = dat
-  toDfCircuit _ = Circuit (uncurry f) where
-    f ~(_, b) c = ((P.pure (Ack False), c), b)
 
 instance (NFDataX dat) => DfConv (Df dom dat) where
   type Dom        (Df dom dat) = dom
   type FwdPayload (Df dom dat) = dat
   toDfCircuit _ = Circuit (uncurry f) where
     f ~(a, _) c = ((c, P.pure NoData), a)
+  fromDfCircuit _ = Circuit (uncurry f) where
+    f a ~(b, _) = (b, (a, P.pure (Ack False)))
 
 
--- DfConv instances for Axi4 subordinate port
+-- DfConv instances for Axi4
 
+-- Manager end only allows for burst length of 1, will ignore the burst length
+-- you input
 instance
   ( GoodAxi4WriteAddressConfig confAW
   , GoodAxi4WriteDataConfig confW
@@ -227,32 +251,86 @@ instance
   , NFDataX userB
   , AWIdWidth confAW ~ BIdWidth confB ) =>
   DfConv
-    (Reverse (Axi4WriteAddress dom confAW userAW),
-     Reverse (Axi4WriteData dom confW userW),
-     Axi4WriteResponse dom confB userB)
+    (Axi4WriteAddress dom confAW userAW,
+     Axi4WriteData dom confW userW,
+     Reverse (Axi4WriteResponse dom confB userB))
     where
 
   type Dom
-    (Reverse (Axi4WriteAddress dom confAW userAW),
-     Reverse (Axi4WriteData dom confW userW),
-     Axi4WriteResponse dom confB userB)
+    (Axi4WriteAddress dom confAW userAW,
+     Axi4WriteData dom confW userW,
+     Reverse (Axi4WriteResponse dom confB userB))
     = dom
-  type BwdPayload
-    (Reverse (Axi4WriteAddress dom confAW userAW),
-     Reverse (Axi4WriteData dom confW userW),
-     Axi4WriteResponse dom confB userB)
+
+  type FwdPayload
+    (Axi4WriteAddress dom confAW userAW,
+     Axi4WriteData dom confW userW,
+     Reverse (Axi4WriteResponse dom confB userB))
     = ( Axi4WriteAddressInfo confAW userAW
       , BurstLengthType (AWKeepBurstLength confAW)
       , BurstType (AWKeepBurst confAW)
       , StrictStrobeType (WNBytes confW) (WKeepStrobe confW)
-      , userW )
-  type FwdPayload
-    (Reverse (Axi4WriteAddress dom confAW userAW),
-     Reverse (Axi4WriteData dom confW userW),
-     Axi4WriteResponse dom confB userB)
+      , userW)
+
+  type BwdPayload
+    (Axi4WriteAddress dom confAW userAW,
+     Axi4WriteData dom confW userW,
+     Reverse (Axi4WriteResponse dom confB userB))
     = (ResponseType (BKeepResponse confB), userB)
 
-  toDfCircuit _ = toDfCircuitHelper s0 blankOtp stateFn where
+  -- MANAGER PORT
+
+  toDfCircuit proxy = toDfCircuitHelper proxy s0 blankOtp stateFn where
+    s0 = (False, False) -- address received, data received
+
+    blankOtp =
+      ( M2S_NoWriteAddress
+      , M2S_NoWriteData
+      , M2S_WriteResponse { _bready = False }
+      )
+
+    stateFn (addrAck, dataAck, respVal) dfAckIn dfDatIn = do
+      addrMsg <- sendAddr addrAck dfDatIn
+      (dataMsg, dfAckOut) <- sendData dataAck dfDatIn
+      (respAck, dfDatOut) <- receiveResp respVal dfAckIn
+      P.pure ((addrMsg, dataMsg, respAck), dfDatOut, dfAckOut)
+
+    sendAddr _ Nothing = P.pure M2S_NoWriteAddress
+    sendAddr S2M_WriteAddress{_awready} (Just (info, _, burst, _, _)) = do
+      (addrReceived, b) <- get
+      put (_awready || addrReceived, b)
+      P.pure $ if addrReceived then M2S_NoWriteAddress
+               else axi4WriteAddrMsgFromWriteAddrInfo
+                    (toKeepType 1)
+                    burst
+                    info
+
+    sendData _ Nothing = P.pure (M2S_NoWriteData, False)
+    sendData S2M_WriteData{_wready} (Just (_, _, _, dat, user)) = do
+      (addrReceived, dataReceived) <- get
+      put (addrReceived, _wready || dataReceived)
+      P.pure $ if (not addrReceived || dataReceived)
+        then (M2S_NoWriteData, False)
+        else
+          ( M2S_WriteData
+            { _wdata = dat
+            , _wlast = True
+            , _wuser = user
+            }
+          , _wready)
+
+    receiveResp S2M_NoWriteResponse _
+      = P.pure (M2S_WriteResponse { _bready = False }, Nothing)
+    receiveResp S2M_WriteResponse{_bresp,_buser} dfAckIn = do
+      (_, dataReceived) <- get
+      let shouldAckResponse = dataReceived && dfAckIn
+      when shouldAckResponse $ put (False, False)
+      P.pure ( M2S_WriteResponse { _bready = shouldAckResponse }
+             , Just (_bresp,_buser))
+
+  -- SUBORDINATE PORT
+
+  fromDfCircuit proxy = fromDfCircuitHelper proxy s0 blankOtp stateFn where
     -- (info about write address given most recently, ID to send write response to)
     s0 = (Nothing, Nothing)
 
@@ -302,24 +380,52 @@ instance
   , NFDataX dat
   , ARIdWidth confAR ~ RIdWidth confR ) =>
   DfConv
-    (Reverse (Axi4ReadAddress dom confAR userAR),
-     Axi4ReadData dom confR userR dat)
+    (Axi4ReadAddress dom confAR dataAR,
+     Reverse (Axi4ReadData dom confR userR dat))
     where
 
   type Dom
-    (Reverse (Axi4ReadAddress dom confAR userAR),
-     Axi4ReadData dom confR userR dat)
+    (Axi4ReadAddress dom confAR dataAR,
+     Reverse (Axi4ReadData dom confR userR dat))
      = dom
-  type BwdPayload -- sent at the beginning of each burst (NOT each transfer)
-    (Reverse (Axi4ReadAddress dom confAR userAR),
-     Axi4ReadData dom confR userR dat)
-     = Axi4ReadAddressInfo confAR userAR
-  type FwdPayload
-    (Reverse (Axi4ReadAddress dom confAR userAR),
-     Axi4ReadData dom confR userR dat)
+
+  type BwdPayload
+    (Axi4ReadAddress dom confAR dataAR,
+     Reverse (Axi4ReadData dom confR userR dat))
      = (dat, userR, ResponseType (RKeepResponse confR))
 
-  toDfCircuit _ = toDfCircuitHelper s0 blankOtp stateFn where
+  type FwdPayload
+    (Axi4ReadAddress dom confAR dataAR,
+     Reverse (Axi4ReadData dom confR userR dat))
+     = Axi4ReadAddressInfo confAR dataAR
+
+  -- MANAGER PORT
+
+  toDfCircuit proxy = toDfCircuitHelper proxy s0 blankOtp stateFn where
+    s0 = ()
+
+    blankOtp =
+      ( M2S_NoReadAddress
+      , M2S_ReadData { _rready = False }
+      )
+
+    stateFn (addrAck, readVal) dfAckIn dfDatIn =
+      let readAddrMsg = processAddrInfo dfDatIn
+      in  P.pure ( (readAddrMsg, M2S_ReadData { _rready = dfAckIn })
+                 , processReadVal readVal
+                 , getDfAckOut addrAck readAddrMsg)
+
+    processAddrInfo = maybe M2S_NoReadAddress axi4ReadAddrMsgFromReadAddrInfo
+
+    processReadVal S2M_NoReadData = Nothing
+    processReadVal S2M_ReadData{..} = Just (_rdata, _ruser, _rresp)
+
+    getDfAckOut _ M2S_NoReadAddress = False
+    getDfAckOut addrAck _ = _arready addrAck
+
+  -- SUBORDINATE PORT
+
+  fromDfCircuit proxy = fromDfCircuitHelper proxy s0 blankOtp stateFn where
     -- ( burst len left in transfer , read id currently replying to )
     s0 = (0, errorX "DfConv for Axi4: No initial value for read id" )
 
@@ -356,139 +462,12 @@ instance
         _ -> P.pure (S2M_NoReadData, False)
 
 
--- DfConv instances for Axi4 manager port
-
--- Only allows for burst length of 1
-instance
-  ( GoodAxi4WriteAddressConfig confAW
-  , GoodAxi4WriteDataConfig confW
-  , GoodAxi4WriteResponseConfig confB ) =>
-  DfConv
-    (Axi4WriteAddress dom confAW userAW,
-     Axi4WriteData dom confW userW,
-     Reverse (Axi4WriteResponse dom confB userB))
-    where
-
-  type Dom
-    (Axi4WriteAddress dom confAW userAW,
-     Axi4WriteData dom confW userW,
-     Reverse (Axi4WriteResponse dom confB userB))
-    = dom
-
-  type FwdPayload
-    (Axi4WriteAddress dom confAW userAW,
-     Axi4WriteData dom confW userW,
-     Reverse (Axi4WriteResponse dom confB userB))
-    = ( Axi4WriteAddressInfo confAW userAW
-      , StrictStrobeType (WNBytes confW) (WKeepStrobe confW)
-      , userW)
-
-  type BwdPayload
-    (Axi4WriteAddress dom confAW userAW,
-     Axi4WriteData dom confW userW,
-     Reverse (Axi4WriteResponse dom confB userB))
-    = (ResponseType (BKeepResponse confB), userB)
-
-  toDfCircuit _ = toDfCircuitHelper s0 blankOtp stateFn where
-    s0 = (False, False) -- address received, data received
-
-    blankOtp =
-      ( M2S_NoWriteAddress
-      , M2S_NoWriteData
-      , M2S_WriteResponse { _bready = False }
-      )
-
-    stateFn (addrAck, dataAck, respVal) dfAckIn dfDatIn = do
-      addrMsg <- sendAddr addrAck dfDatIn
-      (dataMsg, dfAckOut) <- sendData dataAck dfDatIn
-      (respAck, dfDatOut) <- receiveResp respVal dfAckIn
-      P.pure ((addrMsg, dataMsg, respAck), dfDatOut, dfAckOut)
-
-    sendAddr _ Nothing = P.pure M2S_NoWriteAddress
-    sendAddr S2M_WriteAddress{_awready} (Just (info, _, _)) = do
-      (addrReceived, b) <- get
-      put (_awready || addrReceived, b)
-      P.pure $ if addrReceived then M2S_NoWriteAddress
-               else axi4WriteAddrMsgFromWriteAddrInfo
-                    (toKeepType 1)
-                    (toKeepType BmFixed)
-                    info
-
-    sendData _ Nothing = P.pure (M2S_NoWriteData, False)
-    sendData S2M_WriteData{_wready} (Just (_, dat, user)) = do
-      (addrReceived, dataReceived) <- get
-      put (addrReceived, _wready || dataReceived)
-      P.pure $ if (not addrReceived || dataReceived)
-        then (M2S_NoWriteData, False)
-        else
-          ( M2S_WriteData
-            { _wdata = dat
-            , _wlast = True
-            , _wuser = user
-            }
-          , _wready)
-
-    receiveResp S2M_NoWriteResponse _
-      = P.pure (M2S_WriteResponse { _bready = False }, Nothing)
-    receiveResp S2M_WriteResponse{_bresp,_buser} dfAckIn = do
-      (_, dataReceived) <- get
-      let shouldAckResponse = dataReceived && dfAckIn
-      when shouldAckResponse $ put (False, False)
-      P.pure ( M2S_WriteResponse { _bready = shouldAckResponse }
-             , Just (_bresp,_buser))
-
-instance
-  ( GoodAxi4ReadAddressConfig confAR
-  , GoodAxi4ReadDataConfig confR ) =>
-  DfConv
-    (Axi4ReadAddress dom confAR dataAR,
-     Reverse (Axi4ReadData dom confR userR dat))
-    where
-
-  type Dom
-    (Axi4ReadAddress dom confAR dataAR,
-     Reverse (Axi4ReadData dom confR userR dat))
-     = dom
-
-  type BwdPayload
-    (Axi4ReadAddress dom confAR dataAR,
-     Reverse (Axi4ReadData dom confR userR dat))
-     = (dat, userR)
-
-  type FwdPayload
-    (Axi4ReadAddress dom confAR dataAR,
-     Reverse (Axi4ReadData dom confR userR dat))
-     = Axi4ReadAddressInfo confAR dataAR
-
-  toDfCircuit _ = toDfCircuitHelper s0 blankOtp stateFn where
-    s0 = ()
-
-    blankOtp =
-      ( M2S_NoReadAddress
-      , M2S_ReadData { _rready = False }
-      )
-
-    stateFn (addrAck, readVal) dfAckIn dfDatIn =
-      let readAddrMsg = processAddrInfo dfDatIn
-      in  P.pure ( (readAddrMsg, M2S_ReadData { _rready = dfAckIn })
-                 , processReadVal readVal
-                 , getDfAckOut addrAck readAddrMsg)
-
-    processAddrInfo = maybe M2S_NoReadAddress axi4ReadAddrMsgFromReadAddrInfo
-
-    processReadVal S2M_NoReadData = Nothing
-    processReadVal S2M_ReadData{..} = Just (_rdata, _ruser)
-
-    getDfAckOut _ M2S_NoReadAddress = False
-    getDfAckOut addrAck _ = _arready addrAck
-
-
 -- | Convert 'DfConv' into a /one-way/ 'Df' port, at the data input end
 dfToDfConvInp ::
   ( DfConv df
   , HiddenClockResetEnable (Dom df) ) =>
   Proxy df ->
-  Circuit (Reverse df) (Df (Dom df) (BwdPayload df))
+  Circuit df (Df (Dom df) (FwdPayload df))
 dfToDfConvInp = mapCircuit id id P.fst (, P.pure NoData) . fromDfCircuit
 
 -- | Convert 'DfConv' into a /one-way/ 'Df' port, at the data output end
@@ -504,24 +483,24 @@ vecToDfConv ::
   DfConv df =>
   HiddenClockResetEnable (Dom df) =>
   KnownNat n =>
-  Vec n (Proxy df) ->
+  Proxy df ->
   Circuit ( Vec n (Df (Dom df) (FwdPayload df))
           , Vec n (Reverse (Df (Dom df) (BwdPayload df))))
           (Vec n df)
-vecToDfConv params = mapCircuit (uncurry C.zip) unzip id id $ vecCircuits
-                   $ toDfCircuit <$> params
+vecToDfConv proxy = mapCircuit (uncurry C.zip) unzip id id $ vecCircuits
+                  $ repeat $ toDfCircuit proxy
 
 -- 'fromDfCircuit', but the 'DfConv' is inside a 'Vec'
 vecFromDfConv ::
   DfConv df =>
   HiddenClockResetEnable (Dom df) =>
   KnownNat n =>
-  Vec n (Proxy df) ->
-  Circuit ( Vec n (Reverse df) )
-          ( Vec n (Df (Dom df) (BwdPayload df))
-          , Vec n (Reverse (Df (Dom df) (FwdPayload df))))
-vecFromDfConv params = mapCircuit id id unzip (uncurry C.zip) $ vecCircuits
-                     $ fromDfCircuit <$> params
+  Proxy df ->
+  Circuit ( Vec n df )
+          ( Vec n (Df (Dom df) (FwdPayload df))
+          , Vec n (Reverse (Df (Dom df) (BwdPayload df))))
+vecFromDfConv proxy = mapCircuit id id unzip (uncurry C.zip) $ vecCircuits
+                    $ repeat $ fromDfCircuit proxy
 
 -- 'toDfCircuit', but on a pair of 'DfConv's
 tupToDfConv ::
@@ -546,17 +525,16 @@ tupToDfConv (argsA, argsB)
 -- 'fromDfCircuit', but on a pair of 'DfConv's
 tupFromDfConv ::
   ( DfConv dfA
-  , DfConv dfB
-  , Dom dfA ~ Dom dfB
-  , HiddenClockResetEnable (Dom dfA) ) =>
-  ( Proxy dfA
-  , Proxy dfB ) ->
+  , DfConv dfB ) =>
+  Dom dfA ~ Dom dfB =>
+  HiddenClockResetEnable (Dom dfA) =>
+  (Proxy dfA, Proxy dfB) ->
   Circuit
-    (Reverse (dfA, dfB))
-    ( ( Df (Dom dfA) (BwdPayload dfA)
-      , Df (Dom dfB) (BwdPayload dfB) )
-    , ( Reverse (Df (Dom dfA) (FwdPayload dfA))
-      , Reverse (Df (Dom dfB) (FwdPayload dfB)) )
+    (dfA, dfB)
+    ( ( Df (Dom dfA) (FwdPayload dfA)
+      , Df (Dom dfB) (FwdPayload dfB) )
+    , ( Reverse (Df (Dom dfA) (BwdPayload dfA))
+      , Reverse (Df (Dom dfB) (BwdPayload dfB)) )
     )
 tupFromDfConv (argsA, argsB)
   = mapCircuit id id f f
@@ -585,13 +563,13 @@ vecToTup = Circuit ((g *** f) . swap) where
 convert ::
   ( DfConv dfA
   , DfConv dfB
-  , BwdPayload dfA ~ FwdPayload dfB
-  , FwdPayload dfA ~ BwdPayload dfB
+  , FwdPayload dfA ~ FwdPayload dfB
+  , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA) ) =>
   Proxy dfA ->
   Proxy dfB ->
-  Circuit (Reverse dfA) dfB
+  Circuit dfA dfB
 convert dfA dfB
   =  fromDfCircuit dfA
   |> toDfCircuit dfB
@@ -600,13 +578,13 @@ convert dfA dfB
 map ::
   ( DfConv dfA
   , DfConv dfB
-  , FwdPayload dfA ~ BwdPayload dfB
+  , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA) ) =>
   Proxy dfA ->
   Proxy dfB ->
-  (BwdPayload dfA -> FwdPayload dfB) ->
-  Circuit (Reverse dfA) dfB
+  (FwdPayload dfA -> FwdPayload dfB) ->
+  Circuit dfA dfB
 map dfA dfB f
   =  fromDfCircuit dfA
   |> tupCircuits (Df.map f) idC
@@ -616,14 +594,14 @@ map dfA dfB f
 fst ::
   ( DfConv dfA
   , DfConv dfB
-  , FwdPayload dfA ~ BwdPayload dfB
+  , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
-  , BwdPayload dfA ~ (a, b)
+  , FwdPayload dfA ~ (a, b)
   , FwdPayload dfB ~ a ) =>
   Proxy dfA ->
   Proxy dfB ->
-  Circuit (Reverse dfA) dfB
+  Circuit dfA dfB
 fst dfA dfB
   =  fromDfCircuit dfA
   |> tupCircuits Df.fst idC
@@ -633,14 +611,14 @@ fst dfA dfB
 snd ::
   ( DfConv dfA
   , DfConv dfB
-  , FwdPayload dfA ~ BwdPayload dfB
+  , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
-  , BwdPayload dfA ~ (a, b)
+  , FwdPayload dfA ~ (a, b)
   , FwdPayload dfB ~ b ) =>
   Proxy dfA ->
   Proxy dfB ->
-  Circuit (Reverse dfA) dfB
+  Circuit dfA dfB
 snd dfA dfB
   =  fromDfCircuit dfA
   |> tupCircuits Df.snd idC
@@ -650,17 +628,17 @@ snd dfA dfB
 bimap ::
   ( DfConv dfA
   , DfConv dfB
-  , FwdPayload dfA ~ BwdPayload dfB
+  , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
   , B.Bifunctor p
-  , BwdPayload dfA ~ p a c
+  , FwdPayload dfA ~ p a c
   , FwdPayload dfB ~ p b d ) =>
   Proxy dfA ->
   Proxy dfB ->
   (a -> b) ->
   (c -> d) ->
-  Circuit (Reverse dfA) dfB
+  Circuit dfA dfB
 bimap dfA dfB f g
   =  fromDfCircuit dfA
   |> tupCircuits (Df.bimap f g) idC
@@ -670,16 +648,16 @@ bimap dfA dfB f g
 first ::
   ( DfConv dfA
   , DfConv dfB
-  , FwdPayload dfA ~ BwdPayload dfB
+  , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
   , B.Bifunctor p
-  , BwdPayload dfA ~ p a c
+  , FwdPayload dfA ~ p a c
   , FwdPayload dfB ~ p b c ) =>
   Proxy dfA ->
   Proxy dfB ->
   (a -> b) ->
-  Circuit (Reverse dfA) dfB
+  Circuit dfA dfB
 first dfA dfB f
   =  fromDfCircuit dfA
   |> tupCircuits (Df.first f) idC
@@ -689,16 +667,16 @@ first dfA dfB f
 second ::
   ( DfConv dfA
   , DfConv dfB
-  , FwdPayload dfA ~ BwdPayload dfB
+  , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
   , B.Bifunctor p
-  , BwdPayload dfA ~ p a b
+  , FwdPayload dfA ~ p a b
   , FwdPayload dfB ~ p a c ) =>
   Proxy dfA ->
   Proxy dfB ->
   (b -> c) ->
-  Circuit (Reverse dfA) dfB
+  Circuit dfA dfB
 second dfA dfB f
   =  fromDfCircuit dfA
   |> tupCircuits (Df.second f) idC
@@ -708,13 +686,13 @@ second dfA dfB f
 const ::
   ( DfConv dfA
   , DfConv dfB
-  , FwdPayload dfA ~ BwdPayload dfB
+  , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA) ) =>
   Proxy dfA ->
   Proxy dfB ->
   FwdPayload dfB ->
-  Circuit (Reverse dfA) dfB
+  Circuit dfA dfB
 const dfA dfB b
   =  fromDfCircuit dfA
   |> tupCircuits (Df.const b) idC
@@ -736,7 +714,7 @@ void ::
   ( DfConv df
   , HiddenClockResetEnable (Dom df) ) =>
   Proxy df ->
-  Circuit (Reverse df) ()
+  Circuit df ()
 void df = dfToDfConvInp df
   |> Df.void
 
@@ -744,13 +722,13 @@ void df = dfToDfConvInp df
 catMaybes ::
   ( DfConv dfA
   , DfConv dfB
-  , FwdPayload dfA ~ BwdPayload dfB
+  , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
-  , BwdPayload dfA ~ Maybe (FwdPayload dfB) ) =>
+  , FwdPayload dfA ~ Maybe (FwdPayload dfB) ) =>
   Proxy dfA ->
   Proxy dfB ->
-  Circuit (Reverse dfA) dfB
+  Circuit dfA dfB
 catMaybes dfA dfB
   =  fromDfCircuit dfA
   |> tupCircuits (Df.catMaybes) idC
@@ -760,14 +738,14 @@ catMaybes dfA dfB
 mapMaybe ::
   ( DfConv dfA
   , DfConv dfB
-  , FwdPayload dfA ~ BwdPayload dfB
+  , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
   , NFDataX (FwdPayload dfB) ) =>
   Proxy dfA ->
   Proxy dfB ->
-  (BwdPayload dfA -> Maybe (FwdPayload dfB)) ->
-  Circuit (Reverse dfA) dfB
+  (FwdPayload dfA -> Maybe (FwdPayload dfB)) ->
+  Circuit dfA dfB
 mapMaybe dfA dfB f
   =  fromDfCircuit dfA
   |> tupCircuits (Df.mapMaybe f) idC
@@ -777,14 +755,14 @@ mapMaybe dfA dfB f
 filter ::
   ( DfConv dfA
   , DfConv dfB
-  , FwdPayload dfA ~ BwdPayload dfB
+  , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
-  , BwdPayload dfA ~ FwdPayload dfB ) =>
+  , FwdPayload dfA ~ FwdPayload dfB ) =>
   Proxy dfA ->
   Proxy dfB ->
-  (BwdPayload dfA -> Bool) ->
-  Circuit (Reverse dfA) dfB
+  (FwdPayload dfA -> Bool) ->
+  Circuit dfA dfB
 filter dfA dfB f
   =  fromDfCircuit dfA
   |> tupCircuits (Df.filter f) idC
@@ -794,15 +772,15 @@ filter dfA dfB f
 mapLeft ::
   ( DfConv dfA
   , DfConv dfB
-  , FwdPayload dfA ~ BwdPayload dfB
+  , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
-  , BwdPayload dfA ~ Either a c
+  , FwdPayload dfA ~ Either a c
   , FwdPayload dfB ~ Either b c ) =>
   Proxy dfA ->
   Proxy dfB ->
   (a -> b) ->
-  Circuit (Reverse dfA) dfB
+  Circuit dfA dfB
 mapLeft dfA dfB f
   =  fromDfCircuit dfA
   |> tupCircuits (Df.mapLeft f) idC
@@ -812,15 +790,15 @@ mapLeft dfA dfB f
 mapRight ::
   ( DfConv dfA
   , DfConv dfB
-  , FwdPayload dfA ~ BwdPayload dfB
+  , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
-  , BwdPayload dfA ~ Either a b
+  , FwdPayload dfA ~ Either a b
   , FwdPayload dfB ~ Either a c ) =>
   Proxy dfA ->
   Proxy dfB ->
   (b -> c) ->
-  Circuit (Reverse dfA) dfB
+  Circuit dfA dfB
 mapRight dfA dfB f
   =  fromDfCircuit dfA
   |> tupCircuits (Df.mapRight f) idC
@@ -830,15 +808,15 @@ mapRight dfA dfB f
 either ::
   ( DfConv dfA
   , DfConv dfB
-  , FwdPayload dfA ~ BwdPayload dfB
+  , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
-  , BwdPayload dfA ~ Either a b ) =>
+  , FwdPayload dfA ~ Either a b ) =>
   Proxy dfA ->
   Proxy dfB ->
   (a -> FwdPayload dfB) ->
   (b -> FwdPayload dfB) ->
-  Circuit (Reverse dfA) dfB
+  Circuit dfA dfB
 either dfA dfB f g
   =  fromDfCircuit dfA
   |> tupCircuits (Df.either f g) idC
@@ -849,15 +827,15 @@ zipWith ::
   ( DfConv dfA
   , DfConv dfB
   , DfConv dfC
-  , FwdPayload dfA ~ BwdPayload dfC
-  , FwdPayload dfB ~ BwdPayload dfC
+  , BwdPayload dfA ~ BwdPayload dfC
+  , BwdPayload dfB ~ BwdPayload dfC
   , Dom dfA ~ Dom dfB
   , Dom dfA ~ Dom dfC
   , HiddenClockResetEnable (Dom dfA) ) =>
   (Proxy dfA, Proxy dfB) ->
   Proxy dfC ->
-  (BwdPayload dfA -> BwdPayload dfB -> FwdPayload dfC) ->
-  Circuit (Reverse (dfA, dfB)) dfC
+  (FwdPayload dfA -> FwdPayload dfB -> FwdPayload dfC) ->
+  Circuit (dfA, dfB) dfC
 zipWith dfAB dfC f
   =  tupFromDfConv dfAB
   |> coerceCircuit
@@ -871,15 +849,15 @@ zip ::
   ( DfConv dfA
   , DfConv dfB
   , DfConv dfC
-  , FwdPayload dfA ~ BwdPayload dfC
-  , FwdPayload dfB ~ BwdPayload dfC
+  , BwdPayload dfA ~ BwdPayload dfC
+  , BwdPayload dfB ~ BwdPayload dfC
   , Dom dfA ~ Dom dfB
   , Dom dfA ~ Dom dfC
   , HiddenClockResetEnable (Dom dfA)
-  , FwdPayload dfC ~ (BwdPayload dfA, BwdPayload dfB) ) =>
+  , FwdPayload dfC ~ (FwdPayload dfA, FwdPayload dfB) ) =>
   (Proxy dfA, Proxy dfB) ->
   Proxy dfC ->
-  Circuit (Reverse (dfA, dfB)) dfC
+  Circuit (dfA, dfB) dfC
 zip dfAB dfC
   =  tupFromDfConv dfAB
   |> coerceCircuit
@@ -893,17 +871,17 @@ partition ::
   ( DfConv dfA
   , DfConv dfB
   , DfConv dfC
-  , FwdPayload dfA ~ BwdPayload dfB
-  , FwdPayload dfA ~ BwdPayload dfC
+  , BwdPayload dfA ~ BwdPayload dfB
+  , BwdPayload dfA ~ BwdPayload dfC
   , Dom dfA ~ Dom dfB
   , Dom dfA ~ Dom dfC
   , HiddenClockResetEnable (Dom dfA)
-  , BwdPayload dfA ~ FwdPayload dfB
-  , BwdPayload dfA ~ FwdPayload dfC ) =>
+  , FwdPayload dfA ~ FwdPayload dfB
+  , FwdPayload dfA ~ FwdPayload dfC ) =>
   Proxy dfA ->
   (Proxy dfB, Proxy dfC) ->
-  (BwdPayload dfA -> Bool) ->
-  Circuit (Reverse dfA) (dfB, dfC)
+  (FwdPayload dfA -> Bool) ->
+  Circuit dfA (dfB, dfC)
 partition dfA dfBC f
   =  fromDfCircuit dfA
   |> coerceCircuit
@@ -916,15 +894,15 @@ partition dfA dfBC f
 route ::
   ( DfConv dfA
   , DfConv dfB
-  , FwdPayload dfA ~ BwdPayload dfB
+  , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
-  , BwdPayload dfA ~ (Index n, FwdPayload dfB)
+  , FwdPayload dfA ~ (Index n, FwdPayload dfB)
   , KnownNat n
   , 1 <= n ) =>
   Proxy dfA ->
-  Vec n (Proxy dfB) ->
-  Circuit (Reverse dfA) (Vec n dfB)
+  Proxy dfB ->
+  Circuit dfA (Vec n dfB)
 route dfA dfB
   =  fromDfCircuit dfA
   |> coerceCircuit
@@ -951,17 +929,17 @@ select ::
   ( DfConv dfA
   , DfConv dfB
   , DfConv dfC
-  , FwdPayload dfA ~ BwdPayload dfC
-  , FwdPayload dfB ~ BwdPayload dfC
+  , BwdPayload dfA ~ BwdPayload dfC
+  , BwdPayload dfB ~ BwdPayload dfC
   , Dom dfA ~ Dom dfB
   , Dom dfA ~ Dom dfC
   , HiddenClockResetEnable (Dom dfA)
-  , BwdPayload dfA ~ FwdPayload dfC
-  , BwdPayload dfB ~ Index n
+  , FwdPayload dfA ~ FwdPayload dfC
+  , FwdPayload dfB ~ Index n
   , KnownNat n ) =>
-  (Vec n (Proxy dfA), Proxy dfB) ->
+  (Proxy dfA, Proxy dfB) ->
   Proxy dfC ->
-  Circuit (Vec n (Reverse dfA), Reverse dfB) dfC
+  Circuit (Vec n dfA, dfB) dfC
 select (dfA, dfB) dfC
   =  tupCircuits (vecFromDfConv dfA) (fromDfCircuit dfB)
   |> selectHelperA
@@ -976,18 +954,18 @@ selectN ::
   ( DfConv dfA
   , DfConv dfB
   , DfConv dfC
-  , FwdPayload dfA ~ BwdPayload dfC
-  , FwdPayload dfB ~ BwdPayload dfC
+  , BwdPayload dfA ~ BwdPayload dfC
+  , BwdPayload dfB ~ BwdPayload dfC
   , Dom dfA ~ Dom dfB
   , Dom dfA ~ Dom dfC
   , HiddenClockResetEnable (Dom dfA)
-  , BwdPayload dfA ~ FwdPayload dfC
-  , BwdPayload dfB ~ (Index n, Index selectN)
+  , FwdPayload dfA ~ FwdPayload dfC
+  , FwdPayload dfB ~ (Index n, Index selectN)
   , KnownNat n
   , KnownNat selectN ) =>
-  (Vec n (Proxy dfA), Proxy dfB) ->
+  (Proxy dfA, Proxy dfB) ->
   Proxy dfC ->
-  Circuit (Vec n (Reverse dfA), Reverse dfB) dfC
+  Circuit (Vec n dfA, dfB) dfC
 selectN (dfA, dfB) dfC
   =  tupCircuits (vecFromDfConv dfA) (fromDfCircuit dfB)
   |> selectHelperA
@@ -1003,18 +981,18 @@ selectUntil ::
   ( DfConv dfA
   , DfConv dfB
   , DfConv dfC
-  , FwdPayload dfA ~ BwdPayload dfC
-  , FwdPayload dfB ~ BwdPayload dfC
+  , BwdPayload dfA ~ BwdPayload dfC
+  , BwdPayload dfB ~ BwdPayload dfC
   , Dom dfA ~ Dom dfB
   , Dom dfA ~ Dom dfC
   , HiddenClockResetEnable (Dom dfA)
-  , BwdPayload dfA ~ FwdPayload dfC
-  , BwdPayload dfB ~ Index n
+  , FwdPayload dfA ~ FwdPayload dfC
+  , FwdPayload dfB ~ Index n
   , KnownNat n ) =>
-  (Vec n (Proxy dfA), Proxy dfB) ->
+  (Proxy dfA, Proxy dfB) ->
   Proxy dfC ->
-  (BwdPayload dfA -> Bool) ->
-  Circuit (Vec n (Reverse dfA), Reverse dfB) dfC
+  (FwdPayload dfA -> Bool) ->
+  Circuit (Vec n dfA, dfB) dfC
 selectUntil (dfA, dfB) dfC f
   =  tupCircuits (vecFromDfConv dfA) (fromDfCircuit dfB)
   |> selectHelperA
@@ -1029,16 +1007,16 @@ selectUntil (dfA, dfB) dfC f
 fanout ::
   ( DfConv dfA
   , DfConv dfB
-  , FwdPayload dfA ~ BwdPayload dfB
+  , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
-  , BwdPayload dfA ~ FwdPayload dfB
-  , NFDataX (BwdPayload dfA)
+  , FwdPayload dfA ~ FwdPayload dfB
+  , NFDataX (FwdPayload dfA)
   , KnownNat numB
   , numB ~ (decNumB + 1) ) =>
   Proxy dfA ->
-  Vec numB (Proxy dfB) ->
-  Circuit (Reverse dfA) (Vec numB dfB)
+  Proxy dfB ->
+  Circuit dfA (Vec numB dfB)
 fanout dfA dfB
   =  fromDfCircuit dfA
   |> coerceCircuit
@@ -1051,17 +1029,17 @@ fanout dfA dfB
 fanin ::
   ( DfConv dfA
   , DfConv dfB
-  , FwdPayload dfA ~ BwdPayload dfB
+  , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
-  , BwdPayload dfA ~ FwdPayload dfB
-  , NFDataX (BwdPayload dfA)
+  , FwdPayload dfA ~ FwdPayload dfB
+  , NFDataX (FwdPayload dfA)
   , KnownNat numA
   , numA ~ (decNumA + 1) ) =>
-  Vec numA (Proxy dfA) ->
+  Proxy dfA ->
   Proxy dfB ->
-  (BwdPayload dfA -> BwdPayload dfA -> BwdPayload dfA) ->
-  Circuit (Vec numA (Reverse dfA)) dfB
+  (FwdPayload dfA -> FwdPayload dfA -> FwdPayload dfA) ->
+  Circuit (Vec numA dfA) dfB
 fanin dfA dfB f
   =  vecFromDfConv dfA
   |> coerceCircuit
@@ -1074,17 +1052,17 @@ fanin dfA dfB f
 mfanin ::
   ( DfConv dfA
   , DfConv dfB
-  , FwdPayload dfA ~ BwdPayload dfB
+  , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
-  , BwdPayload dfA ~ FwdPayload dfB
-  , NFDataX (BwdPayload dfA)
-  , Monoid (BwdPayload dfA)
+  , FwdPayload dfA ~ FwdPayload dfB
+  , NFDataX (FwdPayload dfA)
+  , Monoid (FwdPayload dfA)
   , KnownNat numA
   , numA ~ (decNumA + 1) ) =>
-  Vec numA (Proxy dfA) ->
+  Proxy dfA ->
   Proxy dfB ->
-  Circuit (Vec numA (Reverse dfA)) dfB
+  Circuit (Vec numA dfA) dfB
 mfanin dfA dfB
   =  vecFromDfConv dfA
   |> coerceCircuit
@@ -1097,15 +1075,15 @@ mfanin dfA dfB
 bundleVec ::
   ( DfConv dfA
   , DfConv dfB
-  , FwdPayload dfA ~ BwdPayload dfB
+  , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
-  , Vec n (BwdPayload dfA) ~ FwdPayload dfB
+  , Vec n (FwdPayload dfA) ~ FwdPayload dfB
   , KnownNat n
   , n ~ (decN + 1) ) =>
-  Vec n (Proxy dfA) ->
+  Proxy dfA ->
   Proxy dfB ->
-  Circuit (Vec n (Reverse dfA)) dfB
+  Circuit (Vec n dfA) dfB
 bundleVec dfA dfB
   =  vecFromDfConv dfA
   |> coerceCircuit
@@ -1119,16 +1097,16 @@ bundleVec dfA dfB
 unbundleVec ::
   ( DfConv dfA
   , DfConv dfB
-  , FwdPayload dfA ~ BwdPayload dfB
+  , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
-  , BwdPayload dfA ~ Vec n (FwdPayload dfB)
+  , FwdPayload dfA ~ Vec n (FwdPayload dfB)
   , NFDataX (FwdPayload dfB)
   , KnownNat n
   , 1 <= n ) =>
   Proxy dfA ->
-  Vec n (Proxy dfB) ->
-  Circuit (Reverse dfA) (Vec n dfB)
+  Proxy dfB ->
+  Circuit dfA (Vec n dfB)
 unbundleVec dfA dfB
   =  fromDfCircuit dfA
   |> coerceCircuit
@@ -1143,15 +1121,15 @@ unbundleVec dfA dfB
 roundrobin ::
   ( DfConv dfA
   , DfConv dfB
-  , FwdPayload dfA ~ BwdPayload dfB
+  , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
-  , BwdPayload dfA ~ FwdPayload dfB
+  , FwdPayload dfA ~ FwdPayload dfB
   , KnownNat n
   , n ~ (decN + 1) ) =>
   Proxy dfA ->
-  Vec n (Proxy dfB) ->
-  Circuit (Reverse dfA) (Vec n dfB)
+  Proxy dfB ->
+  Circuit dfA (Vec n dfB)
 roundrobin dfA dfB
   =  fromDfCircuit dfA
   |> coerceCircuit
@@ -1165,16 +1143,16 @@ roundrobin dfA dfB
 roundrobinCollect ::
   ( DfConv dfA
   , DfConv dfB
-  , FwdPayload dfA ~ BwdPayload dfB
+  , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
-  , BwdPayload dfA ~ FwdPayload dfB
+  , FwdPayload dfA ~ FwdPayload dfB
   , KnownNat n
   , n ~ (decN + 1) ) =>
-  Vec n (Proxy dfA) ->
+  Proxy dfA ->
   Proxy dfB ->
   Df.CollectMode ->
-  Circuit (Vec n (Reverse dfA)) dfB
+  Circuit (Vec n dfA) dfB
 roundrobinCollect dfA dfB mode
   =  vecFromDfConv dfA
   |> coerceCircuit
@@ -1187,14 +1165,14 @@ roundrobinCollect dfA dfB mode
 registerFwd ::
   ( DfConv dfA
   , DfConv dfB
-  , FwdPayload dfA ~ BwdPayload dfB
+  , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
-  , BwdPayload dfA ~ FwdPayload dfB
-  , NFDataX (BwdPayload dfA) ) =>
+  , FwdPayload dfA ~ FwdPayload dfB
+  , NFDataX (FwdPayload dfA) ) =>
   Proxy dfA ->
   Proxy dfB ->
-  Circuit (Reverse dfA) dfB
+  Circuit dfA dfB
 registerFwd dfA dfB
   =  fromDfCircuit dfA
   |> tupCircuits (Df.registerFwd) idC
@@ -1205,14 +1183,14 @@ registerFwd dfA dfB
 registerBwd ::
   ( DfConv dfA
   , DfConv dfB
-  , FwdPayload dfA ~ BwdPayload dfB
+  , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
-  , BwdPayload dfA ~ FwdPayload dfB
-  , NFDataX (BwdPayload dfA) ) =>
+  , FwdPayload dfA ~ FwdPayload dfB
+  , NFDataX (FwdPayload dfA) ) =>
   Proxy dfA ->
   Proxy dfB ->
-  Circuit (Reverse dfA) dfB
+  Circuit dfA dfB
 registerBwd dfA dfB
   =  fromDfCircuit dfA
   |> tupCircuits (Df.registerBwd) idC
@@ -1222,17 +1200,17 @@ registerBwd dfA dfB
 fifo ::
   ( DfConv dfA
   , DfConv dfB
-  , FwdPayload dfA ~ BwdPayload dfB
+  , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
   , KnownNat depth
   , 1 <= depth
-  , BwdPayload dfA ~ FwdPayload dfB
-  , NFDataX (BwdPayload dfA) ) =>
+  , FwdPayload dfA ~ FwdPayload dfB
+  , NFDataX (FwdPayload dfA) ) =>
   Proxy dfA ->
   Proxy dfB ->
   SNat depth ->
-  Circuit (Reverse dfA) dfB
+  Circuit dfA dfB
 fifo dfA dfB fifoDepth
   =  fromDfCircuit dfA
   |> tupCircuits (Df.fifo fifoDepth) idC
@@ -1258,8 +1236,8 @@ sample ::
   , HiddenClockResetEnable (Dom dfB) ) =>
   Proxy dfB ->
   SimulationConfig ->
-  Circuit () (Reverse dfB) ->
-  [Maybe (BwdPayload dfB)]
+  Circuit () dfB ->
+  [Maybe (FwdPayload dfB)]
 sample dfB conf c = Df.sample conf (c |> dfToDfConvInp dfB)
 
 -- | Stall every valid Df packet with a given number of cycles. If there are
@@ -1272,7 +1250,7 @@ stall ::
   , DfConv dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
-  , BwdPayload dfA ~ FwdPayload dfB
+  , FwdPayload dfA ~ FwdPayload dfB
   , HasCallStack ) =>
   Proxy dfA ->
   Proxy dfB ->
@@ -1282,7 +1260,7 @@ stall ::
   StallAck ->
   -- Number of cycles to stall for every valid Df packet
   [Int] ->
-  Circuit (Reverse dfA) dfB
+  Circuit dfA dfB
 stall dfA dfB conf stallAck stalls
   =  dfToDfConvInp dfA
   |> Df.stall conf stallAck stalls
@@ -1311,11 +1289,11 @@ simulate ::
   ( Clock (Dom dfA) ->
     Reset (Dom dfA) ->
     Enable (Dom dfA) ->
-    Circuit dfA (Reverse dfB) ) ->
+    Circuit dfA dfB ) ->
   -- | Inputs
   [Maybe (FwdPayload dfA)] ->
   -- | Outputs
-  [Maybe (BwdPayload dfB)]
+  [Maybe (FwdPayload dfB)]
 simulate dfA dfB conf circ inputs = Df.simulate conf circ' inputs where
   circ' clk rst en
     =  withClockResetEnable clk rst en (dfToDfConvOtp dfA)
