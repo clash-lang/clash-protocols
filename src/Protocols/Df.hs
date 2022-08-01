@@ -496,11 +496,7 @@ bundleVec
  where
   go (iDats0, iAck) = (C.repeat oAck, maybeToData dat)
    where
-    oAck =
-      bool
-        (Ack False)
-        (iAck)
-        (Maybe.isJust dat)
+    oAck = maybe (Ack False) (P.const iAck) dat
     dat = traverse dataToMaybe iDats0
 
 -- | Split up a 'Df' stream of a vector into multiple independent 'Df' streams.
@@ -620,7 +616,7 @@ registerFwd
  where
    go s0 (iDat, Ack iAck) = (s1, (Ack oAck, s0))
     where
-     oAck = not (Maybe.isJust (dataToMaybe s0)) || iAck
+     oAck = Maybe.isNothing (dataToMaybe s0) || iAck
      s1 = if oAck then iDat else s0
 
 -- | Place register on /backward/ part of a circuit. This is implemented using a
@@ -667,28 +663,28 @@ fifo fifoDepth = Circuit $ C.hideReset circuitFunction where
 
   -- when reset is on, set state to initial state and output blank outputs
   machineAsFunction _ (_, True, _, _) = (s0, (0, Nothing, Ack False, NoData))
-  machineAsFunction (rAddr,wAddr,amtLeft) (brRead, False, pushData, Ack popped) =
+  machineAsFunction (rAddr0,wAddr0,amtLeft0) (brRead0, False, pushData, Ack popped) =
     let -- potentially push an item onto blockram
-        maybePush = if amtLeft > 0 then dataToMaybe pushData else Nothing
-        brWrite = (wAddr,) <$> maybePush
+        maybePush = if amtLeft0 > 0 then dataToMaybe pushData else Nothing
+        brWrite = (wAddr0,) <$> maybePush
         -- adjust write address and amount left
         --   (output state machine doesn't see amountLeft')
-        (wAddr', amtLeft') = if (Maybe.isJust maybePush)
-                             then (C.satSucc C.SatWrap wAddr, amtLeft-1)
-                             else (wAddr, amtLeft)
+        (wAddr1, amtLeft1)
+          | Just _ <- maybePush = (C.satSucc C.SatWrap wAddr0, amtLeft0 - 1)
+          | otherwise           = (wAddr0, amtLeft0)
         -- if we're about to push onto an empty queue, we can pop immediately instead
-        (brRead_, amtLeft_) = if (amtLeft == maxBound && Maybe.isJust maybePush)
-                              then (Maybe.fromJust maybePush, amtLeft')
-                              else (brRead, amtLeft)
+        (brRead1, amtLeft2)
+          | Just push <- maybePush, amtLeft0 == maxBound = (push, amtLeft1)
+          | otherwise                                    = (brRead0, amtLeft0)
         -- adjust blockram read address and amount left
-        (rAddr', amtLeft'') = if (amtLeft_ < maxBound && popped)
-                              then (C.satSucc C.SatWrap rAddr, amtLeft'+1)
-                              else (rAddr, amtLeft')
-        brReadAddr = rAddr'
+        (rAddr1, amtLeft3)
+          | amtLeft2 < maxBound && popped = (C.satSucc C.SatWrap rAddr0, amtLeft1 + 1)
+          | otherwise                     = (rAddr0, amtLeft1)
+        brReadAddr = rAddr1
         -- return our new state and outputs
         otpAck = Maybe.isJust maybePush
-        otpDat = if amtLeft_ < maxBound then Data brRead_ else NoData
-    in  ((rAddr', wAddr', amtLeft''), (brReadAddr, brWrite, Ack otpAck, otpDat))
+        otpDat = if amtLeft2 < maxBound then Data brRead1 else NoData
+    in  ((rAddr1, wAddr1, amtLeft3), (brReadAddr, brWrite, Ack otpAck, otpDat))
 
   -- initial state
   -- (next read address in bram, next write address in bram, space left in bram)

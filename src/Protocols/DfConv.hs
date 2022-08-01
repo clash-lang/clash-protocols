@@ -95,34 +95,34 @@ import qualified Protocols.Df as Df
 import           Protocols.Internal
 
 
--- | Class for protocols that are "similar" to 'Df', i.e. they can be
--- converted into a 'Df' port using a 'Circuit' (see 'toDfCircuit'). This is
--- for protocols that carry some "interesting" data, as well as some
--- "uninteresting" data (e.g. address, burst length). The 'Circuit' should
--- abstract away the complexities of each protocol, so that they can be dealt
--- with uniformly using 'Df'. For pipelined protocols, which can carry both in
--- the same cycle, the 'Circuit' should pass along the interesting parts but
--- not the uninteresting parts.
---
--- Can take parameters, e.g. for addresses. Defaults to being the right side
--- of the circuit (@Fwd ~ Otp, Bwd ~ Inp@), but this can be switched using
--- 'Reverse' from 'Protocols.Internal'. Supports both bwd (input/read) data
--- and fwd (output/write) data.
+-- | Class for protocols that are "similar" to 'Df', i.e. they can be converted
+-- to and from a pair of 'Df' ports (one going 'Fwd', one going 'Bwd'), using
+-- a 'Circuit' (see 'toDfCircuit' and 'fromDfCircuit'). This is for protocols
+-- that carry some "interesting" data, as well as some "uninteresting" data
+-- (e.g. address, burst length). The 'Circuit' should abstract away the
+-- complexities of each protocol, so that they can be dealt with uniformly
+-- using 'Df'. For pipelined protocols, which can carry both in the same cycle,
+-- the 'Circuit' should pass along the interesting parts but not the
+-- uninteresting parts.
 class (Protocol df) => DfConv df where
-  -- | Domain that messages are being sent over. It should be true that
+  -- | Domain that messages are being sent over. In general, it should be true that
   -- @Fwd df ~ Signal dom [something]@ and that @Bwd df ~ Signal dom [something]@.
   type Dom df :: Domain
-  -- | Information being sent into the port, along @Bwd df@. This is the
-  -- information being carried over the protocol, /not/ the messages being
-  -- carried over the protocol, so it doesn't include auxiliary information
-  -- like address or burst length. If no data is sent in this direction, set
-  -- this to @()@.
+
+  -- | Information being sent in the 'Bwd' direction, along
+  -- @Reverse (Df (Dom df) (BwdPayload df))@. This is the information being
+  -- carried over the protocol, /not/ the messages being carried over the
+  -- protocol, so it doesn't include auxiliary information like address or
+  -- burst length. If no data is sent in this direction, set this to @()@.
   type BwdPayload df
-  -- | Information being sent out from the port, along @Fwd df@. This is the
-  -- information being carried over the protocol, /not/ the messages being
-  -- carried over the protocol, so it doesn't include auxiliary information like
-  -- address or burst length. If no data is sent in this direction, set this to @()@.
+
+  -- | Information being sent in the 'Fwd' direction, along
+  -- @Df (Dom df) (FwdPayload df)@. This is the information being
+  -- carried over the protocol, /not/ the messages being carried over the
+  -- protocol, so it doesn't include auxiliary information like address or
+  -- burst length. If no data is sent in this direction, set this to @()@.
   type FwdPayload df
+
   -- | Circuit which converts Df into this protocol's messages. This should
   -- deal with all the complexities of your protocol such as addresses, bursts,
   -- pipelining, etc. so that a circuit connected to the 'Df' end doesn't have
@@ -135,6 +135,7 @@ class (Protocol df) => DfConv df where
     Circuit
       (Df (Dom df) (FwdPayload df), Reverse (Df (Dom df) (BwdPayload df)))
       df
+
   -- | 'toDfCircuit', but in reverse: the @df@ port is on the left side instead
   -- of the right side.
   fromDfCircuit :: (HiddenClockResetEnable (Dom df)) =>
@@ -241,8 +242,9 @@ instance (NFDataX dat) => DfConv (Df dom dat) where
 
 -- DfConv instances for Axi4
 
--- Manager end only allows for burst length of 1, will ignore the burst length
--- you input
+-- Manager end (toDfCircuit) only allows for burst length of 1, will ignore the
+-- burst length you input. Subordinate end (fromDfCircuit) allows for any burst
+-- length.
 instance
   ( GoodAxi4WriteAddressConfig confAW
   , GoodAxi4WriteDataConfig confW
@@ -440,18 +442,18 @@ instance
       = P.pure (S2M_ReadAddress { _arready = False }, Nothing)
     processAddr msg dfAckIn = do
       (burstLenLeft,_) <- get
-      when (burstLenLeft == 0)
-        $ put (succResizing $ fromMaybe 0 (fromKeepType $ _arlen msg), _arid msg)
-      P.pure (S2M_ReadAddress{ _arready = burstLenLeft == 0 && dfAckIn }
-             , Just (axi4ReadAddrMsgToReadAddrInfo msg))
+      when (burstLenLeft == 0) $
+        put (succResizing $ fromMaybe 0 (fromKeepType $ _arlen msg), _arid msg)
+      P.pure ( S2M_ReadAddress{ _arready = burstLenLeft == 0 && dfAckIn }
+             , Just (axi4ReadAddrMsgToReadAddrInfo msg) )
 
     succResizing :: (KnownNat n) => Index n -> Index (n+1)
     succResizing n = (resize n) + 1
 
     sendData dfDatIn dataAck = do
-      (burstLenLeft,readId) <- get
-      case (burstLenLeft == 0, dfDatIn) of
-        (False, Just (_rdata, _ruser, _rresp)) -> do
+      (burstLenLeft, readId) <- get
+      case (burstLenLeft, dfDatIn) of
+        (0, Just (_rdata, _ruser, _rresp)) -> do
           put (burstLenLeft-1, readId)
           P.pure
             ( S2M_ReadData
@@ -478,7 +480,7 @@ dfToDfConvOtp ::
   Circuit (Df (Dom df) (FwdPayload df)) df
 dfToDfConvOtp = mapCircuit (, P.pure (Ack False)) P.fst id id . toDfCircuit
 
--- 'toDfCircuit', but the 'DfConv' is inside a 'Vec'
+-- | 'toDfCircuit', but the 'DfConv' is inside a 'Vec'
 vecToDfConv ::
   DfConv df =>
   HiddenClockResetEnable (Dom df) =>
@@ -490,7 +492,7 @@ vecToDfConv ::
 vecToDfConv proxy = mapCircuit (uncurry C.zip) unzip id id $ vecCircuits
                   $ repeat $ toDfCircuit proxy
 
--- 'fromDfCircuit', but the 'DfConv' is inside a 'Vec'
+-- | 'fromDfCircuit', but the 'DfConv' is inside a 'Vec'
 vecFromDfConv ::
   DfConv df =>
   HiddenClockResetEnable (Dom df) =>
@@ -502,12 +504,12 @@ vecFromDfConv ::
 vecFromDfConv proxy = mapCircuit id id unzip (uncurry C.zip) $ vecCircuits
                     $ repeat $ fromDfCircuit proxy
 
--- 'toDfCircuit', but on a pair of 'DfConv's
+-- | 'toDfCircuit', but on a pair of 'DfConv's
 tupToDfConv ::
   ( DfConv dfA
-  , DfConv dfB ) =>
-  Dom dfA ~ Dom dfB =>
-  HiddenClockResetEnable (Dom dfA) =>
+  , DfConv dfB
+  , Dom dfA ~ Dom dfB
+  , HiddenClockResetEnable (Dom dfA) ) =>
   (Proxy dfA, Proxy dfB) ->
   Circuit
     ( ( Df (Dom dfA) (FwdPayload dfA)
@@ -520,14 +522,14 @@ tupToDfConv (argsA, argsB)
   = mapCircuit f f id id
   $ tupCircuits (toDfCircuit argsA) (toDfCircuit argsB)
   where
-  f ((a,b),(c,d)) = ((a,c),(b,d))
+  f ((a, b), (c, d)) = ((a, c), (b, d))
 
--- 'fromDfCircuit', but on a pair of 'DfConv's
+-- | 'fromDfCircuit', but on a pair of 'DfConv's
 tupFromDfConv ::
   ( DfConv dfA
-  , DfConv dfB ) =>
-  Dom dfA ~ Dom dfB =>
-  HiddenClockResetEnable (Dom dfA) =>
+  , DfConv dfB
+  , Dom dfA ~ Dom dfB
+  , HiddenClockResetEnable (Dom dfA) ) =>
   (Proxy dfA, Proxy dfB) ->
   Circuit
     (dfA, dfB)
