@@ -362,6 +362,9 @@ prop_selectUntil =
     let tagEnd xs = zip (init xs) (repeat False) <> [(last xs, True)]
     pure (concatMap tagEnd inputs0)
 
+prop_fifo :: Property
+prop_fifo = idWithModelDf' id (C.withClockResetEnable C.clockGen C.resetGen C.enableGen Df.fifo (C.SNat @10))
+
 tests :: TestTree
 tests =
     -- TODO: Move timeout option to hedgehog for better error messages.

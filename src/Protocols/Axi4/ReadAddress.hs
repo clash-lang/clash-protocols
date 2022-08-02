@@ -6,6 +6,7 @@ to the AXI4 specification.
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wno-missing-fields #-}
@@ -14,7 +15,6 @@ module Protocols.Axi4.ReadAddress
   ( M2S_ReadAddress(..)
   , S2M_ReadAddress(..)
   , Axi4ReadAddress
-  , mapFull
 
     -- * configuration
   , Axi4ReadAddressConfig(..)
@@ -29,12 +29,16 @@ module Protocols.Axi4.ReadAddress
   , ARKeepCache
   , ARKeepPermissions
   , ARKeepQos
+
+    -- * read address info
+  , Axi4ReadAddressInfo(..)
+  , axi4ReadAddrMsgToReadAddrInfo
+  , axi4ReadAddrMsgFromReadAddrInfo
   ) where
 
 -- base
 import Data.Coerce
 import Data.Kind (Type)
-import Data.Proxy
 import GHC.Generics (Generic)
 
 -- clash-prelude
@@ -43,8 +47,6 @@ import qualified Clash.Prelude as C
 -- me
 import Protocols.Axi4.Common
 import Protocols.Internal
-import Protocols.DfLike (DfLike)
-import qualified Protocols.DfLike as DfLike
 
 -- | Configuration options for 'Axi4ReadAddress'.
 data Axi4ReadAddressConfig = Axi4ReadAddressConfig
@@ -134,51 +136,6 @@ instance Protocol (Axi4ReadAddress dom conf userType) where
 
 instance Backpressure (Axi4ReadAddress dom conf userType) where
   boolsToBwd _ = C.fromList_lazy . coerce
-
-instance DfLike dom (Axi4ReadAddress dom conf) userType where
-  type Data (Axi4ReadAddress dom conf) userType =
-    M2S_ReadAddress conf userType
-
-  type Payload userType = userType
-
-  type Ack (Axi4ReadAddress dom conf) userType =
-    S2M_ReadAddress
-
-  getPayload _ (M2S_ReadAddress{_aruser}) = Just _aruser
-  getPayload _ M2S_NoReadAddress = Nothing
-  {-# INLINE getPayload #-}
-
-  setPayload _ _ dat (Just b) = dat{_aruser=b}
-  setPayload _ dfB _ Nothing = DfLike.noData dfB
-  {-# INLINE setPayload #-}
-
-  noData _ = M2S_NoReadAddress
-  {-# INLINE noData #-}
-
-  boolToAck _ = coerce
-  {-# INLINE boolToAck #-}
-
-  ackToBool _ = coerce
-  {-# INLINE ackToBool #-}
-
-instance (C.KnownDomain dom, C.NFDataX userType, C.ShowX userType, Show userType) =>
-  Simulate (Axi4ReadAddress dom conf userType) where
-
-  type SimulateFwdType (Axi4ReadAddress dom conf userType) =
-    [M2S_ReadAddress conf userType]
-
-  type SimulateBwdType (Axi4ReadAddress dom conf userType) =
-    [S2M_ReadAddress]
-
-  type SimulateChannels (Axi4ReadAddress dom conf userType) = 1
-
-  simToSigFwd Proxy = C.fromList_lazy
-  simToSigBwd Proxy = C.fromList_lazy
-  sigToSimFwd Proxy = C.sample_lazy
-  sigToSimBwd Proxy = C.sample_lazy
-
-  stallC conf (C.head -> (stallAck, stalls)) =
-    DfLike.stall Proxy conf stallAck stalls
 
 -- | See Table A2-5 "Read address channel signals"
 
@@ -306,17 +263,93 @@ deriving instance
   ) =>
   C.NFDataX (M2S_ReadAddress conf userType)
 
--- | Circuit that transforms the LHS 'Axi4ReadAddress' protocol to a
--- version using different type parameters according to two functions
--- that can transform the data and ack signal to and from the other protocol.
-mapFull ::
-  forall dom
-    conf1 t1
-    conf2 t2 .
-  (M2S_ReadAddress conf1 t1 ->
-    M2S_ReadAddress conf2 t2) ->
-  (S2M_ReadAddress -> S2M_ReadAddress) ->
-  Circuit
-    (Axi4ReadAddress dom conf1 t1)
-    (Axi4ReadAddress dom conf2 t2)
-mapFull = DfLike.mapDfLike Proxy Proxy
+-- | Mainly for use in @DfConv@.
+--
+-- Data carried along 'Axi4ReadAddress' channel which is put in control of
+-- the user, rather than being managed by the @DfConv@ instances. Matches up
+-- one-to-one with the fields of 'M2S_ReadAddress' except for '_arlen',
+-- '_arsize', and '_arburst'.
+data Axi4ReadAddressInfo (conf :: Axi4ReadAddressConfig) (userType :: Type)
+  = Axi4ReadAddressInfo
+  { -- | Id
+    _ariid :: !(C.BitVector (ARIdWidth conf))
+
+    -- | Address
+  , _ariaddr :: !(C.BitVector (ARAddrWidth conf))
+
+    -- | Region
+  , _ariregion :: !(RegionType (ARKeepRegion conf))
+
+    -- | Burst length
+  , _arilen :: !(BurstLengthType (ARKeepBurstLength conf))
+
+    -- | Burst size
+  , _arisize :: !(SizeType (ARKeepSize conf))
+
+    -- | Burst type
+  , _ariburst :: !(BurstType (ARKeepBurst conf))
+
+    -- | Lock type
+  , _arilock :: !(LockType (ARKeepLock conf))
+
+    -- | Cache type
+  , _aricache :: !(CacheType (ARKeepCache conf))
+
+    -- | Protection type
+  , _ariprot :: !(PermissionsType (ARKeepPermissions conf))
+
+    -- | QoS value
+  , _ariqos :: !(QosType (ARKeepQos conf))
+
+    -- | User data
+  , _ariuser :: !userType
+  }
+  deriving (Generic)
+
+deriving instance
+  ( GoodAxi4ReadAddressConfig conf
+  , Show userType ) =>
+  Show (Axi4ReadAddressInfo conf userType)
+
+deriving instance
+  ( GoodAxi4ReadAddressConfig conf
+  , C.NFDataX userType ) =>
+  C.NFDataX (Axi4ReadAddressInfo conf userType)
+
+-- | Convert 'M2S_ReadAddress' to 'Axi4ReadAddressInfo', dropping some info
+axi4ReadAddrMsgToReadAddrInfo
+  :: M2S_ReadAddress conf userType
+  -> Axi4ReadAddressInfo conf userType
+axi4ReadAddrMsgToReadAddrInfo M2S_NoReadAddress = C.errorX "Expected ReadAddress"
+axi4ReadAddrMsgToReadAddrInfo M2S_ReadAddress{..}
+  = Axi4ReadAddressInfo
+  { _ariid     = _arid
+  , _ariaddr   = _araddr
+  , _ariregion = _arregion
+  , _arilen    = _arlen
+  , _arisize   = _arsize
+  , _ariburst  = _arburst
+  , _arilock   = _arlock
+  , _aricache  = _arcache
+  , _ariprot   = _arprot
+  , _ariqos    = _arqos
+  , _ariuser   = _aruser
+  }
+
+-- | Convert 'Axi4ReadAddressInfo' to 'M2S_ReadAddress', adding some info
+axi4ReadAddrMsgFromReadAddrInfo
+  :: Axi4ReadAddressInfo conf userType -> M2S_ReadAddress conf userType
+axi4ReadAddrMsgFromReadAddrInfo Axi4ReadAddressInfo{..}
+  = M2S_ReadAddress
+  { _arid     = _ariid
+  , _araddr   = _ariaddr
+  , _arregion = _ariregion
+  , _arlen    = _arilen
+  , _arsize   = _arisize
+  , _arburst  = _ariburst
+  , _arlock   = _arilock
+  , _arcache  = _aricache
+  , _arprot   = _ariprot
+  , _arqos    = _ariqos
+  , _aruser   = _ariuser
+  }

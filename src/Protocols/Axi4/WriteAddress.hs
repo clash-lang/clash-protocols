@@ -6,6 +6,7 @@ to the AXI4 specification.
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {-# OPTIONS_GHC -Wno-missing-fields #-}
@@ -14,7 +15,6 @@ module Protocols.Axi4.WriteAddress
   ( M2S_WriteAddress(..)
   , S2M_WriteAddress(..)
   , Axi4WriteAddress
-  , mapFull
 
     -- * configuration
   , Axi4WriteAddressConfig(..)
@@ -29,12 +29,16 @@ module Protocols.Axi4.WriteAddress
   , AWKeepCache
   , AWKeepPermissions
   , AWKeepQos
+
+    -- * write address info
+  , Axi4WriteAddressInfo(..)
+  , axi4WriteAddrMsgToWriteAddrInfo
+  , axi4WriteAddrMsgFromWriteAddrInfo
   ) where
 
 -- base
 import Data.Coerce (coerce)
 import Data.Kind (Type)
-import Data.Proxy
 import GHC.Generics (Generic)
 
 -- clash-prelude
@@ -43,8 +47,6 @@ import qualified Clash.Prelude as C
 -- me
 import Protocols.Axi4.Common
 import Protocols.Internal
-import Protocols.DfLike (DfLike)
-import qualified Protocols.DfLike as DfLike
 
 -- | Configuration options for 'Axi4WriteAddress'.
 data Axi4WriteAddressConfig = Axi4WriteAddressConfig
@@ -135,50 +137,6 @@ instance Protocol (Axi4WriteAddress dom conf userType) where
 instance Backpressure (Axi4WriteAddress dom conf userType) where
   boolsToBwd _ = C.fromList_lazy . coerce
 
-instance DfLike dom (Axi4WriteAddress dom conf) userType where
-  type Data (Axi4WriteAddress dom conf) userType =
-    M2S_WriteAddress conf userType
-
-  type Payload userType = userType
-
-  type Ack (Axi4WriteAddress dom conf) userType =
-    S2M_WriteAddress
-
-  getPayload _ (M2S_WriteAddress{_awuser}) = Just _awuser
-  getPayload _ M2S_NoWriteAddress = Nothing
-  {-# INLINE getPayload #-}
-
-  setPayload _ _ dat (Just b) = dat{_awuser=b}
-  setPayload _ dfB _ Nothing = DfLike.noData dfB
-  {-# INLINE setPayload #-}
-
-  noData _ = M2S_NoWriteAddress
-  {-# INLINE noData #-}
-
-  boolToAck _ = coerce
-  {-# INLINE boolToAck #-}
-
-  ackToBool _ = coerce
-  {-# INLINE ackToBool #-}
-
-instance (C.KnownDomain dom, C.NFDataX userType, C.ShowX userType, Show userType) =>
-  Simulate (Axi4WriteAddress dom conf userType) where
-
-  type SimulateFwdType (Axi4WriteAddress dom conf userType) =
-    [M2S_WriteAddress conf userType]
-
-  type SimulateBwdType (Axi4WriteAddress dom conf userType) =
-    [S2M_WriteAddress]
-
-  type SimulateChannels (Axi4WriteAddress dom conf userType) = 1
-
-  simToSigFwd Proxy = C.fromList_lazy
-  simToSigBwd Proxy = C.fromList_lazy
-  sigToSimFwd Proxy = C.sample_lazy
-  sigToSimBwd Proxy = C.sample_lazy
-
-  stallC conf (C.head -> (stallAck, stalls)) =
-    DfLike.stall Proxy conf stallAck stalls
 
 -- | See Table A2-2 "Write address channel signals"
 data M2S_WriteAddress
@@ -304,17 +262,87 @@ deriving instance
   ) =>
   C.NFDataX (M2S_WriteAddress conf userType)
 
--- | Circuit that transforms the LHS 'Axi4WriteAddress' protocol to a
--- version using different type parameters according to two functions
--- that can transform the data and ack signal to and from the other protocol.
-mapFull ::
-  forall dom
-    conf1 userType1
-    conf2 userType2 .
-  (M2S_WriteAddress conf1 userType1 ->
-    M2S_WriteAddress conf2 userType2) ->
-  (S2M_WriteAddress -> S2M_WriteAddress) ->
-  Circuit
-    (Axi4WriteAddress dom conf1 userType1)
-    (Axi4WriteAddress dom conf2 userType2)
-mapFull = DfLike.mapDfLike Proxy Proxy
+-- | Mainly for use in @DfConv@.
+--
+-- Data carried along 'Axi4WriteAddress' channel which is put in control of
+-- the user, rather than being managed by the @DfConv@ instances. Matches up
+-- one-to-one with the fields of 'M2S_WriteAddress' except for '_awlen',
+-- '_awsize', and '_awburst'.
+data Axi4WriteAddressInfo (conf :: Axi4WriteAddressConfig) (userType :: Type)
+  = Axi4WriteAddressInfo
+  { -- | Id
+    _awiid :: !(C.BitVector (AWIdWidth conf))
+
+    -- | Address
+  , _awiaddr :: !(C.BitVector (AWAddrWidth conf))
+
+    -- | Region
+  , _awiregion :: !(RegionType (AWKeepRegion conf))
+
+    -- | Burst size
+  , _awisize :: !(SizeType (AWKeepSize conf))
+
+    -- | Lock type
+  , _awilock :: !(LockType (AWKeepLock conf))
+
+    -- | Cache type
+  , _awicache :: !(CacheType (AWKeepCache conf))
+
+    -- | Protection type
+  , _awiprot :: !(PermissionsType (AWKeepPermissions conf))
+
+    -- | QoS value
+  , _awiqos :: !(QosType (AWKeepQos conf))
+
+    -- | User data
+  , _awiuser :: !userType
+  }
+  deriving (Generic)
+
+deriving instance
+  ( GoodAxi4WriteAddressConfig conf
+  , Show userType ) =>
+  Show (Axi4WriteAddressInfo conf userType)
+
+deriving instance
+  ( GoodAxi4WriteAddressConfig conf
+  , C.NFDataX userType ) =>
+  C.NFDataX (Axi4WriteAddressInfo conf userType)
+
+-- | Convert 'M2S_WriteAddress' to 'Axi4WriteAddressInfo', dropping some info
+axi4WriteAddrMsgToWriteAddrInfo
+  :: M2S_WriteAddress conf userType
+  -> Axi4WriteAddressInfo conf userType
+axi4WriteAddrMsgToWriteAddrInfo M2S_NoWriteAddress = C.errorX "Expected WriteAddress"
+axi4WriteAddrMsgToWriteAddrInfo M2S_WriteAddress{..}
+  = Axi4WriteAddressInfo
+  { _awiid     = _awid
+  , _awiaddr   = _awaddr
+  , _awiregion = _awregion
+  , _awisize   = _awsize
+  , _awilock   = _awlock
+  , _awicache  = _awcache
+  , _awiprot   = _awprot
+  , _awiqos    = _awqos
+  , _awiuser   = _awuser
+  }
+
+-- | Convert 'Axi4WriteAddressInfo' to 'M2S_WriteAddress', adding some info
+axi4WriteAddrMsgFromWriteAddrInfo
+  :: BurstLengthType (AWKeepBurstLength conf)
+  -> BurstType (AWKeepBurst conf)
+  -> Axi4WriteAddressInfo conf userType
+  -> M2S_WriteAddress conf userType
+axi4WriteAddrMsgFromWriteAddrInfo _awlen _awburst Axi4WriteAddressInfo{..}
+  = M2S_WriteAddress
+  { _awid     = _awiid
+  , _awaddr   = _awiaddr
+  , _awregion = _awiregion
+  , _awsize   = _awisize
+  , _awlock   = _awilock
+  , _awcache  = _awicache
+  , _awprot   = _awiprot
+  , _awqos    = _awiqos
+  , _awuser   = _awiuser
+  , _awlen, _awburst
+  }
