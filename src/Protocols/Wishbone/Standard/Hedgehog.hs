@@ -1,6 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 -- |
 -- Types and functions to aid with testing Wishbone circuits.
@@ -22,7 +21,7 @@ import Hedgehog ((===))
 import qualified Hedgehog as H
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
-import Protocols
+import Protocols hiding (stallC, circuit)
 import Protocols.Hedgehog
 import Protocols.Wishbone
 import Prelude as P hiding (cycle)
@@ -80,9 +79,9 @@ validateStandard ::
 validateStandard m2s s2m = go 0 (P.zip m2s s2m) WSSQuiet
   where
     go _ [] _ = Right ()
-    go n ((fwd, bwd) : rest) st = case nextStateStandard st fwd bwd of
+    go n ((fwd, bwd) : rest) st0 = case nextStateStandard st0 fwd bwd of
       Left e -> Left (n, e)
-      Right st' -> go (n + 1) rest st'
+      Right st1 -> go (n + 1) rest st1
 
 -- | Create a stalling wishbone 'Standard' circuit.
 stallStandard ::
@@ -99,10 +98,10 @@ stallStandard ::
   Circuit
     (Wishbone dom 'Standard addressWidth a)
     (Wishbone dom 'Standard addressWidth a)
-stallStandard stalls =
+stallStandard stallsPerCycle =
   Circuit $
     B.second (emptyWishboneM2S :-)
-      . uncurry (go stalls Nothing)
+      . uncurry (go stallsPerCycle Nothing)
   where
     go ::
       [Int] ->
@@ -186,34 +185,34 @@ driveStandard ::
   -- | Requests to send out
   [WishboneMasterRequest addressWidth a] ->
   Circuit () (Wishbone dom 'Standard addressWidth a)
-driveStandard ExpectOptions {..} dat =
+driveStandard ExpectOptions {..} reqs =
   Circuit $
     ((),)
       . C.fromList_lazy
       . (emptyWishboneM2S :)
-      . go eoResetCycles dat
+      . go eoResetCycles reqs
       . C.sample_lazy
       . snd
   where
     transferToSignals ::
-      forall a addressWidth.
-      ( C.ShowX a,
-        Show a,
-        C.NFDataX a,
-        C.KnownNat addressWidth,
-        C.KnownNat (C.BitSize a)
+      forall b addrWidth.
+      ( C.ShowX b,
+        Show b,
+        C.NFDataX b,
+        C.KnownNat addrWidth,
+        C.KnownNat (C.BitSize b)
       ) =>
-      WishboneMasterRequest addressWidth a ->
-      WishboneM2S addressWidth (BitSize a `DivRU` 8) a
+      WishboneMasterRequest addrWidth b ->
+      WishboneM2S addrWidth (BitSize b `DivRU` 8) b
     transferToSignals (Read addr) =
-      (emptyWishboneM2S @addressWidth @a)
+      (emptyWishboneM2S @addrWidth @b)
         { busCycle = True,
           strobe = True,
           addr = addr,
           writeEnable = False
         }
     transferToSignals (Write addr dat) =
-      (emptyWishboneM2S @addressWidth @a)
+      (emptyWishboneM2S @addrWidth @b)
         { busCycle = True,
           strobe = True,
           addr = addr,
@@ -263,19 +262,21 @@ wishbonePropWithModel ::
   -- | Initial state of the model
   st ->
   H.Property
-wishbonePropWithModel eOpts model circuit inputGen st = H.property $ do
+wishbonePropWithModel eOpts model circuit0 inputGen st = H.property $ do
   input <- H.forAll inputGen
 
-  let n = P.length input
-  let genStall = Gen.integral (Range.linear 0 10)
+  let
+    n = P.length input
+    genStall = Gen.integral (Range.linear 0 10)
 
   stalls <- H.forAll (Gen.list (Range.singleton n) genStall)
 
-  let resets = 50
-      driver = driveStandard @dom (defExpectOptions {eoResetCycles = resets}) input
-      stallC = stallStandard stalls
-      circuit' = stallC |> circuit
-      (m2s, _ : s2m) = observeComposedWishboneCircuit (eoTimeout eOpts) driver circuit'
+  let
+    resets = 50
+    driver = driveStandard @dom (defExpectOptions {eoResetCycles = resets}) input
+    stallC = stallStandard stalls
+    circuit1 = stallC |> circuit0
+    (m2s, _ : s2m) = observeComposedWishboneCircuit (eoTimeout eOpts) driver circuit1
 
   validateStandard m2s s2m === Right ()
 
@@ -289,15 +290,15 @@ wishbonePropWithModel eOpts model circuit inputGen st = H.property $ do
       Either (Int, String) ()
     matchModel _ [] _ _ = Right () -- so far everything is good but the sampling stopped
     matchModel _ _ [] _ = Right ()
-    matchModel cyc (s : s2m) (req : reqs) state
-      | not (hasTerminateFlag s) = s `C.seqX` matchModel (succ cyc) s2m (req : reqs) state
+    matchModel cyc (s : s2m) (req : reqs0) state
+      | not (hasTerminateFlag s) = s `C.seqX` matchModel (succ cyc) s2m (req : reqs0) state
       | otherwise = case model req s state of
         Left err -> Left (cyc, err)
-        Right st' -> s `C.seqX` matchModel (succ cyc) s2m reqs' st'
+        Right st1 -> s `C.seqX` matchModel (succ cyc) s2m reqs1 st1
           where
-            reqs'
-              | retry s = req : reqs
-              | otherwise = reqs
+            reqs1
+              | retry s = req : reqs0
+              | otherwise = reqs0
 
 observeComposedWishboneCircuit ::
   (KnownDomain dom) =>

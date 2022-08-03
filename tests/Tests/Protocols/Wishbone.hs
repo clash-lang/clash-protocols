@@ -3,8 +3,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE RecordWildCards #-}
--- The exhaustiveness-checker doesn't work well with ViewPatterns
-{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 
 module Tests.Protocols.Wishbone where
 
@@ -102,18 +100,20 @@ memoryWbModel ::
   WishboneS2M a ->
   [(BitVector addressWidth, a)] ->
   Either String [(BitVector addressWidth, a)]
-memoryWbModel (Read addr) s st@(lookup addr -> Just x)
-  | readData s == x && acknowledge s = Right st
-  | otherwise =
-    Left $
-      "Read from a known address did not yield the same value "
-        <> showX x
-        <> " : "
-        <> showX s
-memoryWbModel (Read addr) s st@(lookup addr -> Nothing)
-  | acknowledge s && hasX (readData s) == Right def = Right st
-  | otherwise =
-    Left $ "Read from unknown address did no ACK with undefined result : " <> showX s
+memoryWbModel (Read addr) s st
+  = case lookup addr st of
+      Just x | readData s == x && acknowledge s -> Right st
+      Just x | otherwise ->
+        Left $
+          "Read from a known address did not yield the same value "
+            <> showX x
+            <> " : "
+            <> showX s
+      Nothing | acknowledge s && hasX (readData s) == Right def -> Right st
+      Nothing | otherwise ->
+        Left $
+          "Read from unknown address did no ACK with undefined result : "
+            <> showX s
 memoryWbModel (Write addr a) s st
   | acknowledge s = Right ((addr, a) : st)
   | otherwise = Left $ "Write should be acked : " <> showX s

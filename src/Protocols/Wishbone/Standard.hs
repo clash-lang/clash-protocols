@@ -26,10 +26,10 @@ roundrobin ::
     (Wishbone dom 'Standard addressWidth a)
     (Vec n (Wishbone dom 'Standard addressWidth a))
 roundrobin = Circuit $ \(m2s, s2ms) -> B.first head $ fn (singleton m2s, s2ms)
-  where
-    Circuit fn = sharedBus selectFn
-    selectFn (unbundle -> (mIdx, sIdx, _)) =
-      liftA2 (,) mIdx (satSucc SatWrap <$> sIdx)
+ where
+  Circuit fn = sharedBus selectFn
+  selectFn (unbundle -> (mIdx, sIdx, _)) =
+    liftA2 (,) mIdx (satSucc SatWrap <$> sIdx)
 
 -- | General-purpose shared-bus with N masters and M slaves.
 --
@@ -56,21 +56,21 @@ sharedBus ::
     (Vec n (Wishbone dom 'Standard addressWidth a))
     (Vec m (Wishbone dom 'Standard addressWidth a))
 sharedBus selectFn = Circuit go
-  where
-    go (bundle -> m2ss, bundle -> s2ms) = (unbundle s2ms', unbundle m2ss')
-      where
-        mIdx = regEn (0 :: Index n) acceptIds mIdx'
-        sIdx = regEn (0 :: Index m) acceptIds sIdx'
+ where
+  go (bundle -> m2ss0, bundle -> s2ms0) = (unbundle s2ms1, unbundle m2ss1)
+   where
+    mIdx0 = regEn (0 :: Index n) acceptIds mIdx1
+    sIdx0 = regEn (0 :: Index m) acceptIds sIdx1
 
-        (mIdx', sIdx') = unbundle $ selectFn (liftA3 (,,) mIdx sIdx m2ss)
+    (mIdx1, sIdx1) = unbundle $ selectFn (liftA3 (,,) mIdx0 sIdx0 m2ss0)
 
-        m2s = liftA2 (!!) m2ss mIdx
-        s2m = liftA2 (!!) s2ms sIdx
+    m2s = liftA2 (!!) m2ss0 mIdx0
+    s2m = liftA2 (!!) s2ms0 sIdx0
 
-        acceptIds = (not . busCycle <$> m2s) .&&. (not . lock <$> m2s)
+    acceptIds = (not . busCycle <$> m2s) .&&. (not . lock <$> m2s)
 
-        m2ss' = liftA3 replace sIdx m2s $ pure (repeat emptyWishboneM2S)
-        s2ms' = liftA3 replace mIdx s2m $ pure (repeat emptyWishboneS2M)
+    m2ss1 = liftA3 replace sIdx0 m2s $ pure (repeat emptyWishboneM2S)
+    s2ms1 = liftA3 replace mIdx0 s2m $ pure (repeat emptyWishboneS2M)
 
 -- | Crossbar-Switch circuit, allowing to dynamically route N masters to N slaves
 crossbarSwitch ::
@@ -88,12 +88,12 @@ crossbarSwitch ::
     )
     (Vec m (Wishbone dom 'Standard addressWidth a)) -- slaves
 crossbarSwitch = Circuit go
-  where
-    go ((CSignal route, bundle -> m2ss), bundle -> s2ms) =
-      ((CSignal (pure ()), unbundle s2ms'), unbundle m2ss')
-      where
-        m2ss' = scatter @_ @_ @_ @_ @0 (repeat emptyWishboneM2S) <$> route <*> m2ss
-        s2ms' = gather <$> s2ms <*> route
+ where
+  go ((CSignal route, bundle -> m2ss0), bundle -> s2ms0) =
+    ((CSignal (pure ()), unbundle s2ms1), unbundle m2ss1)
+   where
+    m2ss1 = scatter @_ @_ @_ @_ @0 (repeat emptyWishboneM2S) <$> route <*> m2ss0
+    s2ms1 = gather <$> s2ms0 <*> route
 
 -- | Memory component circuit using a specific RAM function
 --
@@ -117,31 +117,31 @@ memoryWb ::
   (Signal dom (BitVector addressWidth) -> Signal dom (Maybe (BitVector addressWidth, a)) -> Signal dom a) ->
   Circuit (Wishbone dom 'Standard addressWidth a) ()
 memoryWb ram = Circuit go
-  where
-    go (m2s, ()) = (reply m2s, ())
+ where
+  go (m2s, ()) = (reply m2s, ())
 
-    reply ::
-      Signal dom (WishboneM2S addressWidth (BitSize a `DivRU` 8) a) ->
-      Signal dom (WishboneS2M a)
-    reply request = do
-      ack <- writeAck .||. readAck
-      val <- readValue
-      pure $ (emptyWishboneS2M @a) {acknowledge = ack, readData = val}
-      where
-        addr' = addr <$> request
-        writeData' = writeData <$> request
-        isWriteRequest = (\WishboneM2S {..} -> writeEnable && strobe && busCycle) <$> request
-        write =
-          mux
-            isWriteRequest
-            (Just <$> ((,) <$> addr' <*> writeData'))
-            (pure Nothing)
+  reply ::
+    Signal dom (WishboneM2S addressWidth (BitSize a `DivRU` 8) a) ->
+    Signal dom (WishboneS2M a)
+  reply request = do
+    ack <- writeAck .||. readAck
+    val <- readValue
+    pure $ (emptyWishboneS2M @a) {acknowledge = ack, readData = val}
+   where
+    addr1 = addr <$> request
+    writeData1 = writeData <$> request
+    isWriteRequest = (\WishboneM2S {..} -> writeEnable && strobe && busCycle) <$> request
+    write =
+      mux
+        isWriteRequest
+        (Just <$> ((,) <$> addr1 <*> writeData1))
+        (pure Nothing)
 
-        writeAck = isRising False isWriteRequest
+    writeAck = isRising False isWriteRequest
 
-        isReadRequest = (\WishboneM2S {..} -> writeEnable && strobe && busCycle) <$> request
-        justReadRequest = isRising False isReadRequest
+    isReadRequest = (\WishboneM2S {..} -> writeEnable && strobe && busCycle) <$> request
+    justReadRequest = isRising False isReadRequest
 
-        readAck = register False justReadRequest
+    readAck = register False justReadRequest
 
-        readValue = ram addr' write
+    readValue = ram addr1 write
