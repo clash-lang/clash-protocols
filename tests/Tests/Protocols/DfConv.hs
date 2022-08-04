@@ -180,7 +180,7 @@ prop_axi4_stream_fifo_id =
   propWithModelSingleDomain
     @C.System
     defExpectOptions
-    (DfTest.genData ((,) <$> genExtraInfo <*> genVec genByte))
+    (DfTest.genData genInfo)
     (C.exposeClockResetEnable id)
     (C.exposeClockResetEnable @C.System ckt)
     (\a b -> tally a === tally b)
@@ -191,14 +191,15 @@ prop_axi4_stream_fifo_id =
       (Axi4Stream dom ('Axi4StreamConfig 5 2 2) Int)
   ckt = DfConv.fifo Proxy Proxy (C.SNat @10)
 
-  genExtraInfo =
-    Axi4StreamExtraInfo <$>
+  genInfo =
+    Axi4StreamInfo <$>
+    (genVec Gen.enumBounded) <*>
+    (genVec Gen.enumBounded) <*>
+    (genVec Gen.enumBounded) <*>
     Gen.enumBounded <*>
     Gen.enumBounded <*>
     Gen.enumBounded <*>
     DfTest.genSmallInt
-
-  genByte = (DataByte <$> Gen.enumBounded) C.<|> pure PositionByte C.<|> pure NullByte
 
 
 tests :: TestTree

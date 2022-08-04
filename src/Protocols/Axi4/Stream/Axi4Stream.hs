@@ -58,28 +58,20 @@ type family DestWidth (conf :: Axi4StreamConfig) where
 -- | Shorthand for a "well-behaved" config, so that we don't need to write out
 -- a bunch of type constraints later. Holds for every configuration; don't worry
 -- about implementing this class.
-type GoodAxi4StreamConfig conf =
+type KnownAxi4StreamConfig conf =
   ( KnownNat (DataWidth conf)
   , KnownNat (IdWidth conf)
   , KnownNat (DestWidth conf)
   )
 
--- | A byte sent along an AXI4 Stream. Each byte can either be a data byte, a
--- position byte, or a null byte. The value of position and null bytes should
--- be ignored. Additionally, null bytes can be added or dropped.
-data Axi4StreamByte
-  = DataByte (Unsigned 8)
-  | PositionByte
-  | NullByte
-  deriving (Generic, C.NFDataX, C.ShowX, Eq, NFData, Show, Hashable)
-
 -- | Data sent from manager to subordinate. The tvalid field is left out: messages with @tvalid = False@
--- should be sent as a @NoAxi4StreamM2S@. The tdata, @tstrb@, and @tkeep@ fields are
--- all grouped in the @_tdata@ field in this datatype (see @Axi4StreamByte@).
+-- should be sent as a @NoAxi4StreamM2S@.
 data Axi4StreamM2S (conf :: Axi4StreamConfig) (userType :: Type)
   = NoAxi4StreamM2S
   | Axi4StreamM2S
-    { _tdata :: Vec (DataWidth conf) Axi4StreamByte
+    { _tdata :: Vec (DataWidth conf) (Unsigned 8)
+    , _tkeep :: Vec (DataWidth conf) Bool
+    , _tstrb :: Vec (DataWidth conf) Bool
     , _tlast :: Bool
     , _tid   :: Unsigned (IdWidth conf)
     , _tdest :: Unsigned (DestWidth conf)
@@ -88,67 +80,75 @@ data Axi4StreamM2S (conf :: Axi4StreamConfig) (userType :: Type)
   deriving (Generic, C.ShowX, Show, NFData, Bundle)
 
 deriving instance
-  ( GoodAxi4StreamConfig conf
+  ( KnownAxi4StreamConfig conf
   , C.NFDataX userType
   ) => C.NFDataX (Axi4StreamM2S conf userType)
 
 deriving instance
-  ( GoodAxi4StreamConfig conf
+  ( KnownAxi4StreamConfig conf
   , Eq userType
   ) => Eq (Axi4StreamM2S conf userType)
 
--- | "Unimportant" info sent from manager to subordinate. Includes everything in
--- 'Axi4StreamM2S' except for '_tdata'. Used in 'DfConv.DfConv' implementation.
-data Axi4StreamExtraInfo (conf :: Axi4StreamConfig) (userType :: Type)
-  = Axi4StreamExtraInfo
-  { _telast :: Bool
-  , _teid   :: Unsigned (IdWidth conf)
-  , _tedest :: Unsigned (DestWidth conf)
-  , _teuser :: userType
+-- | Info sent from manager to subordinate. Includes everything in
+-- 'Axi4StreamM2S' constructor. Used in 'DfConv.DfConv' implementation.
+data Axi4StreamInfo (conf :: Axi4StreamConfig) (userType :: Type)
+  = Axi4StreamInfo
+  { _tidata :: Vec (DataWidth conf) (Unsigned 8)
+  , _tikeep :: Vec (DataWidth conf) Bool
+  , _tistrb :: Vec (DataWidth conf) Bool
+  , _tilast :: Bool
+  , _tiid   :: Unsigned (IdWidth conf)
+  , _tidest :: Unsigned (DestWidth conf)
+  , _tiuser :: userType
   }
   deriving (Generic, C.ShowX, Show, NFData, Bundle)
 
 deriving instance
-  ( GoodAxi4StreamConfig conf
+  ( KnownAxi4StreamConfig conf
   , C.NFDataX userType
-  ) => C.NFDataX (Axi4StreamExtraInfo conf userType)
+  ) => C.NFDataX (Axi4StreamInfo conf userType)
 
 deriving instance
-  ( GoodAxi4StreamConfig conf
+  ( KnownAxi4StreamConfig conf
   , Eq userType
-  ) => Eq (Axi4StreamExtraInfo conf userType)
+  ) => Eq (Axi4StreamInfo conf userType)
 
 deriving instance
-  ( GoodAxi4StreamConfig conf
+  ( KnownAxi4StreamConfig conf
   , Hashable userType
-  ) => Hashable (Axi4StreamExtraInfo conf userType)
+  ) => Hashable (Axi4StreamInfo conf userType)
 
--- | Combine "important" data and "unimportant" extra info to make an 'Axi4StreamM2S'.
-axi4StreamDataToM2S
-  :: Maybe (Axi4StreamExtraInfo conf userType, Vec (DataWidth conf) Axi4StreamByte)
+-- | Convert an 'Axi4StreamInfo' to an 'Axi4StreamM2S', keeping all the info.
+axi4StreamInfoToM2S
+  :: Maybe (Axi4StreamInfo conf userType)
   -> Axi4StreamM2S conf userType
-axi4StreamDataToM2S Nothing = NoAxi4StreamM2S
-axi4StreamDataToM2S (Just (Axi4StreamExtraInfo{..}, _tdata))
+axi4StreamInfoToM2S Nothing = NoAxi4StreamM2S
+axi4StreamInfoToM2S (Just Axi4StreamInfo{..})
   = Axi4StreamM2S
-  { _tdata
-  , _tlast = _telast
-  , _tid   = _teid
-  , _tdest = _tedest
-  , _tuser = _teuser
+  { _tdata = _tidata
+  , _tkeep = _tikeep
+  , _tstrb = _tistrb
+  , _tlast = _tilast
+  , _tid   = _tiid
+  , _tdest = _tidest
+  , _tuser = _tiuser
   }
 
--- | Split an 'Axi4StreamM2S' into "important" data and "unimportant" extra info.
-axi4StreamM2SToData
+-- | Convert an 'Axi4StreamM2S' to an 'Axi4StreamInfo', keeping all the info.
+axi4StreamM2SToInfo
   :: Axi4StreamM2S conf userType
-  -> Maybe (Axi4StreamExtraInfo conf userType, Vec (DataWidth conf) Axi4StreamByte)
-axi4StreamM2SToData NoAxi4StreamM2S = Nothing
-axi4StreamM2SToData Axi4StreamM2S{..}
-  = Just (Axi4StreamExtraInfo
-  { _telast = _tlast
-  , _teid   = _tid
-  , _tedest = _tdest
-  , _teuser = _tuser
-  }, _tdata)
+  -> Maybe (Axi4StreamInfo conf userType)
+axi4StreamM2SToInfo NoAxi4StreamM2S = Nothing
+axi4StreamM2SToInfo Axi4StreamM2S{..}
+  = Just Axi4StreamInfo
+  { _tidata = _tdata
+  , _tikeep = _tkeep
+  , _tistrb = _tstrb
+  , _tilast = _tlast
+  , _tiid   = _tid
+  , _tidest = _tdest
+  , _tiuser = _tuser
+  }
 
 -- | Data sent from subordinate to manager. A simple acknowledge message.
 -- '_tready' may be on even when manager is sending 'NoAxi4StreamM2S'.
@@ -167,25 +167,25 @@ instance Protocol (Axi4Stream dom conf userType) where
 instance Backpressure (Axi4Stream dom conf userType) where
   boolsToBwd _ = C.fromList_lazy . fmap Axi4StreamS2M
 
-instance (GoodAxi4StreamConfig conf, NFDataX userType) =>
+instance (KnownAxi4StreamConfig conf, NFDataX userType) =>
   DfConv.DfConv    (Axi4Stream dom conf userType) where
   type Dom         (Axi4Stream dom conf userType) = dom
   type FwdPayload  (Axi4Stream dom conf userType)
-    = (Axi4StreamExtraInfo conf userType, Vec (DataWidth conf) Axi4StreamByte)
+    = Axi4StreamInfo conf userType
 
   toDfCircuit proxy = DfConv.toDfCircuitHelper proxy s0 blankOtp stateFn where
     s0 = ()
     blankOtp = NoAxi4StreamM2S
     stateFn ack _ otpItem
-      = pure (axi4StreamDataToM2S otpItem, Nothing, Maybe.isJust otpItem && _tready ack)
+      = pure (axi4StreamInfoToM2S otpItem, Nothing, Maybe.isJust otpItem && _tready ack)
 
   fromDfCircuit proxy = DfConv.fromDfCircuitHelper proxy s0 blankOtp stateFn where
     s0 = ()
     blankOtp = Axi4StreamS2M { _tready = False }
     stateFn m2s ack _
-      = pure (Axi4StreamS2M { _tready = ack }, axi4StreamM2SToData m2s, False)
+      = pure (Axi4StreamS2M { _tready = ack }, axi4StreamM2SToInfo m2s, False)
 
-instance (GoodAxi4StreamConfig conf, NFDataX userType, KnownDomain dom) =>
+instance (KnownAxi4StreamConfig conf, NFDataX userType, KnownDomain dom) =>
   Simulate (Axi4Stream dom conf userType) where
   type SimulateFwdType (Axi4Stream dom conf userType) = [Axi4StreamM2S conf userType]
   type SimulateBwdType (Axi4Stream dom conf userType) = [Axi4StreamS2M]
@@ -200,25 +200,25 @@ instance (GoodAxi4StreamConfig conf, NFDataX userType, KnownDomain dom) =>
     = withClockResetEnable clockGen resetGen enableGen
     $ DfConv.stall Proxy Proxy conf stallAck stalls
 
-instance (GoodAxi4StreamConfig conf, NFDataX userType, KnownDomain dom) =>
+instance (KnownAxi4StreamConfig conf, NFDataX userType, KnownDomain dom) =>
   Drivable (Axi4Stream dom conf userType) where
   type ExpectType (Axi4Stream dom conf userType)
-    = [(Axi4StreamExtraInfo conf userType, Vec (DataWidth conf) Axi4StreamByte)]
+    = [Axi4StreamInfo conf userType]
 
-  toSimulateType Proxy = P.map (axi4StreamDataToM2S . Just)
-  fromSimulateType Proxy = Maybe.mapMaybe axi4StreamM2SToData
+  toSimulateType Proxy = P.map (axi4StreamInfoToM2S . Just)
+  fromSimulateType Proxy = Maybe.mapMaybe axi4StreamM2SToInfo
 
   driveC conf vals
     = withClockResetEnable clockGen resetGen enableGen
-    $ DfConv.drive Proxy conf (axi4StreamM2SToData <$> vals)
+    $ DfConv.drive Proxy conf (axi4StreamM2SToInfo <$> vals)
   sampleC conf ckt
     = withClockResetEnable clockGen resetGen enableGen
-    $ fmap axi4StreamDataToM2S
+    $ fmap axi4StreamInfoToM2S
     $ DfConv.sample Proxy conf
     $ ckt
 
 instance
-  ( GoodAxi4StreamConfig conf
+  ( KnownAxi4StreamConfig conf
   , NFDataX userType
   , NFData userType
   , ShowX userType
@@ -230,4 +230,4 @@ instance
   expectToLengths Proxy = pure . P.length
   expectN Proxy options nExpected sampled
     = expectN (Proxy @(Df.Df dom _)) options nExpected
-    $ Df.maybeToData . axi4StreamM2SToData <$> sampled
+    $ Df.maybeToData . axi4StreamM2SToInfo <$> sampled
