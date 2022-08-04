@@ -11,6 +11,7 @@ Internal module to prevent hs-boot files (breaks Haddock)
 module Protocols.Internal where
 
 import           Control.DeepSeq (NFData)
+import           Data.Hashable (Hashable)
 import           Data.Maybe (fromMaybe)
 import           Data.Proxy
 import           GHC.Base (Any)
@@ -724,7 +725,7 @@ type family KeepType (keep :: Bool) (optionalType :: Type) = t | t -> keep optio
   KeepType 'True optionalType = Identity optionalType
   KeepType 'False optionalType = Proxy optionalType
 
--- TODO These should really be in clash-prelude
+-- TODO this should go into Clash.Prelude (?)
 deriving instance (C.ShowX t) => (C.ShowX (Identity t))
 deriving instance (C.ShowX t) => (C.ShowX (Proxy t))
 deriving instance (C.NFDataX t) => (C.NFDataX (Identity t))
@@ -740,6 +741,7 @@ class
   , C.ShowX (KeepType keep Bool)
   , NFData (KeepType keep Bool)
   , C.NFDataX (KeepType keep Bool)
+  , Hashable (KeepType keep Bool)
   ) => KeepTypeClass (keep :: Bool) where
   -- | Get the value of @keep@ at the term level.
   getKeep :: KeepType keep optionalType -> Bool
