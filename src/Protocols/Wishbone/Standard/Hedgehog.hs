@@ -251,7 +251,7 @@ wishbonePropWithModel ::
     C.KnownNat (C.BitSize a)
   ) =>
   ExpectOptions ->
-  -- | Check whether a S2M signal for a given request is matching a pure model using 'st'
+  -- | Check whether a S2M signal for a given request is matching a pure model using @st@
   --   as its state.
   --   Return an error message 'Left' or the updated state 'Right'
   (WishboneMasterRequest addressWidth a -> WishboneS2M a -> st -> Either String st) ->
