@@ -32,6 +32,8 @@ import Test.Tasty.TH (testGroupGenerator)
 -- clash-protocols (me!)
 import Protocols
 import Protocols.Hedgehog
+import Protocols.Internal
+import qualified Protocols.Df as Df
 import qualified Protocols.DfConv as DfConv
 
 -- tests
@@ -171,6 +173,39 @@ prop_select =
     let tall i = fromMaybe 0 (HashMap.lookup i (tally ixs))
     dats <- mapM (\i -> Gen.list (Range.singleton (tall i)) DfTest.genSmallInt) C.indicesI
     pure (dats, ixs)
+
+-- test out the test bench
+prop_test_bench_id :: Property
+prop_test_bench_id =
+  DfTest.idWithModelDf
+    defExpectOptions
+    (DfTest.genData DfTest.genSmallInt)
+    id
+    ( C.withClockResetEnable @C.System C.clockGen C.resetGen C.enableGen
+    $ DfConv.dfConvTestBench Proxy Proxy
+      (repeat True) (repeat (Df.Data 0)) ckt)
+ where
+  ckt :: (C.HiddenClockResetEnable dom) =>
+   Circuit
+   (Df dom Int, Reverse (Df dom Int))
+   (Df dom Int, Reverse (Df dom Int))
+  ckt = DfConv.convert Proxy Proxy
+
+prop_test_bench_rev_id :: Property
+prop_test_bench_rev_id =
+  DfTest.idWithModelDf
+    defExpectOptions
+    (DfTest.genData DfTest.genSmallInt)
+    id
+    ( C.withClockResetEnable @C.System C.clockGen C.resetGen C.enableGen
+    $ DfConv.dfConvTestBenchRev Proxy Proxy
+      (repeat (Df.Data 0)) (repeat True) ckt)
+ where
+  ckt :: (C.HiddenClockResetEnable dom) =>
+   Circuit
+   (Df dom Int, Reverse (Df dom Int))
+   (Df dom Int, Reverse (Df dom Int))
+  ckt = DfConv.convert Proxy Proxy
 
 
 tests :: TestTree

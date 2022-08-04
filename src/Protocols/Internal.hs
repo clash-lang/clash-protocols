@@ -6,9 +6,12 @@ Internal module to prevent hs-boot files (breaks Haddock)
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-} -- NFDataX and ShowX for Identity and Proxy
 
 module Protocols.Internal where
 
+import           Control.DeepSeq (NFData)
+import           Data.Maybe (fromMaybe)
 import           Data.Proxy
 import           GHC.Base (Any)
 import           Prelude hiding (map, const)
@@ -721,11 +724,23 @@ type family KeepType (keep :: Bool) (optionalType :: Type) = t | t -> keep optio
   KeepType 'True optionalType = Identity optionalType
   KeepType 'False optionalType = Proxy optionalType
 
+-- TODO These should really be in clash-prelude
+deriving instance (C.ShowX t) => (C.ShowX (Identity t))
+deriving instance (C.ShowX t) => (C.ShowX (Proxy t))
+deriving instance (C.NFDataX t) => (C.NFDataX (Identity t))
+deriving instance (C.NFDataX t) => (C.NFDataX (Proxy t))
+
 -- | We want to define operations on 'KeepType' that work for both possibilities
 -- (@keep = 'True@ and @keep = 'False@), but we can't pattern match directly.
 -- Instead we need to define a class and instantiate
 -- the class for both @'True@ and @'False@.
-class KeepTypeClass (keep :: Bool) where
+class
+  ( Eq (KeepType keep Bool)
+  , Show (KeepType keep Bool)
+  , C.ShowX (KeepType keep Bool)
+  , NFData (KeepType keep Bool)
+  , C.NFDataX (KeepType keep Bool)
+  ) => KeepTypeClass (keep :: Bool) where
   -- | Get the value of @keep@ at the term level.
   getKeep :: KeepType keep optionalType -> Bool
   -- | Convert an optional value to a normal value,
@@ -748,6 +763,29 @@ instance KeepTypeClass 'False where
   fromKeepType _ = Nothing
   toKeepType _ = Proxy
   mapKeepType = fmap
+
+-- | Grab a value from 'KeepType', given a default value. Uses 'fromMaybe'
+-- and 'fromKeepType'.
+fromKeepTypeDef
+  :: KeepTypeClass keep
+  => optionalType
+  -> KeepType keep optionalType
+  -> optionalType
+fromKeepTypeDef deflt val = fromMaybe deflt (fromKeepType val)
+
+-- | Convert one optional field to another, keeping the value the same if
+-- possible. If not possible, a default argument is provided.
+convKeepType
+  :: (KeepTypeClass a, KeepTypeClass b) => t -> KeepType a t -> KeepType b t
+convKeepType b = toKeepType . fromKeepTypeDef b
+
+-- | Omitted value in @KeepType 'False t@.
+keepTypeFalse :: KeepType 'False t
+keepTypeFalse = Proxy
+
+-- | Grab value in @KeepType 'True t@. No default is needed.
+fromKeepTypeTrue :: KeepType 'True t -> t
+fromKeepTypeTrue = runIdentity
 
 -- | Protocol to reverse a circuit.
 -- 'Fwd' becomes 'Bwd' and vice versa.
@@ -786,4 +824,4 @@ vecCircuits fs = Circuit (\inps -> C.unzip $ f <$> fs <*> uncurry C.zip inps) wh
 -- The 'Circuit's run in parallel.
 tupCircuits :: Circuit a b -> Circuit c d -> Circuit (a,c) (b,d)
 tupCircuits (Circuit f) (Circuit g) = Circuit (reorder . (f *** g) . reorder) where
-  reorder ((a,b),(c,d)) = ((a,c),(b,d))
+  reorder ~(~(a,b),~(c,d)) = ((a,c),(b,d))
