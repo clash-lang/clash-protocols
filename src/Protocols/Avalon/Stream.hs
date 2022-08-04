@@ -10,7 +10,7 @@ Types and instance declarations for the Avalon-stream protocol.
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-} -- Hashable (Unsigned n)
 
-module Protocols.Avalon.Stream.AvalonStream where
+module Protocols.Avalon.Stream where
 
 -- base
 import           Control.DeepSeq (NFData)
@@ -75,7 +75,7 @@ type family ReadyLatency (conf :: AvalonStreamConfig) where
 -- | Shorthand for a "well-behaved" config, so that we don't need to write out
 -- a bunch of type constraints later. Holds for every configuration; don't worry
 -- about implementing this class.
-type GoodAvalonStreamConfig conf =
+type KnownAvalonStreamConfig conf =
   ( KnownNat      (ChannelWidth      conf)
   , KnownNat      (ErrorWidth        conf)
   , KeepTypeClass (KeepStartOfPacket conf)
@@ -87,10 +87,9 @@ type GoodAvalonStreamConfig conf =
 
 -- | Data sent from manager to subordinate.
 -- The tvalid field is left out: messages with
--- @tvalid = False@ should be sent as a @NoAvalonStreamM2S@.
+-- @tvalid = False@ should be sent as a @Nothing@.
 data AvalonStreamM2S (conf :: AvalonStreamConfig) (dataType :: Type)
-  = NoAvalonStreamM2S
-  | AvalonStreamM2S
+  = AvalonStreamM2S
     { _data          :: dataType
     , _channel       :: Unsigned (ChannelWidth conf)
     , _error         :: Unsigned (ErrorWidth conf)
@@ -101,96 +100,34 @@ data AvalonStreamM2S (conf :: AvalonStreamConfig) (dataType :: Type)
   deriving (Generic, Bundle)
 
 deriving instance
-  ( GoodAvalonStreamConfig conf
+  ( KnownAvalonStreamConfig conf
   , C.NFDataX dataType
   ) => C.NFDataX (AvalonStreamM2S conf dataType)
 
 deriving instance
-  ( GoodAvalonStreamConfig conf
+  ( KnownAvalonStreamConfig conf
   , NFData dataType
   ) => NFData (AvalonStreamM2S conf dataType)
 
 deriving instance
-  ( GoodAvalonStreamConfig conf
+  ( KnownAvalonStreamConfig conf
   , C.ShowX dataType
   ) => C.ShowX (AvalonStreamM2S conf dataType)
 
 deriving instance
-  ( GoodAvalonStreamConfig conf
+  ( KnownAvalonStreamConfig conf
   , Show dataType
   ) => Show (AvalonStreamM2S conf dataType)
 
 deriving instance
-  ( GoodAvalonStreamConfig conf
+  ( KnownAvalonStreamConfig conf
   , Eq dataType
   ) => Eq (AvalonStreamM2S conf dataType)
 
--- | "Unimportant" info sent from manager to subordinate. Includes everything in
--- 'AvalonStreamM2S' except for '_data'. Used in 'DfConv.DfConv' implementation.
-data AvalonStreamExtraInfo (conf :: AvalonStreamConfig)
-  = AvalonStreamExtraInfo
-  { _echannel       :: Unsigned (ChannelWidth conf)
-  , _eerror         :: Unsigned (ErrorWidth conf)
-  , _estartofpacket :: KeepType (KeepStartOfPacket conf) Bool
-  , _eendofpacket   :: KeepType (KeepEndOfPacket conf) Bool
-  , _eempty         :: Unsigned (EmptyWidth conf)
-  }
-  deriving (Generic, Bundle)
-
 deriving instance
-  ( GoodAvalonStreamConfig conf
-  ) => C.NFDataX (AvalonStreamExtraInfo conf)
-
-deriving instance
-  ( GoodAvalonStreamConfig conf
-  ) => NFData (AvalonStreamExtraInfo conf)
-
-deriving instance
-  ( GoodAvalonStreamConfig conf
-  ) => C.ShowX (AvalonStreamExtraInfo conf)
-
-deriving instance
-  ( GoodAvalonStreamConfig conf
-  ) => Show (AvalonStreamExtraInfo conf)
-
-deriving instance
-  ( GoodAvalonStreamConfig conf
-  ) => Eq (AvalonStreamExtraInfo conf)
-
-deriving instance
-  ( GoodAvalonStreamConfig conf
-  ) => Hashable (AvalonStreamExtraInfo conf)
-
--- | Combine "important" data and "unimportant" extra info to make an
--- 'AvalonStreamM2S'.
-avalonStreamDataToM2S ::
-  Maybe (AvalonStreamExtraInfo conf, dataType) ->
-  AvalonStreamM2S conf dataType
-avalonStreamDataToM2S Nothing = NoAvalonStreamM2S
-avalonStreamDataToM2S (Just (AvalonStreamExtraInfo{..}, _data))
-  = AvalonStreamM2S
-  { _data
-  , _channel       = _echannel
-  , _error         = _eerror
-  , _startofpacket = _estartofpacket
-  , _endofpacket   = _eendofpacket
-  , _empty         = _eempty
-  }
-
--- | Split an 'AvalonStreamM2S' into "important" data and "unimportant" extra
--- info.
-avalonStreamM2SToData ::
-  AvalonStreamM2S conf dataType ->
-  Maybe (AvalonStreamExtraInfo conf, dataType)
-avalonStreamM2SToData NoAvalonStreamM2S = Nothing
-avalonStreamM2SToData AvalonStreamM2S{..}
-  = Just (AvalonStreamExtraInfo
-  { _echannel       = _channel
-  , _eerror         = _error
-  , _estartofpacket = _startofpacket
-  , _eendofpacket   = _endofpacket
-  , _eempty         = _empty
-  }, _data)
+  ( KnownAvalonStreamConfig conf
+  , Hashable dataType
+  ) => Hashable (AvalonStreamM2S conf dataType)
 
 -- | Data sent from subordinate to manager. A simple acknowledge message.
 -- Manager can only send 'AvalonStreamM2S' when '_ready' was true
@@ -203,7 +140,7 @@ data AvalonStream (dom :: Domain) (conf :: AvalonStreamConfig) (dataType :: Type
 
 instance Protocol (AvalonStream dom conf dataType) where
   type Fwd (AvalonStream dom conf dataType)
-    = Signal dom (AvalonStreamM2S conf dataType)
+    = Signal dom (Maybe (AvalonStreamM2S conf dataType))
   type Bwd (AvalonStream dom conf dataType)
     = Signal dom (AvalonStreamS2M (ReadyLatency conf))
 
@@ -211,21 +148,20 @@ instance (ReadyLatency conf ~ 0) =>
   Backpressure (AvalonStream dom conf dataType) where
   boolsToBwd _ = C.fromList_lazy . fmap AvalonStreamS2M
 
-instance (GoodAvalonStreamConfig conf, NFDataX dataType) =>
+instance (KnownAvalonStreamConfig conf, NFDataX dataType) =>
   DfConv.DfConv    (AvalonStream dom conf dataType) where
   type Dom         (AvalonStream dom conf dataType) = dom
   type FwdPayload  (AvalonStream dom conf dataType)
-    = (AvalonStreamExtraInfo conf, dataType)
+    = AvalonStreamM2S conf dataType
 
   toDfCircuit proxy = DfConv.toDfCircuitHelper proxy s0 blankOtp stateFn where
     s0 = C.repeat @((ReadyLatency conf)+1) False
-    blankOtp = NoAvalonStreamM2S
+    blankOtp = Nothing
     stateFn (AvalonStreamS2M thisAck) _ otpItem = do
       modify (thisAck +>>)
       ackQueue <- get
       pure
-        ( avalonStreamDataToM2S
-           (if (Maybe.isJust otpItem && C.last ackQueue) then otpItem else Nothing)
+        ( if (Maybe.isJust otpItem && C.last ackQueue) then otpItem else Nothing
         , Nothing
         , C.last ackQueue )
 
@@ -235,19 +171,19 @@ instance (GoodAvalonStreamConfig conf, NFDataX dataType) =>
     stateFn m2s ack _ = do
       noCurrentVal <- gets Maybe.isNothing
       let msgOtp = AvalonStreamS2M { _ready = noCurrentVal }
-      when noCurrentVal $ put (avalonStreamM2SToData m2s)
+      when noCurrentVal $ put m2s
       dfOtp <- get
       when (Maybe.isJust dfOtp && ack) $ put Nothing
       pure (msgOtp, dfOtp, False)
 
 instance
   ( ReadyLatency conf ~ 0
-  , GoodAvalonStreamConfig conf
+  , KnownAvalonStreamConfig conf
   , NFDataX dataType
   , KnownDomain dom ) =>
   Simulate (AvalonStream dom conf dataType) where
   type SimulateFwdType (AvalonStream dom conf dataType)
-    = [AvalonStreamM2S conf dataType]
+    = [Maybe (AvalonStreamM2S conf dataType)]
   type SimulateBwdType (AvalonStream dom conf dataType) = [AvalonStreamS2M 0]
   type SimulateChannels (AvalonStream dom conf dataType) = 1
 
@@ -262,28 +198,27 @@ instance
 
 instance
   ( ReadyLatency conf ~ 0
-  , GoodAvalonStreamConfig conf
+  , KnownAvalonStreamConfig conf
   , NFDataX dataType
   , KnownDomain dom ) =>
   Drivable (AvalonStream dom conf dataType) where
   type ExpectType (AvalonStream dom conf dataType)
-    = [(AvalonStreamExtraInfo conf, dataType)]
+    = [AvalonStreamM2S conf dataType]
 
-  toSimulateType Proxy = P.map (avalonStreamDataToM2S . Just)
-  fromSimulateType Proxy = Maybe.mapMaybe avalonStreamM2SToData
+  toSimulateType Proxy = P.map Just
+  fromSimulateType Proxy = Maybe.catMaybes
 
   driveC conf vals
     = withClockResetEnable clockGen resetGen enableGen
-    $ DfConv.drive Proxy conf (avalonStreamM2SToData <$> vals)
+    $ DfConv.drive Proxy conf vals
   sampleC conf ckt
     = withClockResetEnable clockGen resetGen enableGen
-    $ fmap avalonStreamDataToM2S
     $ DfConv.sample Proxy conf
     $ ckt
 
 instance
   ( ReadyLatency conf ~ 0
-  , GoodAvalonStreamConfig conf
+  , KnownAvalonStreamConfig conf
   , NFDataX dataType
   , NFData dataType
   , ShowX dataType
@@ -295,4 +230,4 @@ instance
   expectToLengths Proxy = pure . P.length
   expectN Proxy options nExpected sampled
     = expectN (Proxy @(Df.Df dom _)) options nExpected
-    $ Df.maybeToData . avalonStreamM2SToData <$> sampled
+    $ Df.maybeToData <$> sampled

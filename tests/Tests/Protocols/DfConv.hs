@@ -31,7 +31,7 @@ import Test.Tasty.TH (testGroupGenerator)
 
 -- clash-protocols (me!)
 import Protocols
-import Protocols.Avalon.Stream.AvalonStream
+import Protocols.Avalon.Stream
 import Protocols.Internal
 import Protocols.Hedgehog
 import qualified Protocols.DfConv as DfConv
@@ -181,7 +181,7 @@ prop_avalon_stream_fifo_id =
   propWithModelSingleDomain
     @C.System
     defExpectOptions
-    (DfTest.genData ((,) <$> genExtraInfo <*> DfTest.genSmallInt))
+    (DfTest.genData genInfo)
     (C.exposeClockResetEnable id)
     (C.exposeClockResetEnable @C.System ckt)
     (\a b -> tally a === tally b)
@@ -192,8 +192,9 @@ prop_avalon_stream_fifo_id =
       (AvalonStream dom ('AvalonStreamConfig 2 2 'True 'True 2 0) Int)
   ckt = DfConv.fifo Proxy Proxy (C.SNat @10)
 
-  genExtraInfo =
-    AvalonStreamExtraInfo <$>
+  genInfo =
+    AvalonStreamM2S <$>
+    DfTest.genSmallInt <*>
     Gen.enumBounded <*>
     Gen.enumBounded <*>
     (toKeepType <$> Gen.enumBounded) <*>
