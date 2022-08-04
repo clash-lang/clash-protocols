@@ -12,6 +12,7 @@ module Protocols.Internal where
 
 import           Control.DeepSeq (NFData)
 import           Data.Hashable (Hashable)
+import           Data.Maybe (fromMaybe)
 import           Data.Proxy
 import           GHC.Base (Any)
 import           Prelude hiding (map, const)
@@ -765,6 +766,29 @@ instance KeepTypeClass 'False where
   toKeepType _ = Proxy
   mapKeepType = fmap
 
+-- | Grab a value from 'KeepType', given a default value. Uses 'fromMaybe'
+-- and 'fromKeepType'.
+fromKeepTypeDef
+  :: KeepTypeClass keep
+  => optionalType
+  -> KeepType keep optionalType
+  -> optionalType
+fromKeepTypeDef deflt val = fromMaybe deflt (fromKeepType val)
+
+-- | Convert one optional field to another, keeping the value the same if
+-- possible. If not possible, a default argument is provided.
+convKeepType
+  :: (KeepTypeClass a, KeepTypeClass b) => t -> KeepType a t -> KeepType b t
+convKeepType b = toKeepType . fromKeepTypeDef b
+
+-- | Omitted value in @KeepType 'False t@.
+keepTypeFalse :: KeepType 'False t
+keepTypeFalse = Proxy
+
+-- | Grab value in @KeepType 'True t@. No default is needed.
+fromKeepTypeTrue :: KeepType 'True t -> t
+fromKeepTypeTrue = runIdentity
+
 -- | Protocol to reverse a circuit.
 -- 'Fwd' becomes 'Bwd' and vice versa.
 -- No changes are made otherwise.
@@ -802,4 +826,4 @@ vecCircuits fs = Circuit (\inps -> C.unzip $ f <$> fs <*> uncurry C.zip inps) wh
 -- The 'Circuit's run in parallel.
 tupCircuits :: Circuit a b -> Circuit c d -> Circuit (a,c) (b,d)
 tupCircuits (Circuit f) (Circuit g) = Circuit (reorder . (f *** g) . reorder) where
-  reorder ((a,b),(c,d)) = ((a,c),(b,d))
+  reorder ~(~(a,b),~(c,d)) = ((a,c),(b,d))
