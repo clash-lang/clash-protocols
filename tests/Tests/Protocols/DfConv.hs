@@ -32,6 +32,7 @@ import Test.Tasty.TH (testGroupGenerator)
 -- clash-protocols (me!)
 import Protocols
 import Protocols.Avalon.Stream
+import Protocols.Axi4.Stream
 import Protocols.Internal
 import Protocols.Hedgehog
 import qualified Protocols.DfConv as DfConv
@@ -200,6 +201,34 @@ prop_avalon_stream_fifo_id =
     (toKeepType <$> Gen.enumBounded) <*>
     (toKeepType <$> Gen.enumBounded) <*>
     Gen.enumBounded
+
+-- also test out the DfConv instance for Axi4Stream
+
+prop_axi4_stream_fifo_id :: Property
+prop_axi4_stream_fifo_id =
+  propWithModelSingleDomain
+    @C.System
+    defExpectOptions
+    (DfTest.genData genInfo)
+    (C.exposeClockResetEnable id)
+    (C.exposeClockResetEnable @C.System ckt)
+    (\a b -> tally a === tally b)
+ where
+  ckt :: (C.HiddenClockResetEnable dom) =>
+    Circuit
+      (Axi4Stream dom ('Axi4StreamConfig 5 2 2) Int)
+      (Axi4Stream dom ('Axi4StreamConfig 5 2 2) Int)
+  ckt = DfConv.fifo Proxy Proxy (C.SNat @10)
+
+  genInfo =
+    Axi4StreamM2S <$>
+    (genVec Gen.enumBounded) <*>
+    (genVec Gen.enumBounded) <*>
+    (genVec Gen.enumBounded) <*>
+    Gen.enumBounded <*>
+    Gen.enumBounded <*>
+    Gen.enumBounded <*>
+    DfTest.genSmallInt
 
 
 tests :: TestTree

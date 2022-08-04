@@ -128,6 +128,7 @@ library
     , deepseq
     , extra
     , ghc >= 8.6
+    , hashable
     , hedgehog >= 1.0.2
     , pretty-show
     , strict-tuple
@@ -149,6 +150,7 @@ library
     Protocols.Axi4.WriteAddress
     Protocols.Axi4.WriteData
     Protocols.Axi4.WriteResponse
+    Protocols.Axi4.Stream
 
     Protocols.Avalon.Stream
 
