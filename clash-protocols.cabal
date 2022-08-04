@@ -134,6 +134,7 @@ library
     , strict-tuple
 
     , mtl
+    , hashable
 
       -- To be removed; we need 'Test.Tasty.Hedgehog.Extra' to fix upstream issues
     , tasty >= 1.2 && < 1.5
@@ -150,6 +151,8 @@ library
     Protocols.Axi4.WriteData
     Protocols.Axi4.WriteResponse
     Protocols.Axi4.Stream
+
+    Protocols.Avalon.Stream
 
     Protocols.Df
     Protocols.DfConv

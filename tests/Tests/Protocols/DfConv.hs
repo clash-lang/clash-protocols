@@ -31,7 +31,9 @@ import Test.Tasty.TH (testGroupGenerator)
 
 -- clash-protocols (me!)
 import Protocols
+import Protocols.Avalon.Stream
 import Protocols.Axi4.Stream
+import Protocols.Internal
 import Protocols.Hedgehog
 import qualified Protocols.DfConv as DfConv
 
@@ -172,6 +174,33 @@ prop_select =
     let tall i = fromMaybe 0 (HashMap.lookup i (tally ixs))
     dats <- mapM (\i -> Gen.list (Range.singleton (tall i)) DfTest.genSmallInt) C.indicesI
     pure (dats, ixs)
+
+-- also test out the DfConv instance for AvalonStream
+
+prop_avalon_stream_fifo_id :: Property
+prop_avalon_stream_fifo_id =
+  propWithModelSingleDomain
+    @C.System
+    defExpectOptions
+    (DfTest.genData genInfo)
+    (C.exposeClockResetEnable id)
+    (C.exposeClockResetEnable @C.System ckt)
+    (\a b -> tally a === tally b)
+ where
+  ckt :: (C.HiddenClockResetEnable dom) =>
+    Circuit
+      (AvalonStream dom ('AvalonStreamConfig 2 2 'True 'True 2 0) Int)
+      (AvalonStream dom ('AvalonStreamConfig 2 2 'True 'True 2 0) Int)
+  ckt = DfConv.fifo Proxy Proxy (C.SNat @10)
+
+  genInfo =
+    AvalonStreamM2S <$>
+    DfTest.genSmallInt <*>
+    Gen.enumBounded <*>
+    Gen.enumBounded <*>
+    (toKeepType <$> Gen.enumBounded) <*>
+    (toKeepType <$> Gen.enumBounded) <*>
+    Gen.enumBounded
 
 -- also test out the DfConv instance for Axi4Stream
 
