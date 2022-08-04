@@ -51,6 +51,7 @@ module Protocols
   , StallAck(..)
   , simulateC
   , simulateCS
+  , simulateCSE
   , def
 
     -- * Circuit notation plugin

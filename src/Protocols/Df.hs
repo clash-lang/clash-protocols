@@ -87,6 +87,9 @@ import qualified Clash.Explicit.Prelude as CE
 import           Protocols.Internal
 
 -- $setup
+-- >>> :m -Prelude
+-- >>> import Prelude hiding (filter, zipWith)
+-- >>> import qualified Clash.Prelude as C
 -- >>> import Protocols
 -- >>> import Clash.Prelude (Vec(..))
 -- >>> import qualified Prelude as P

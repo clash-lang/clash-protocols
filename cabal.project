@@ -18,3 +18,5 @@ source-repository-package
     location: https://github.com/martijnbastiaan/haskell-hedgehog.git
     tag: f7d25b0a1927b7c06d69535d5dcfcade560ec624
     subdir: hedgehog
+
+write-ghc-environment-files: always
