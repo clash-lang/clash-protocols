@@ -132,6 +132,7 @@ library
     , hedgehog >= 1.0.2
     , pretty-show
     , strict-tuple
+    , mtl
 
     , mtl
     , hashable
