@@ -149,7 +149,7 @@ library
     Protocols.Axi4.WriteAddress
     Protocols.Axi4.WriteData
     Protocols.Axi4.WriteResponse
-    Protocols.Axi4.Stream.Axi4Stream
+    Protocols.Axi4.Stream
 
     Protocols.Df
     Protocols.DfConv

@@ -31,7 +31,7 @@ import Test.Tasty.TH (testGroupGenerator)
 
 -- clash-protocols (me!)
 import Protocols
-import Protocols.Axi4.Stream.Axi4Stream
+import Protocols.Axi4.Stream
 import Protocols.Hedgehog
 import qualified Protocols.DfConv as DfConv
 
@@ -192,7 +192,7 @@ prop_axi4_stream_fifo_id =
   ckt = DfConv.fifo Proxy Proxy (C.SNat @10)
 
   genInfo =
-    Axi4StreamInfo <$>
+    Axi4StreamM2S <$>
     (genVec Gen.enumBounded) <*>
     (genVec Gen.enumBounded) <*>
     (genVec Gen.enumBounded) <*>

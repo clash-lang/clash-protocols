@@ -10,7 +10,7 @@ Types and instance declarations for the AXI4-stream protocol.
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-} -- Hashable (Unsigned n)
 
-module Protocols.Axi4.Stream.Axi4Stream where
+module Protocols.Axi4.Stream where
 
 -- base
 import           Control.DeepSeq (NFData)
@@ -65,18 +65,17 @@ type KnownAxi4StreamConfig conf =
   )
 
 -- | Data sent from manager to subordinate. The tvalid field is left out: messages with @tvalid = False@
--- should be sent as a @NoAxi4StreamM2S@.
+-- should be sent as a @Nothing@.
 data Axi4StreamM2S (conf :: Axi4StreamConfig) (userType :: Type)
-  = NoAxi4StreamM2S
-  | Axi4StreamM2S
-    { _tdata :: Vec (DataWidth conf) (Unsigned 8)
-    , _tkeep :: Vec (DataWidth conf) Bool
-    , _tstrb :: Vec (DataWidth conf) Bool
-    , _tlast :: Bool
-    , _tid   :: Unsigned (IdWidth conf)
-    , _tdest :: Unsigned (DestWidth conf)
-    , _tuser :: userType
-    }
+  = Axi4StreamM2S
+  { _tdata :: Vec (DataWidth conf) (Unsigned 8)
+  , _tkeep :: Vec (DataWidth conf) Bool
+  , _tstrb :: Vec (DataWidth conf) Bool
+  , _tlast :: Bool
+  , _tid   :: Unsigned (IdWidth conf)
+  , _tdest :: Unsigned (DestWidth conf)
+  , _tuser :: userType
+  }
   deriving (Generic, C.ShowX, Show, NFData, Bundle)
 
 deriving instance
@@ -89,70 +88,14 @@ deriving instance
   , Eq userType
   ) => Eq (Axi4StreamM2S conf userType)
 
--- | Info sent from manager to subordinate. Includes everything in
--- 'Axi4StreamM2S' constructor. Used in 'DfConv.DfConv' implementation.
-data Axi4StreamInfo (conf :: Axi4StreamConfig) (userType :: Type)
-  = Axi4StreamInfo
-  { _tidata :: Vec (DataWidth conf) (Unsigned 8)
-  , _tikeep :: Vec (DataWidth conf) Bool
-  , _tistrb :: Vec (DataWidth conf) Bool
-  , _tilast :: Bool
-  , _tiid   :: Unsigned (IdWidth conf)
-  , _tidest :: Unsigned (DestWidth conf)
-  , _tiuser :: userType
-  }
-  deriving (Generic, C.ShowX, Show, NFData, Bundle)
-
-deriving instance
-  ( KnownAxi4StreamConfig conf
-  , C.NFDataX userType
-  ) => C.NFDataX (Axi4StreamInfo conf userType)
-
-deriving instance
-  ( KnownAxi4StreamConfig conf
-  , Eq userType
-  ) => Eq (Axi4StreamInfo conf userType)
-
 deriving instance
   ( KnownAxi4StreamConfig conf
   , Hashable userType
-  ) => Hashable (Axi4StreamInfo conf userType)
-
--- | Convert an 'Axi4StreamInfo' to an 'Axi4StreamM2S', keeping all the info.
-axi4StreamInfoToM2S
-  :: Maybe (Axi4StreamInfo conf userType)
-  -> Axi4StreamM2S conf userType
-axi4StreamInfoToM2S Nothing = NoAxi4StreamM2S
-axi4StreamInfoToM2S (Just Axi4StreamInfo{..})
-  = Axi4StreamM2S
-  { _tdata = _tidata
-  , _tkeep = _tikeep
-  , _tstrb = _tistrb
-  , _tlast = _tilast
-  , _tid   = _tiid
-  , _tdest = _tidest
-  , _tuser = _tiuser
-  }
-
--- | Convert an 'Axi4StreamM2S' to an 'Axi4StreamInfo', keeping all the info.
-axi4StreamM2SToInfo
-  :: Axi4StreamM2S conf userType
-  -> Maybe (Axi4StreamInfo conf userType)
-axi4StreamM2SToInfo NoAxi4StreamM2S = Nothing
-axi4StreamM2SToInfo Axi4StreamM2S{..}
-  = Just Axi4StreamInfo
-  { _tidata = _tdata
-  , _tikeep = _tkeep
-  , _tistrb = _tstrb
-  , _tilast = _tlast
-  , _tiid   = _tid
-  , _tidest = _tdest
-  , _tiuser = _tuser
-  }
+  ) => Hashable (Axi4StreamM2S conf userType)
 
 -- | Data sent from subordinate to manager. A simple acknowledge message.
--- '_tready' may be on even when manager is sending 'NoAxi4StreamM2S'.
--- Manager may not decide whether or not to send 'NoAxi4StreamM2S' based on
+-- '_tready' may be on even when manager is sending 'Nothing'.
+-- Manager may not decide whether or not to send 'Nothing' based on
 -- the '_tready' signal.
 newtype Axi4StreamS2M = Axi4StreamS2M { _tready :: Bool }
   deriving (Generic, C.NFDataX, C.ShowX, Eq, NFData, Show, Bundle)
@@ -161,7 +104,7 @@ newtype Axi4StreamS2M = Axi4StreamS2M { _tready :: Bool }
 data Axi4Stream (dom :: Domain) (conf :: Axi4StreamConfig) (userType :: Type)
 
 instance Protocol (Axi4Stream dom conf userType) where
-  type Fwd (Axi4Stream dom conf userType) = Signal dom (Axi4StreamM2S conf userType)
+  type Fwd (Axi4Stream dom conf userType) = Signal dom (Maybe (Axi4StreamM2S conf userType))
   type Bwd (Axi4Stream dom conf userType) = Signal dom Axi4StreamS2M
 
 instance Backpressure (Axi4Stream dom conf userType) where
@@ -171,23 +114,23 @@ instance (KnownAxi4StreamConfig conf, NFDataX userType) =>
   DfConv.DfConv    (Axi4Stream dom conf userType) where
   type Dom         (Axi4Stream dom conf userType) = dom
   type FwdPayload  (Axi4Stream dom conf userType)
-    = Axi4StreamInfo conf userType
+    = Axi4StreamM2S conf userType
 
   toDfCircuit proxy = DfConv.toDfCircuitHelper proxy s0 blankOtp stateFn where
     s0 = ()
-    blankOtp = NoAxi4StreamM2S
+    blankOtp = Nothing
     stateFn ack _ otpItem
-      = pure (axi4StreamInfoToM2S otpItem, Nothing, Maybe.isJust otpItem && _tready ack)
+      = pure (otpItem, Nothing, Maybe.isJust otpItem && _tready ack)
 
   fromDfCircuit proxy = DfConv.fromDfCircuitHelper proxy s0 blankOtp stateFn where
     s0 = ()
     blankOtp = Axi4StreamS2M { _tready = False }
     stateFn m2s ack _
-      = pure (Axi4StreamS2M { _tready = ack }, axi4StreamM2SToInfo m2s, False)
+      = pure (Axi4StreamS2M { _tready = ack }, m2s, False)
 
 instance (KnownAxi4StreamConfig conf, NFDataX userType, KnownDomain dom) =>
   Simulate (Axi4Stream dom conf userType) where
-  type SimulateFwdType (Axi4Stream dom conf userType) = [Axi4StreamM2S conf userType]
+  type SimulateFwdType (Axi4Stream dom conf userType) = [Maybe (Axi4StreamM2S conf userType)]
   type SimulateBwdType (Axi4Stream dom conf userType) = [Axi4StreamS2M]
   type SimulateChannels (Axi4Stream dom conf userType) = 1
 
@@ -203,17 +146,16 @@ instance (KnownAxi4StreamConfig conf, NFDataX userType, KnownDomain dom) =>
 instance (KnownAxi4StreamConfig conf, NFDataX userType, KnownDomain dom) =>
   Drivable (Axi4Stream dom conf userType) where
   type ExpectType (Axi4Stream dom conf userType)
-    = [Axi4StreamInfo conf userType]
+    = [Axi4StreamM2S conf userType]
 
-  toSimulateType Proxy = P.map (axi4StreamInfoToM2S . Just)
-  fromSimulateType Proxy = Maybe.mapMaybe axi4StreamM2SToInfo
+  toSimulateType Proxy = fmap Just
+  fromSimulateType Proxy = Maybe.catMaybes
 
   driveC conf vals
     = withClockResetEnable clockGen resetGen enableGen
-    $ DfConv.drive Proxy conf (axi4StreamM2SToInfo <$> vals)
+    $ DfConv.drive Proxy conf vals
   sampleC conf ckt
     = withClockResetEnable clockGen resetGen enableGen
-    $ fmap axi4StreamInfoToM2S
     $ DfConv.sample Proxy conf
     $ ckt
 
@@ -230,4 +172,4 @@ instance
   expectToLengths Proxy = pure . P.length
   expectN Proxy options nExpected sampled
     = expectN (Proxy @(Df.Df dom _)) options nExpected
-    $ Df.maybeToData . axi4StreamM2SToInfo <$> sampled
+    $ Df.maybeToData <$> sampled
