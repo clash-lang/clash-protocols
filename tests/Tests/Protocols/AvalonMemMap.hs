@@ -29,7 +29,7 @@ import Protocols.Internal
 import qualified Protocols.Df as Df
 import Protocols.Hedgehog
 import qualified Protocols.DfConv as DfConv
-import Protocols.Avalon.MemMap.AvalonMemMap
+import Protocols.Avalon.MemMap
 
 -- tests
 import qualified Tests.Protocols.Df as DfTest
@@ -39,11 +39,11 @@ import qualified Tests.Protocols.Df as DfTest
 ---------------------------------------------------------------
 
 type SharedConfig
-  = 'AvalonMMSharedConfig 2 'True 'True 2 'True 'True 2 'True 2 'True 'True 'True
+  = 'AvalonMmSharedConfig 2 'True 'True 2 'True 'True 2 'True 2 'True 'True 'True
 type ManagerConfig
-  = 'AvalonMMManagerConfig 'False 'False 'False SharedConfig
+  = 'AvalonMmManagerConfig 'False 'False 'False SharedConfig
 type SubordinateConfig
-  = 'AvalonMMSubordinateConfig
+  = 'AvalonMmSubordinateConfig
     'True 'True 'True 'False 'True 'False 'False 'False 'False SharedConfig
 
 genWriteImpt :: Gen (AvalonWriteImpt 'True SharedConfig)
@@ -95,8 +95,8 @@ prop_avalon_convert_manager_subordinate =
       (repeat (Df.Data readImpt)) ckt)
  where
   ckt :: (C.HiddenClockResetEnable dom) => Circuit
-    (AvalonMMManager dom ManagerConfig)
-    (AvalonMMSubordinate dom 0 SubordinateConfig)
+    (AvalonMmManager dom ManagerConfig)
+    (AvalonMmSubordinate dom 0 SubordinateConfig)
   ckt = DfConv.convert Proxy Proxy
 
 -- feed ReadReqImpt's to a manager-to-subordinate converter, and see that the
@@ -112,8 +112,8 @@ prop_avalon_convert_manager_subordinate_rev =
       (repeat (Df.Data $ Left readReqImpt)) (repeat True) ckt)
  where
   ckt :: (C.HiddenClockResetEnable dom) => Circuit
-    (AvalonMMManager dom ManagerConfig)
-    (AvalonMMSubordinate dom 0 SubordinateConfig)
+    (AvalonMmManager dom ManagerConfig)
+    (AvalonMmSubordinate dom 0 SubordinateConfig)
   ckt = DfConv.convert Proxy Proxy
 
 -- feed ReadImpt's to a subordinate-to-manager converter, and see that the fwd
@@ -129,8 +129,8 @@ prop_avalon_convert_subordinate_manager =
       (repeat (Df.Data readImpt)) ckt)
  where
   ckt :: (C.HiddenClockResetEnable dom) => Circuit
-    (AvalonMMSubordinate dom 0 SubordinateConfig)
-    (AvalonMMManager dom ManagerConfig)
+    (AvalonMmSubordinate dom 0 SubordinateConfig)
+    (AvalonMmManager dom ManagerConfig)
   ckt = DfConv.convert Proxy Proxy
 
 -- feed ReadReqImpt's to a subordinate-to-manager converter, and see that the
@@ -146,8 +146,8 @@ prop_avalon_convert_subordinate_manager_rev =
       (repeat (Df.Data $ Left readReqImpt)) (repeat True) ckt)
  where
   ckt :: (C.HiddenClockResetEnable dom) => Circuit
-    (AvalonMMSubordinate dom 0 SubordinateConfig)
-    (AvalonMMManager dom ManagerConfig)
+    (AvalonMmSubordinate dom 0 SubordinateConfig)
+    (AvalonMmManager dom ManagerConfig)
   ckt = DfConv.convert Proxy Proxy
 
 
