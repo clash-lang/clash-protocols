@@ -827,3 +827,57 @@ vecCircuits fs = Circuit (\inps -> C.unzip $ f <$> fs <*> uncurry C.zip inps) wh
 tupCircuits :: Circuit a b -> Circuit c d -> Circuit (a,c) (b,d)
 tupCircuits (Circuit f) (Circuit g) = Circuit (reorder . (f *** g) . reorder) where
   reorder ~(~(a,b),~(c,d)) = ((a,c),(b,d))
+
+-- TODO comment
+interconnectFwd ::
+  forall a numLeft numRight dom bwd fwd.
+  ( C.HiddenClockResetEnable dom
+  , C.KnownNat numLeft
+  , C.KnownNat numRight
+  , Bwd a ~ Signal dom bwd
+  , Fwd a ~ Signal dom fwd ) =>
+  bwd ->
+  fwd ->
+  C.Signal dom (C.Vec numLeft (Maybe (C.Index numRight))) ->
+  Circuit (C.Vec numLeft a) (C.Vec numRight a)
+interconnectFwd defLeft defRight routeReqs = Circuit circuitFunc where
+  circuitFunc (inpLeft, inpRight) =
+    let (otpLeft, otpRight) = C.unbundle $ C.mealy mealyFunc s0 $ C.bundle (routeReqs, C.bundle (C.bundle inpLeft, C.bundle inpRight))
+    in (C.unbundle otpLeft, C.unbundle otpRight)
+
+  s0 = C.repeat Nothing
+
+  mealyFunc s (reqs, (inpLeft, inpRight)) =
+    let pairingsRL = genPairingsRL s reqs
+        pairingsLR = genPairingsLR pairingsRL
+    in  (pairingsRL, (maybe defLeft (inpRight C.!!) <$> pairingsLR, maybe defRight (inpLeft C.!!) <$> pairingsRL))
+
+  genPairingsRL oldRL reqLR =
+    let oldRL' = keepRLPairing reqLR <$> oldRL <*> countUp
+        newRL  = (\r -> C.findIndex (== Just r) reqLR) <$> countUp
+    in  (C.<|>) <$> oldRL' <*> newRL :: C.Vec numRight (Maybe (C.Index numLeft))
+
+  genPairingsLR pairingsRL = (\l -> C.elemIndex (Just l) pairingsRL) <$> countUp
+
+  keepRLPairing reqLR (Just lNum) rNum | (reqLR C.!! lNum) == Just rNum = Just lNum
+  keepRLPairing _ _ _ = Nothing
+
+  countUp :: (C.KnownNat n, C.KnownNat m) => C.Vec n (C.Index m)
+  countUp = C.iterateI (+ 1) 0
+
+-- TODO comment
+interconnectBwd ::
+  forall a numLeft numRight dom bwd fwd.
+  ( C.HiddenClockResetEnable dom
+  , C.KnownNat numLeft
+  , C.KnownNat numRight
+  , Bwd a ~ Signal dom bwd
+  , Fwd a ~ Signal dom fwd ) =>
+  bwd ->
+  fwd ->
+  C.Signal dom (C.Vec numRight (Maybe (C.Index numLeft))) ->
+  Circuit (C.Vec numLeft a) (C.Vec numRight a)
+interconnectBwd defLeft defRight routeReqs
+  = coerceCircuit
+  $ reverseCircuit
+  $ interconnectFwd @(Reverse a) defRight defLeft routeReqs

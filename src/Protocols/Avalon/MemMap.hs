@@ -87,11 +87,18 @@ module Protocols.Avalon.MemMap
     -- * Protocols
   , AvalonMmManager(..)
   , AvalonMmSubordinate(..)
+
+    -- * Interconnect fabric
+  , interconnectFabric
+  , interconnectFabricSingleMember
+  , interconnectFabric2
+  , interconnectFabric2SingleMember
   ) where
 
 -- base
 import Prelude ()
 
+import           Control.Arrow ((***))
 import           Control.Monad.State (put, get)
 import           Control.DeepSeq (NFData)
 import qualified Data.Maybe as Maybe
@@ -1261,3 +1268,232 @@ instance
 --
 -- Tests can still be made for Avalon MM circuits, using 'DfConv.dfConvTestBench'.
 -- See 'Tests.Protocols.AvalonMemMap' for examples.
+
+
+
+
+-- TODO flush doesn't work; I'm not confident that it handles everything else correctly; also the "forall" is annoying and should be removed
+interconnectFabric ::
+  forall dom managerConfig subordinateConfig numManager numSubordinate decNumSub fixedWaitTime.
+  ( KnownManagerConfig managerConfig
+  , KnownSubordinateConfig subordinateConfig
+  , MShared managerConfig ~ SShared subordinateConfig
+  , HiddenClockResetEnable dom
+  , KnownNat fixedWaitTime
+  , KnownNat numManager
+  , KnownNat numSubordinate
+  , numSubordinate ~ (decNumSub + 1) ) =>
+  Vec numSubordinate (Unsigned (AddrWidth (SShared subordinateConfig)) -> Bool) ->
+  Vec numSubordinate (Unsigned 6) ->
+  SNat fixedWaitTime ->
+  Circuit
+    (Vec numManager (AvalonMmManager dom managerConfig))
+    (Vec numSubordinate (AvalonMmSubordinate dom fixedWaitTime subordinateConfig))
+interconnectFabric subordinateAddrFns irqNums fixedWaitTime = Circuit cktFn where
+  -- We use a mealy machine, since state is necessary to keep track of which manager is connected to which subordinate.
+  cktFn (inpA, inpB) = (unbundle otpA, unbundle otpB) where (otpA, otpB) = unbundle $ mealy transFn s0 $ bundle (bundle inpA, bundle inpB)
+
+  -- (sm: which subordinate was connected to which manager last clock cycle, xferSt: state for each manager-to-subordinate connection)
+  -- xferSt is indexed by subordinate
+  -- xferSt: Vec (Maybe (ctr1: num waitrequest=false&read=true - num readdatavalid=true, ctr2: xfers left in burst (dec on readdatavalid=true OR waitrequest=false&write=true), ctr3: fixed wait time left (dec always, loop around on good message), ready for transfer (becomes True on waitrequest=false and ctr3=0, False on good message)))
+  -- xferState[subordinate] = Nothing indicates that subordinate is not connected to any manager
+  s0 = (repeat Nothing, repeat Nothing)
+
+  -- transition function, called every clock cycle
+  -- takes in old state and input, returns new state and output
+  transFn (smOld, xferSt) (mo, so) = ((sm, xferSt'), (mi, si)) where
+    -- figure out which subordinate gets paired with which manager, and vice versa
+    (ms, sm) = managerSubordinatePairings mo smOld xferSt
+    -- get the interrupt request number
+    mirq = minIrq so
+    -- get the interrupt list (n subordinates produce n bools; then resize, padding with zeros)
+    irqList = fromKeepTypeDef False . so_irq <$> so
+    -- set IRQ-related fields of a manager-in message using the values calculated above
+    setIrq miMsg = miMsg { mi_irqList = toKeepType $ unpack $ resize $ pack irqList, mi_irqNumber = toKeepType mirq }
+    -- calculate all manager-in messages
+    mi = setIrq . maybe mmManagerInNoData (\n -> convSoMi (so !! n) (xferSt !! n)) <$> ms
+    -- calculate all subordinate-in messages
+    si = maybe (const mmSubordinateInNoData) (\n -> convMoSi (mo !! n)) <$> sm <*> xferSt
+    -- calculate the next xferStates
+    xferSt' = modifySt <$> (fmap (mo !!) <$> sm) <*> so <*> xferSt
+
+  -- out of all subordinates with IRQ turned on, return the smallest IRQ number
+  minIrq so = fold minJust $ irqNum <$> so <*> irqNums where
+    minJust (Just a) (Just b) | a < b = Just a
+    minJust (Just a) Nothing = Just a
+    minJust _ b = b
+
+    irqNum soMsg num = if fromKeepTypeDef False (so_irq soMsg) then Just num else Nothing
+
+  -- figure out which manager is paired with which subordinate (ms) and vice versa (sm)
+  -- given current manager-out messages; previous sm value; and all the xferStates
+  managerSubordinatePairings mo smOld xferSt = (ms, sm) where
+    -- for old sm values, determine if they're still transmitting
+    smOld' = (\smOldElem addrFn xferStI -> smOldElem >>= keepSM addrFn xferStI) <$> smOld <*> subordinateAddrFns <*> xferSt
+    -- a transmission is still going if the xferState is Just or if the manager is still asking to connect
+    keepSM addrFn xferStI idx = if (moGood addrFn (mo !! idx)) || Maybe.isJust xferStI then Just idx else Nothing
+    -- get new subordinate-to-manager connections in case a subordinate is disconnectd and a manager wants to connect to it
+    smCurr = (\addrFn -> findIndex (moGood addrFn) mo) <$> subordinateAddrFns
+    -- given addrFn, does manager-out message want to connect to this address?
+    moGood addrFn moMsg = moIsOn moMsg && addrFn (mo_addr moMsg)
+    -- make subordinate-to-manager pairings, preferring existing connections
+    sm = (<|>) <$> smOld' <*> smCurr
+    -- figure out manager-to-subordinate pairings based on sm
+    ms = flip elemIndex sm . Just <$> iterateI (+ 1) 0
+
+  -- mo wants to read or write
+  moIsOn mo = (fromKeepTypeDef True (mo_read mo) || fromKeepTypeDef True (mo_write mo)) && (0 /= fromKeepTypeDef 1 (mo_byteEnable mo))
+  -- mo wants to read
+  moIsRead mo = moIsOn mo && fromKeepTypeDef True (mo_read mo) && not (fromKeepTypeDef False (mo_write mo))
+  -- mo wants to write
+  moIsWrite mo = moIsOn mo && fromKeepTypeDef True (mo_write mo) && not (fromKeepTypeDef False (mo_read mo))
+
+  -- modify one xferSt value, given one manager-out message and one subordinate-out message
+  -- if there is no manager connected, our state should be Nothing
+  modifySt Nothing _ _ = Nothing
+  -- if there is a manager connected, give a default value of xferSt if needed, and then call on modifySt' to modify it
+  modifySt (Just mo) so st = modifySt' mo so (Maybe.fromMaybe (0 :: Unsigned 8,
+                                                               fromKeepTypeDef 1 (mo_burstCount mo),
+                                                               _0 fixedWaitTime,
+                                                               False) st)
+  modifySt' mo so (ctr1, ctr2, ctr3, readyForTransfer) = modifySt'' (optDecCtr so $ optIncCtr1 mo so ctr1,
+                                                                     optDecCtr2 mo so ctr2,
+                                                                     modifyCtr3 mo ctr3,
+                                                                     modifyReadyForTransfer mo so ctr3 readyForTransfer)
+  -- increment ctr1 if we're reading and waitrequest=false
+  optIncCtr1 mo so ctr1 = if shouldIncCtr1 mo so then ctr1+1 else ctr1
+  shouldIncCtr1 mo so = moIsRead mo && not (fromKeepTypeDef False (so_waitRequest so))
+  -- decrement ctr2 if (we're writing and waitrequest=false) or readdatavalid=true
+  optDecCtr2 mo so ctr2 = if (moIsWrite mo && not (fromKeepTypeDef False (so_waitRequest so)) && ctr2 /= 0) then ctr2-1 else optDecCtr so ctr2
+  -- decrement ctr if readdatavalid=true
+  optDecCtr so ctr = if (ctr /= 0) && (fromKeepTypeDef True $ so_readDataValid so) then ctr-1 else ctr
+  -- always decrement ctr3; loop around to maxBound if mo is sending something
+  -- this is for fixed wait state interfaces
+  modifyCtr3 mo 0 = if moIsOn mo then maxBound else 0
+  modifyCtr3 _ n = n-1
+  modifyReadyForTransfer mo so ctr3 readyForTransfer
+    | not (fromKeepTypeDef False (so_waitRequest so)) && ctr3 == 0 = True
+    | moIsOn mo = False
+    | otherwise = readyForTransfer
+  -- finally, kill the xferSt if all the counters are at 0
+  modifySt'' (0, 0, 0, _) = Nothing
+  modifySt'' st = Just st
+  -- hack to get a "0" value of the right type
+  _0 :: (KnownNat n) => SNat n -> Index (n+1)
+  _0 _ = 0
+
+  -- given subordinate-out message and xferSt, generate manager-in message
+  convSoMi so st
+    = AvalonManagerIn
+    { mi_waitRequest   = Maybe.maybe True (\(ctr1,_,ctr3,_) -> ctr1 < maxBound && ctr3 == 0) st && (fromKeepTypeDef False (so_waitRequest so))
+    , mi_readDataValid = convKeepType False (so_readDataValid so)
+    , mi_endOfPacket   = convKeepType False (so_endOfPacket so)
+    , mi_irqList       = errorX "interconnect fabric: this value gets overwritten later"
+    , mi_irqNumber     = errorX "interconnect fabric: this value gets overwritten later"
+    , mi_readData      = so_readData so
+    }
+
+  -- given manager-out message and xferSt, generate subordinate-in message
+  convMoSi mo st
+    = AvalonSubordinateIn
+    { si_addr               = toKeepType $ mo_addr mo
+    , si_read               = toKeepType $ fromKeepTypeDef True (mo_read  mo) && not (fromKeepTypeDef False (mo_write mo))
+    , si_write              = toKeepType $ fromKeepTypeDef True (mo_write mo) && not (fromKeepTypeDef False (mo_read  mo))
+    , si_writeByteEnable    = toKeepType $ resize $ if (fromKeepTypeDef True (mo_write mo)) then fromKeepTypeDef 0 (mo_byteEnable mo) else 0
+    , si_burstCount         = mo_burstCount mo
+    , si_chipSelect         = toKeepType True
+    , si_byteEnable         = toKeepType $ resize $ fromKeepTypeDef 0 $ mo_byteEnable mo
+    , si_beginTransfer      = toKeepType $ moIsOn mo && (Maybe.maybe True (\(_,_,_,readyForMsg) -> readyForMsg) st)
+    , si_beginBurstTransfer = toKeepType $ Maybe.isNothing st
+    , si_writeData          = mo_writeData mo
+    }
+
+
+-- Interconnect fabric, but there's only one manager and one subordinate.
+-- Vecs are removed for convenience.
+interconnectFabricSingleMember ::
+  ( KnownManagerConfig managerConfig
+  , KnownSubordinateConfig subordinateConfig
+  , MShared managerConfig ~ SShared subordinateConfig
+  , HiddenClockResetEnable dom
+  , KnownNat fixedWaitTime ) =>
+  (Unsigned (AddrWidth (SShared subordinateConfig)) -> Bool) ->
+  Unsigned 6 ->
+  SNat fixedWaitTime ->
+  Circuit
+    (AvalonMmManager dom managerConfig)
+    (AvalonMmSubordinate dom fixedWaitTime subordinateConfig)
+interconnectFabricSingleMember subordinateAddrFn irqNum fixedWaitTime
+  = Circuit ((head *** head) . toSignals (interconnectFabric (singleton subordinateAddrFn) (singleton irqNum) fixedWaitTime) . (singleton *** singleton))
+
+
+
+-- An @AvalonManagerIn@ containing no read data, but not giving a wait request or an IRQ.
+mmManagerInNoData :: (KnownManagerConfig config) => AvalonManagerIn config
+mmManagerInNoData
+  = AvalonManagerIn
+  { mi_waitRequest   = False
+  , mi_readDataValid = toKeepType False
+  , mi_endOfPacket   = toKeepType False
+  , mi_irqList       = toKeepType 0
+  , mi_irqNumber     = toKeepType Nothing
+  , mi_readData      = errorX "No read data defined"
+  }
+
+
+
+
+-- Another version of interconnect fabric, this time using 'DfConv.interconnect'
+
+-- TODO irq, fixed wait time
+-- TODO honestly, forget what what exactly was going on here. I was halfway through implementing IRQ
+interconnectFabric2 ::
+  forall dom managerConfig subordinateConfig numManager numSubordinate.
+  ( KnownManagerConfig managerConfig
+  , KnownSubordinateConfig subordinateConfig
+  , MShared managerConfig ~ SShared subordinateConfig
+  , HiddenClockResetEnable dom
+  , KnownNat numManager
+  , KnownNat numSubordinate
+  , KeepAddr subordinateConfig ~ 'True -- don't know why this is here
+  ) =>
+  (Unsigned (AddrWidth (SShared subordinateConfig)) -> Maybe (Index numSubordinate)) ->
+  Circuit
+    (Vec numManager (AvalonMmManager dom managerConfig))
+    (Vec numSubordinate (AvalonMmSubordinate dom 0 {- TODO (this is the wait time) -} subordinateConfig))
+interconnectFabric2 addrFn = Circuit circuitFn
+ where
+  circuitFn (mgrInps, subInps) =
+    let (realSubInps, subExtraStuff) = unzip $ unbundle . fmap subordinateOutRemoveNonDf <$> subInps
+        irqsSignal = fmap (\(_, _, a) -> a) <$> bundle subExtraStuff
+        managerIrqs = const (toKeepType 0, toKeepType Nothing) <$> irqsSignal
+        (mgrOtps, subOtps) = toSignals fullDfComponent (fmap (fst . managerOutRemoveNonDf) <$> mgrInps, realSubInps)
+        -- otps' = unbundle $ pure ((managerInAddNonDf <$> pure (toKeepType 0, toKeepType Nothing)) <*>) <*> bundle mgrOtps
+        otps' = pure ((managerInAddNonDf <$> managerIrqs) <*>) <*> mgrOtps
+    in (otps', fmap (subordinateInAddNonDf (toKeepType undefined, toKeepType undefined)) <$> subOtps)
+
+  fullDfComponent ::
+    Circuit
+      (Vec numManager (AvalonMmManager dom (RemoveNonDfManager managerConfig)))
+      (Vec numSubordinate (AvalonMmSubordinate dom 0 {- TODO (this is the wait time) -} (RemoveNonDfSubordinate subordinateConfig)))
+  fullDfComponent =  DfConv.interconnect Proxy Proxy reqFn
+  reqFn (AvalonManagerOut{..})
+    | not (fromKeepTypeDef True mo_read || fromKeepTypeDef True mo_write) = Nothing
+    | otherwise = addrFn mo_addr
+
+
+-- Interconnect fabric, but there's only one manager and one subordinate.
+-- Vecs are removed for convenience.
+interconnectFabric2SingleMember ::
+  ( KnownManagerConfig managerConfig
+  , KnownSubordinateConfig subordinateConfig
+  , MShared managerConfig ~ SShared subordinateConfig
+  , HiddenClockResetEnable dom
+  , KeepAddr subordinateConfig ~ 'True -- don't know why this is here
+  ) =>
+  (Unsigned (AddrWidth (SShared subordinateConfig)) -> Maybe (Index 1) {- so, a Bool? -}) ->
+  Circuit
+    (AvalonMmManager dom managerConfig)
+    (AvalonMmSubordinate dom 0 {- TODO (this is the wait time) -} subordinateConfig)
+interconnectFabric2SingleMember addrFn
+  = Circuit ((head *** head) . toSignals (interconnectFabric2 addrFn) . (singleton *** singleton))

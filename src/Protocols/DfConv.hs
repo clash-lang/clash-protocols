@@ -61,6 +61,7 @@ module Protocols.DfConv
   , registerFwd
   , registerBwd
   , fifo
+  , interconnect
 
     -- * Simulation functions
   , drive
@@ -1381,3 +1382,30 @@ dfConvTestBenchRev dfA dfB fwdPayload fwdAcks circ
     $ P.const
     ( boolsToBwd (Proxy @(Df _ _)) fwdAcks
     , () )
+
+
+-- TODO comment
+interconnect ::
+  ( DfConv dfA
+  , DfConv dfB
+  , BwdPayload dfA ~ BwdPayload dfB
+  , FwdPayload dfA ~ FwdPayload dfB
+  , Dom dfA ~ Dom dfB
+  , HiddenClockResetEnable (Dom dfA)
+  , KnownNat numA
+  , KnownNat numB
+  , Fwd dfA ~ Signal (Dom dfA) fwdA ) =>
+  Proxy dfA ->
+  Proxy dfB ->
+  (fwdA -> Maybe (Index numB)) ->
+  Circuit (Vec numA dfA) (Vec numB dfB)
+interconnect dfA dfB routeReqFn = Circuit circuitFn where
+  circuitFn (inpA, inpB) = toSignals (innerCircuit $ fmap routeReqFn <$> bundle inpA) (inpA, inpB)
+  innerCircuit routeReqs
+    =  vecFromDfConv dfA
+    |> tupCircuits
+    (  interconnectFwd (Ack False) NoData routeReqs )
+    (  undoDoubleRev $ reverseCircuit $ interconnectBwd (Ack False) NoData routeReqs )
+    |> vecToDfConv dfB
+  undoDoubleRev :: Circuit (Reverse (Vec x (Reverse a))) (Reverse (Vec y (Reverse b))) -> Circuit (Vec x a) (Vec y b)
+  undoDoubleRev = coerceCircuit
