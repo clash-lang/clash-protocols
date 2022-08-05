@@ -2,7 +2,7 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Tests.Protocols.AvalonMemMap where
+module Tests.Protocols.Avalon where
 
 -- base
 import Prelude
@@ -30,8 +30,10 @@ import qualified Protocols.Df as Df
 import Protocols.Hedgehog
 import qualified Protocols.DfConv as DfConv
 import Protocols.Avalon.MemMap
+import Protocols.Avalon.Stream
 
 -- tests
+import Util
 import qualified Tests.Protocols.Df as DfTest
 
 ---------------------------------------------------------------
@@ -149,6 +151,33 @@ prop_avalon_convert_subordinate_manager_rev =
     (AvalonMmSubordinate dom 0 SubordinateConfig)
     (AvalonMmManager dom ManagerConfig)
   ckt = DfConv.convert Proxy Proxy
+
+-- also test out the DfConv instance for AvalonStream
+
+prop_avalon_stream_fifo_id :: Property
+prop_avalon_stream_fifo_id =
+  propWithModelSingleDomain
+    @C.System
+    defExpectOptions
+    (DfTest.genData genInfo)
+    (C.exposeClockResetEnable id)
+    (C.exposeClockResetEnable @C.System ckt)
+    (\a b -> tally a === tally b)
+ where
+  ckt :: (C.HiddenClockResetEnable dom) =>
+    Circuit
+      (AvalonStream dom ('AvalonStreamConfig 2 2 'True 'True 2 0) Int)
+      (AvalonStream dom ('AvalonStreamConfig 2 2 'True 'True 2 0) Int)
+  ckt = DfConv.fifo Proxy Proxy (C.SNat @10)
+
+  genInfo =
+    AvalonStreamM2S <$>
+    DfTest.genSmallInt <*>
+    Gen.enumBounded <*>
+    Gen.enumBounded <*>
+    (toKeepType <$> Gen.enumBounded) <*>
+    (toKeepType <$> Gen.enumBounded) <*>
+    Gen.enumBounded
 
 
 tests :: TestTree

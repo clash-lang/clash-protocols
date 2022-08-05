@@ -18,7 +18,7 @@ module Protocols.Axi4.ReadAddress
 
     -- * configuration
   , Axi4ReadAddressConfig(..)
-  , GoodAxi4ReadAddressConfig
+  , KnownAxi4ReadAddressConfig
   , ARKeepBurst
   , ARKeepSize
   , ARIdWidth
@@ -37,6 +37,7 @@ module Protocols.Axi4.ReadAddress
   ) where
 
 -- base
+import Control.DeepSeq (NFData)
 import Data.Coerce
 import Data.Kind (Type)
 import GHC.Generics (Generic)
@@ -187,7 +188,7 @@ newtype S2M_ReadAddress = S2M_ReadAddress
 -- | Shorthand for a "well-behaved" read address config,
 -- so that we don't need to write out a bunch of type constraints later.
 -- Holds for every configuration; don't worry about implementing this class.
-class
+type KnownAxi4ReadAddressConfig conf =
   ( KeepTypeClass (ARKeepBurst conf)
   , KeepTypeClass (ARKeepSize conf)
   , KeepTypeClass (ARKeepRegion conf)
@@ -199,6 +200,15 @@ class
 
   , C.KnownNat (ARIdWidth conf)
   , C.KnownNat (ARAddrWidth conf)
+
+  , C.ShowX (RegionType (ARKeepRegion conf))
+  , C.ShowX (BurstLengthType (ARKeepBurstLength conf))
+  , C.ShowX (SizeType (ARKeepSize conf))
+  , C.ShowX (BurstType (ARKeepBurst conf))
+  , C.ShowX (LockType (ARKeepLock conf))
+  , C.ShowX (CacheType (ARKeepCache conf))
+  , C.ShowX (PermissionsType (ARKeepPermissions conf))
+  , C.ShowX (QosType (ARKeepQos conf))
 
   , Show (RegionType (ARKeepRegion conf))
   , Show (BurstLengthType (ARKeepBurstLength conf))
@@ -217,48 +227,34 @@ class
   , C.NFDataX (CacheType (ARKeepCache conf))
   , C.NFDataX (PermissionsType (ARKeepPermissions conf))
   , C.NFDataX (QosType (ARKeepQos conf))
-  ) => GoodAxi4ReadAddressConfig conf
 
-instance
-  ( KeepTypeClass (ARKeepBurst conf)
-  , KeepTypeClass (ARKeepSize conf)
-  , KeepTypeClass (ARKeepRegion conf)
-  , KeepTypeClass (ARKeepBurstLength conf)
-  , KeepTypeClass (ARKeepLock conf)
-  , KeepTypeClass (ARKeepCache conf)
-  , KeepTypeClass (ARKeepPermissions conf)
-  , KeepTypeClass (ARKeepQos conf)
+  , NFData (RegionType (ARKeepRegion conf))
+  , NFData (BurstLengthType (ARKeepBurstLength conf))
+  , NFData (SizeType (ARKeepSize conf))
+  , NFData (BurstType (ARKeepBurst conf))
+  , NFData (LockType (ARKeepLock conf))
+  , NFData (CacheType (ARKeepCache conf))
+  , NFData (PermissionsType (ARKeepPermissions conf))
+  , NFData (QosType (ARKeepQos conf))
 
-  , C.KnownNat (ARIdWidth conf)
-  , C.KnownNat (ARAddrWidth conf)
-
-  , Show (RegionType (ARKeepRegion conf))
-  , Show (BurstLengthType (ARKeepBurstLength conf))
-  , Show (SizeType (ARKeepSize conf))
-  , Show (BurstType (ARKeepBurst conf))
-  , Show (LockType (ARKeepLock conf))
-  , Show (CacheType (ARKeepCache conf))
-  , Show (PermissionsType (ARKeepPermissions conf))
-  , Show (QosType (ARKeepQos conf))
-
-  , C.NFDataX (RegionType (ARKeepRegion conf))
-  , C.NFDataX (BurstLengthType (ARKeepBurstLength conf))
-  , C.NFDataX (SizeType (ARKeepSize conf))
-  , C.NFDataX (BurstType (ARKeepBurst conf))
-  , C.NFDataX (LockType (ARKeepLock conf))
-  , C.NFDataX (CacheType (ARKeepCache conf))
-  , C.NFDataX (PermissionsType (ARKeepPermissions conf))
-  , C.NFDataX (QosType (ARKeepQos conf))
-  ) => GoodAxi4ReadAddressConfig conf
+  , Eq (RegionType (ARKeepRegion conf))
+  , Eq (BurstLengthType (ARKeepBurstLength conf))
+  , Eq (SizeType (ARKeepSize conf))
+  , Eq (BurstType (ARKeepBurst conf))
+  , Eq (LockType (ARKeepLock conf))
+  , Eq (CacheType (ARKeepCache conf))
+  , Eq (PermissionsType (ARKeepPermissions conf))
+  , Eq (QosType (ARKeepQos conf))
+  )
 
 deriving instance
-  ( GoodAxi4ReadAddressConfig conf
+  ( KnownAxi4ReadAddressConfig conf
   , Show userType
   ) =>
   Show (M2S_ReadAddress conf userType)
 
 deriving instance
-  ( GoodAxi4ReadAddressConfig conf
+  ( KnownAxi4ReadAddressConfig conf
   , C.NFDataX userType
   ) =>
   C.NFDataX (M2S_ReadAddress conf userType)
@@ -307,14 +303,29 @@ data Axi4ReadAddressInfo (conf :: Axi4ReadAddressConfig) (userType :: Type)
   deriving (Generic)
 
 deriving instance
-  ( GoodAxi4ReadAddressConfig conf
+  ( KnownAxi4ReadAddressConfig conf
   , Show userType ) =>
   Show (Axi4ReadAddressInfo conf userType)
 
 deriving instance
-  ( GoodAxi4ReadAddressConfig conf
+  ( KnownAxi4ReadAddressConfig conf
+  , C.ShowX userType ) =>
+  C.ShowX (Axi4ReadAddressInfo conf userType)
+
+deriving instance
+  ( KnownAxi4ReadAddressConfig conf
   , C.NFDataX userType ) =>
   C.NFDataX (Axi4ReadAddressInfo conf userType)
+
+deriving instance
+  ( KnownAxi4ReadAddressConfig conf
+  , NFData userType ) =>
+  NFData (Axi4ReadAddressInfo conf userType)
+
+deriving instance
+  ( KnownAxi4ReadAddressConfig conf
+  , Eq userType ) =>
+  Eq (Axi4ReadAddressInfo conf userType)
 
 -- | Convert 'M2S_ReadAddress' to 'Axi4ReadAddressInfo', dropping some info
 axi4ReadAddrMsgToReadAddrInfo

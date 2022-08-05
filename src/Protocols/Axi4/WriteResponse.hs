@@ -17,7 +17,7 @@ module Protocols.Axi4.WriteResponse
 
     -- * configuration
   , Axi4WriteResponseConfig(..)
-  , GoodAxi4WriteResponseConfig
+  , KnownAxi4WriteResponseConfig
   , BKeepResponse
   , BIdWidth
   ) where
@@ -91,28 +91,21 @@ newtype M2S_WriteResponse = M2S_WriteResponse { _bready :: Bool }
 -- | Shorthand for a "well-behaved" write response config,
 -- so that we don't need to write out a bunch of type constraints later.
 -- Holds for every configuration; don't worry about implementing this class.
-class
+type KnownAxi4WriteResponseConfig conf =
   ( KeepTypeClass (BKeepResponse conf)
   , C.KnownNat (BIdWidth conf)
   , Show (ResponseType (BKeepResponse conf))
   , C.NFDataX (ResponseType (BKeepResponse conf))
-  ) => GoodAxi4WriteResponseConfig conf
-
-instance
-  ( KeepTypeClass (BKeepResponse conf)
-  , C.KnownNat (BIdWidth conf)
-  , Show (ResponseType (BKeepResponse conf))
-  , C.NFDataX (ResponseType (BKeepResponse conf))
-  ) => GoodAxi4WriteResponseConfig conf
+  )
 
 deriving instance
-  ( GoodAxi4WriteResponseConfig conf
+  ( KnownAxi4WriteResponseConfig conf
   , Show userType
   ) =>
   Show (S2M_WriteResponse conf userType)
 
 deriving instance
-  ( GoodAxi4WriteResponseConfig conf
+  ( KnownAxi4WriteResponseConfig conf
   , C.NFDataX userType
   ) =>
   C.NFDataX (S2M_WriteResponse conf userType)

@@ -188,7 +188,8 @@ test-suite unittests
     Tests.Protocols
     Tests.Protocols.Df
     Tests.Protocols.DfConv
-    Tests.Protocols.AvalonMemMap
+    Tests.Protocols.Avalon
+    Tests.Protocols.Axi4
     Tests.Protocols.Plugin
     Tests.Protocols.Wishbone
 
@@ -202,6 +203,7 @@ test-suite unittests
     extra,
     hashable,
     hedgehog,
+    strict-tuple,
     tasty >= 1.2 && < 1.5,
     tasty-hedgehog >= 1.2,
     tasty-th,
