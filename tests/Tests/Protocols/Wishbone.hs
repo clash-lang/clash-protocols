@@ -8,7 +8,6 @@ module Tests.Protocols.Wishbone where
 
 import Clash.Hedgehog.Sized.BitVector
 import Clash.Prelude hiding ((&&))
--- tasty
 import Control.DeepSeq (NFData)
 import Data.Either (isLeft)
 import Hedgehog
