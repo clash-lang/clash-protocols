@@ -11,3 +11,5 @@ extra-deps:
 - git: https://github.com/cchalmers/circuit-notation.git
   commit: 2574640364eef12222517af059b9e4a7e6b503a7
 - tasty-hedgehog-1.2.0.0
+- clash-prelude-1.6.3
+- clash-prelude-hedgehog-1.6.3

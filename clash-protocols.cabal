@@ -156,6 +156,10 @@ library
 
     Protocols.Avalon.MemMap
 
+    Protocols.Wishbone
+    Protocols.Wishbone.Standard
+    Protocols.Wishbone.Standard.Hedgehog
+
     Protocols.Df
     Protocols.DfConv
     Protocols.Hedgehog
@@ -187,10 +191,12 @@ test-suite unittests
     Tests.Protocols.DfConv
     Tests.Protocols.AvalonMemMap
     Tests.Protocols.Plugin
+    Tests.Protocols.Wishbone
 
     Util
   build-depends:
     clash-protocols,
+    clash-prelude-hedgehog,
     data-default,
     unordered-containers,
     deepseq,
@@ -199,7 +205,8 @@ test-suite unittests
     hedgehog,
     tasty >= 1.2 && < 1.5,
     tasty-hedgehog >= 1.2,
-    tasty-th
+    tasty-th,
+    tasty-hunit
 
 test-suite doctests
   import:           common-options
