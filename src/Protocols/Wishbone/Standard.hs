@@ -104,6 +104,10 @@ crossbarSwitch = Circuit go
 --   The data rate could be increased by using registered feedback cycles or
 --   by using a pipelined circuit which would eliminate one wait cycle.
 --
+--   Since the underlying block RAM operates on values of @a@ directly, the only
+--   accepted bus selector value is 'maxBound'. All other bus selector values
+--   will cause an ERR response.
+--
 --   TODO create pipelined memory circuit
 memoryWb ::
   forall dom a addressWidth.
@@ -124,9 +128,10 @@ memoryWb ram = Circuit go
     Signal dom (WishboneM2S addressWidth (BitSize a `DivRU` 8) a) ->
     Signal dom (WishboneS2M a)
   reply request = do
-    ack <- writeAck .||. readAck
+    ack <- (writeAck .||. readAck) .&&. (not <$> isError)
+    errVal <- isError
     val <- readValue
-    pure $ (emptyWishboneS2M @a) {acknowledge = ack, readData = val}
+    pure $ (emptyWishboneS2M @a) {acknowledge = ack, err = errVal, readData = val}
    where
     addr1 = addr <$> request
     writeData1 = writeData <$> request
@@ -142,6 +147,9 @@ memoryWb ram = Circuit go
     isReadRequest = (\WishboneM2S {..} -> writeEnable && strobe && busCycle) <$> request
     justReadRequest = isRising False isReadRequest
 
+    requestValid = (busCycle <$> request) .&&. (strobe <$> request)
+
     readAck = register False justReadRequest
 
     readValue = ram addr1 write
+    isError = requestValid .&&. (/= maxBound) <$> (busSelect <$> request)
