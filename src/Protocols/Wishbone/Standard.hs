@@ -128,7 +128,7 @@ memoryWb ram = Circuit go
     Signal dom (WishboneM2S addressWidth (BitSize a `DivRU` 8) a) ->
     Signal dom (WishboneS2M a)
   reply request = do
-    ack <- (writeAck .||. readAck) .&&. (not <$> isError)
+    ack <- (writeAck .||. readAck) .&&. (not <$> isError) .&&. requestValid
     errVal <- isError
     val <- readValue
     pure $ (emptyWishboneS2M @a) {acknowledge = ack, err = errVal, readData = val}

@@ -82,7 +82,7 @@ addrReadIdWbModel Write {} s@WishboneS2M {..} ()
     Left $ "Write should have been acknowledged with no DAT " <> showX s
 
 prop_addrReadIdWb_model :: Property
-prop_addrReadIdWb_model =
+prop_addrReadIdWb_model = withClockResetEnable clockGen resetGen enableGen $
   wishbonePropWithModel @System
     defExpectOptions
     addrReadIdWbModel

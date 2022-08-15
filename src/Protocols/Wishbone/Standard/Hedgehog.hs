@@ -10,14 +10,14 @@ module Protocols.Wishbone.Standard.Hedgehog
     stallStandard,
     driveStandard,
     wishbonePropWithModel,
+    validatorCircuit,
+    validatorCircuitLenient
   )
 where
 
 import Clash.Prelude as C hiding (cycle, not, (&&), (||), indices)
 import Clash.Signal.Internal (Signal ((:-)))
--- hedgehog
 import Control.DeepSeq (NFData)
--- me
 import qualified Data.Bifunctor as B
 import Hedgehog ((===))
 import qualified Hedgehog as H
@@ -28,6 +28,7 @@ import Protocols.Hedgehog
 import Protocols.Wishbone
 import Prelude as P hiding (cycle)
 import Clash.Sized.Internal.BitVector
+import GHC.Stack (HasCallStack)
 
 -- | Datatype representing a single transaction request sent from a Wishbone Master to a Wishbone Slave
 data WishboneMasterRequest addressWidth dat
@@ -49,6 +50,7 @@ data LenientValidationState
   = LVSQuiet
   | LVSInCycleNoStrobe
   | LVSWaitForSlave
+  deriving (Generic, NFDataX)
 
 -- TODO add a SlaveHolding state? Spec seems unclear
 
@@ -81,20 +83,6 @@ nextStateLenient LVSWaitForSlave m2s s2m
   | acknowledge s2m || err s2m || retry s2m = Right LVSQuiet
   | otherwise = Right LVSWaitForSlave
 
--- | Lenient validation of a wishbone-component based on the specification
---
--- Returns 'Right ()' when the interactions comply with the spec.
--- Returns 'Left (cycle, err)' when a spec violation was found.
-validateLenient ::
-  [WishboneM2S addressWidth (BitSize a `DivRU` 8) a] ->
-  [WishboneS2M a] ->
-  Either (Int, LenientValidationError) ()
-validateLenient m2s s2m = go 0 (P.zip m2s s2m) LVSQuiet
-  where
-    go _ [] _ = Right ()
-    go n ((fwd, bwd) : rest) st = case nextStateLenient st fwd bwd of
-      Left e -> Left (n, e)
-      Right st' -> go (n + 1) rest st'
 
 --
 -- Validation for "common sense" compliance
@@ -115,7 +103,7 @@ data CommonSenseValidationState
   | CSVSInCycleNoStrobe
   | CSVSReadCycle
   | CSVSWriteCycle
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic, NFDataX)
 
 nextStateCommonSense ::
   forall a addressWidth.
@@ -152,24 +140,16 @@ nextStateCommonSense CSVSReadCycle m2s@WishboneM2S {..} s2m@WishboneS2M {..}
   | otherwise = Right (True, CSVSReadCycle)
   where
     responseValid WishboneM2S {busSelect=sel} WishboneS2M {readData=dat} = selectValidData sel dat
-nextStateCommonSense CSVSWriteCycle m2s@WishboneM2S {..} s2m@WishboneS2M {..}
+nextStateCommonSense CSVSWriteCycle m2s@WishboneM2S {..} WishboneS2M {..}
   | not busCycle = Right (True, CSVSQuiet)
   | not strobe = Right (True, CSVSInCycleNoStrobe)
   | not writeEnable = Left "deasserted WE while in a write cycle"
   | not $ requestValid m2s = Left "write request does not respect SEL"
   | err || retry = Right (True, CSVSQuiet)
-  | acknowledge =
-    if responseValid s2m
-      then Right (True, CSVSQuiet)
-      else Left "write-response contains defined read-data"
+  | acknowledge = Right (True, CSVSQuiet)
   | otherwise = Right (True, CSVSWriteCycle)
   where
     requestValid WishboneM2S {busSelect=sel, writeData=dat} = selectValidData sel dat
-    responseValid WishboneS2M {readData=dat0} =
-      let dat1 = bitCoerce dat0
-          numBits = natVal @_ @BitVector dat1
-          mask = 2 P.^ numBits - 1
-       in unsafeMask dat1 == mask
 
 selectValidData ::
   forall a.
@@ -193,18 +173,6 @@ selectValidData byteSelect rawDat =
     indices :: forall n. (KnownNat n) => BitVector n -> [Index n]
     indices bv = [idx | idx <- [0 .. maxBound], bitToBool (bv ! idx)]
 
-validateCommonSense ::
-  (BitPack a) =>
-  [WishboneM2S addressWidth (BitSize a `DivRU` 8) a] ->
-  [WishboneS2M a] ->
-  Either (Int, CommonSenseValidationError) ()
-validateCommonSense m2s s2m = go 0 (P.zip m2s s2m) CSVSQuiet
-  where
-    go _ [] _ = Right ()
-    go n ((fwd, bwd) : rest) st = case nextStateCommonSense st fwd bwd of
-      Left e -> Left (n, e)
-      Right (False, st') -> go (n + 1) ((fwd, bwd) : rest) st'
-      Right (True, st') -> go (n + 1) rest st'
 
 -- | Create a stalling wishbone 'Standard' circuit.
 stallStandard ::
@@ -364,6 +332,67 @@ driveStandard ExpectOptions {..} reqs =
         =
         transferToSignals d : (rep `C.seqX` go 0 (d : dat) replies)
 
+-- | Circuit which validates the wishbone communication signals between a
+--   master and a slave circuit.
+--
+--   Halts execution using 'error' when a "common sense" spec validation occurs.
+--
+--   N.B. Not synthesisable.
+validatorCircuit ::
+  forall dom addressWidth a.
+  ( HasCallStack,
+    HiddenClockResetEnable dom,
+    KnownNat addressWidth,
+    BitPack a,
+    NFDataX a,
+    ShowX a
+  ) =>
+  Circuit (Wishbone dom 'Standard addressWidth a) (Wishbone dom 'Standard addressWidth a)
+validatorCircuit =
+  Circuit $ mealyB go (0 :: Integer, (emptyWishboneM2S, emptyWishboneS2M), CSVSQuiet)
+ where
+  go (cycle, (m2s0, s2m0), state0) (m2s1, s2m1) =
+    case nextStateCommonSense state0 m2s0 s2m0 of
+      Left err -> error $
+        "Wishbone common-sense validation error on cycle "
+        <> show cycle
+        <> ": "
+        <> err
+        <> "\n"
+        <> showX m2s0
+        <> "\n"
+        <> showX s2m0
+      Right (True, state1) -> ((cycle + 1, (m2s1, s2m1), state1), (s2m1, m2s1))
+      Right (False, state1) -> go (cycle, (m2s0, s2m0), state1) (m2s1, s2m1)
+
+
+-- | Circuit which validates the wishbone communication signals between a
+--   master and a slave circuit.
+--
+--   Halts execution using 'error' when a spec validation occurs.
+--
+--   N.B. Not synthesisable.
+validatorCircuitLenient ::
+  forall dom addressWidth a.
+  ( HasCallStack,
+    HiddenClockResetEnable dom,
+    KnownNat addressWidth,
+    BitPack a,
+    NFDataX a
+  ) =>
+  Circuit (Wishbone dom 'Standard addressWidth a) (Wishbone dom 'Standard addressWidth a)
+validatorCircuitLenient =
+  Circuit $ mealyB go (0 :: Integer, (emptyWishboneM2S, emptyWishboneS2M), LVSQuiet)
+ where
+  go (cycle, (m2s0, s2m0), state0) (m2s1, s2m1) =
+    case nextStateLenient state0 m2s0 s2m0 of
+      Left err -> error $
+        "Wishbone lenient validation error on cycle "
+        <> show cycle
+        <> ": "
+        <> show err
+      Right state1 -> ((cycle + 1, (m2s1, s2m1), state1), (s2m1, m2s1))
+
 -- | Test a wishbone 'Standard' circuit against a pure model.
 wishbonePropWithModel ::
   forall dom a addressWidth st.
@@ -372,7 +401,7 @@ wishbonePropWithModel ::
     Show a,
     C.NFDataX a,
     C.KnownNat addressWidth,
-    C.KnownDomain dom,
+    C.HiddenClockResetEnable dom,
     C.KnownNat (C.BitSize a),
     C.BitPack a
   ) =>
@@ -401,11 +430,8 @@ wishbonePropWithModel eOpts model circuit0 inputGen st = H.property $ do
     resets = 50
     driver = driveStandard @dom (defExpectOptions {eoResetCycles = resets}) input
     stallC = stallStandard stalls
-    circuit1 = stallC |> circuit0
-    (m2s, _ : s2m) = observeComposedWishboneCircuit (eoTimeout eOpts) driver circuit1
-
-  validateLenient m2s s2m === Right ()
-  validateCommonSense m2s s2m === Right ()
+    circuit1 = stallC |> validatorCircuit |> circuit0
+    (_, _ : s2m) = observeComposedWishboneCircuit (eoTimeout eOpts) driver circuit1
 
   matchModel 0 s2m input st === Right ()
   where
