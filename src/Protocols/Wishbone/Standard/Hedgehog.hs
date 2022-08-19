@@ -1,10 +1,32 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE MagicHash #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE MultiWayIf #-}
 
 -- |
 -- Types and functions to aid with testing Wishbone circuits.
+--
+-- This module provides two "modes" of Wishbone Specification compliance checks:
+--
+--  * "lenient" mode
+--
+--  * "common sense" mode
+--
+-- __\"lenient\" mode__
+--
+-- The Wishbone spec mostly specifies the handshake protocols but does not make many
+-- assumptions about which signals *should* be valid in response to what. This is
+-- presumably done so to allow circuits to be very flexible, however it makes for
+-- a relatively weak validation tool.
+--
+-- __\"common sense\" mode__
+--
+-- The Wishbone spec itself makes very little assumptions about how interactions
+-- should look like outside of basic hand-shaking.
+-- This "common sense" compliance checking additionally checks for:
+--  - A read request is acked with defined data
+--    - response data respects the 'busSelect' signal
+--  - A write request must contain valid data according to the 'busSelect' signal
 module Protocols.Wishbone.Standard.Hedgehog
   ( WishboneMasterRequest (..),
     stallStandard,
@@ -17,7 +39,6 @@ where
 
 import Clash.Prelude as C hiding (cycle, not, (&&), (||), indices)
 import Clash.Signal.Internal (Signal ((:-)))
-import Control.DeepSeq (NFData)
 import qualified Data.Bifunctor as B
 import Hedgehog ((===))
 import qualified Hedgehog as H
@@ -27,7 +48,6 @@ import Protocols hiding (stallC, circuit)
 import Protocols.Hedgehog
 import Protocols.Wishbone
 import Prelude as P hiding (cycle)
-import Clash.Sized.Internal.BitVector
 import GHC.Stack (HasCallStack)
 
 -- | Datatype representing a single transaction request sent from a Wishbone Master to a Wishbone Slave
@@ -40,11 +60,6 @@ deriving instance (KnownNat addressWidth, KnownNat (BitSize a), Show a) => (Show
 --
 -- Validation for (lenient) spec compliance
 --
--- The Wishbone spec mostly specifies the handshake protocols but does not make many
--- assumptions about which signals *should* be valid in response to what. This is
--- presumably done so to allow circuits to be very flexible, however it makes for
--- a relatively weak validation tool.
---
 
 data LenientValidationState
   = LVSQuiet
@@ -52,48 +67,38 @@ data LenientValidationState
   | LVSWaitForSlave
   deriving (Generic, NFDataX)
 
--- TODO add a SlaveHolding state? Spec seems unclear
-
-data LenientValidationError
-  = LVEMoreThanOneTerminationSignalAsserted
-  | LVETerminationSignalOutsideOfCycle
-  deriving (NFData, Generic, NFDataX, Show, ShowX, Eq)
 
 nextStateLenient ::
   LenientValidationState ->
   WishboneM2S addressWidth (BitSize a `DivRU` 8) a ->
   WishboneS2M a ->
-  Either LenientValidationError LenientValidationState
+  Either String LenientValidationState
 nextStateLenient _ m2s s2m
   | P.length (filter ($ s2m) [acknowledge, err, retry]) > 1 =
-    Left LVEMoreThanOneTerminationSignalAsserted
+    Left "More than one termination signal asserted"
   | not (busCycle m2s) && (acknowledge s2m || err s2m || retry s2m) =
-    Left LVETerminationSignalOutsideOfCycle
-nextStateLenient LVSQuiet m2s _
-  | busCycle m2s && P.not (strobe m2s) = Right LVSInCycleNoStrobe
-  | busCycle m2s && strobe m2s = Right LVSWaitForSlave
-  | otherwise = Right LVSQuiet
-nextStateLenient LVSInCycleNoStrobe m2s _
-  | not (busCycle m2s) = Right LVSQuiet
-  | busCycle m2s && strobe m2s = Right LVSWaitForSlave
-  | otherwise = Right LVSInCycleNoStrobe
-nextStateLenient LVSWaitForSlave m2s s2m
-  | busCycle m2s && P.not (strobe m2s) = Right LVSInCycleNoStrobe
-  | not (busCycle m2s) = Right LVSQuiet
-  | acknowledge s2m || err s2m || retry s2m = Right LVSQuiet
-  | otherwise = Right LVSWaitForSlave
+    Left "Termination signals outside of a bus cycle"
+nextStateLenient state m2s s2m = case state of
+  LVSQuiet ->
+    if
+    | busCycle m2s && P.not (strobe m2s) -> Right LVSInCycleNoStrobe
+    | busCycle m2s && strobe m2s -> Right LVSWaitForSlave
+    | otherwise -> Right LVSQuiet
+  LVSInCycleNoStrobe ->
+    if
+    | not (busCycle m2s) -> Right LVSQuiet
+    | busCycle m2s && strobe m2s -> Right LVSWaitForSlave
+    | otherwise -> Right LVSInCycleNoStrobe
+  LVSWaitForSlave ->
+    if
+    | busCycle m2s && P.not (strobe m2s) -> Right LVSInCycleNoStrobe
+    | not (busCycle m2s) -> Right LVSQuiet
+    | acknowledge s2m || err s2m || retry s2m -> Right LVSQuiet
+    | otherwise -> Right LVSWaitForSlave
 
 
 --
 -- Validation for "common sense" compliance
---
--- The Wishbone spec itself makes very little assumptions about how interactions
--- should look like outside of basic hand-shaking.
--- This "common sense" compliance checking additionally checks for:
---  - A read request is acked with defined data
---    - response data respects the 'busSelect' signal
---  - A write request is answered with only an ACK/ERR/RETRY and no defined data
---    - components might want to reply with data
 --
 
 type CommonSenseValidationError = String
@@ -116,44 +121,50 @@ nextStateCommonSense ::
 nextStateCommonSense _ _ s2m
   | P.length (filter ($ s2m) [acknowledge, err, retry]) > 1 =
     Left "More than one termination signal asserted"
-nextStateCommonSense CSVSQuiet WishboneM2S {..} s2m
-  | busCycle && not strobe = Right (True, CSVSInCycleNoStrobe)
-  | busCycle && strobe && writeEnable = Right (False, CSVSWriteCycle)
-  | busCycle && strobe && not writeEnable = Right (False, CSVSReadCycle)
-  | hasTerminateFlag s2m = Left "Termination signals outside of a bus cycle"
-  | otherwise = Right (True, CSVSQuiet)
-nextStateCommonSense CSVSInCycleNoStrobe WishboneM2S {..} _
-  | not busCycle = Right (True, CSVSQuiet)
-  | not strobe = Right (True, CSVSInCycleNoStrobe)
-  | writeEnable = Right (False, CSVSWriteCycle)
-  | not writeEnable = Right (False, CSVSReadCycle)
-  | otherwise = C.error "Should not happen"
-nextStateCommonSense CSVSReadCycle m2s@WishboneM2S {..} s2m@WishboneS2M {..}
-  | not busCycle = Right (True, CSVSQuiet)
-  | not strobe = Right (True, CSVSInCycleNoStrobe)
-  | acknowledge =
-    if responseValid m2s s2m
-      then Right (True, CSVSQuiet)
-      else Left "read-response does not respect SEL"
-  | err || retry = Right (True, CSVSQuiet)
-  | writeEnable = Left "asserted WE while in a read cycle"
-  | otherwise = Right (True, CSVSReadCycle)
-  where
-    responseValid WishboneM2S {busSelect=sel} WishboneS2M {readData=dat} = selectValidData sel dat
-nextStateCommonSense CSVSWriteCycle m2s@WishboneM2S {..} WishboneS2M {..}
-  | not busCycle = Right (True, CSVSQuiet)
-  | not strobe = Right (True, CSVSInCycleNoStrobe)
-  | not writeEnable = Left "deasserted WE while in a write cycle"
-  | not $ requestValid m2s = Left "write request does not respect SEL"
-  | err || retry = Right (True, CSVSQuiet)
-  | acknowledge = Right (True, CSVSQuiet)
-  | otherwise = Right (True, CSVSWriteCycle)
-  where
-    requestValid WishboneM2S {busSelect=sel, writeData=dat} = selectValidData sel dat
+nextStateCommonSense state m2s@WishboneM2S{..} s2m@WishboneS2M{..} = case state of
+  CSVSQuiet ->
+    if
+    | busCycle && not strobe -> Right (True, CSVSInCycleNoStrobe)
+    | busCycle && strobe && writeEnable -> Right (False, CSVSWriteCycle)
+    | busCycle && strobe && not writeEnable -> Right (False, CSVSReadCycle)
+    | hasTerminateFlag s2m -> Left "Termination signals outside of a bus cycle"
+    | otherwise -> Right (True, CSVSQuiet)
+  CSVSInCycleNoStrobe ->
+    if
+    | not busCycle -> Right (True, CSVSQuiet)
+    | not strobe -> Right (True, CSVSInCycleNoStrobe)
+    | writeEnable -> Right (False, CSVSWriteCycle)
+    | not writeEnable -> Right (False, CSVSReadCycle)
+    | otherwise -> C.error "Should not happen"
+  CSVSReadCycle ->
+    if
+    | not busCycle -> Right (True, CSVSQuiet)
+    | not strobe -> Right (True, CSVSInCycleNoStrobe)
+    | acknowledge ->
+      if responseValid m2s s2m
+        then Right (True, CSVSQuiet)
+        else Left "read-response does not respect SEL"
+    | err || retry -> Right (True, CSVSQuiet)
+    | writeEnable -> Left "asserted WE while in a read cycle"
+    | otherwise -> Right (True, CSVSReadCycle)
+  CSVSWriteCycle ->
+    if
+    | not busCycle -> Right (True, CSVSQuiet)
+    | not strobe -> Right (True, CSVSInCycleNoStrobe)
+    | not writeEnable -> Left "deasserted WE while in a write cycle"
+    | not $ requestValid m2s -> Left "write request does not respect SEL"
+    | err || retry -> Right (True, CSVSQuiet)
+    | acknowledge -> Right (True, CSVSQuiet)
+    | otherwise -> Right (True, CSVSWriteCycle)
+ where
+  responseValid WishboneM2S{busSelect=sel} WishboneS2M{readData=dat} = selectValidData sel dat
+  requestValid WishboneM2S{busSelect=sel, writeData=dat} = selectValidData sel dat
 
+-- | This function checks whether all bytes selected by \"SEL\" in a value
+--   contain defined data.
 selectValidData ::
   forall a.
-  (KnownNat (BitSize a), BitPack a) =>
+  (HasCallStack, KnownNat (BitSize a), BitPack a) =>
   BitVector (BitSize a `DivRU` 8) ->
   a ->
   Bool
@@ -168,10 +179,10 @@ selectValidData byteSelect rawDat =
     dat :: C.Vec (BitSize a `DivRU` 8) (BitVector 8)
     dat = case maybeIsX rawDat of
       Just val -> bitCoerce $ resize (bitCoerce val :: BitVector (BitSize a))
-      Nothing -> C.repeat undefined#
+      Nothing -> C.deepErrorX "value to be 'select-checked' has an undefined spine"
 
     indices :: forall n. (KnownNat n) => BitVector n -> [Index n]
-    indices bv = [idx | idx <- [0 .. maxBound], bitToBool (bv ! idx)]
+    indices bv = filter (testBit bv . fromIntegral) [0 .. maxBound]
 
 
 -- | Create a stalling wishbone 'Standard' circuit.
@@ -353,15 +364,14 @@ validatorCircuit =
  where
   go (cycle, (m2s0, s2m0), state0) (m2s1, s2m1) =
     case nextStateCommonSense state0 m2s0 s2m0 of
-      Left err -> error $
-        "Wishbone common-sense validation error on cycle "
+      Left err ->
+        error $
+           "Wishbone common-sense validation error on cycle "
         <> show cycle
-        <> ": "
-        <> err
-        <> "\n"
-        <> showX m2s0
-        <> "\n"
-        <> showX s2m0
+        <> ": " <> err
+        <> "\n\n"
+        <> "M2S: " <> show m2s0 <> "\n"
+        <> "S2M: " <> show s2m0
       Right (True, state1) -> ((cycle + 1, (m2s1, s2m1), state1), (s2m1, m2s1))
       Right (False, state1) -> go (cycle, (m2s0, s2m0), state1) (m2s1, s2m1)
 
@@ -378,7 +388,8 @@ validatorCircuitLenient ::
     HiddenClockResetEnable dom,
     KnownNat addressWidth,
     BitPack a,
-    NFDataX a
+    NFDataX a,
+    ShowX a
   ) =>
   Circuit (Wishbone dom 'Standard addressWidth a) (Wishbone dom 'Standard addressWidth a)
 validatorCircuitLenient =
@@ -386,11 +397,14 @@ validatorCircuitLenient =
  where
   go (cycle, (m2s0, s2m0), state0) (m2s1, s2m1) =
     case nextStateLenient state0 m2s0 s2m0 of
-      Left err -> error $
-        "Wishbone lenient validation error on cycle "
+      Left err ->
+        error $
+           "Wishbone lenient validation error on cycle "
         <> show cycle
-        <> ": "
-        <> show err
+        <> ": " <> err
+        <> "\n\n"
+        <> "M2S: " <> show m2s0 <> "\n"
+        <> "S2M: " <> show s2m0
       Right state1 -> ((cycle + 1, (m2s1, s2m1), state1), (s2m1, m2s1))
 
 -- | Test a wishbone 'Standard' circuit against a pure model.

@@ -8,7 +8,6 @@ module Tests.Protocols.Wishbone where
 
 import Clash.Hedgehog.Sized.BitVector
 import Clash.Prelude hiding (not, (&&))
--- tasty
 import Control.DeepSeq (NFData)
 import Hedgehog
 import qualified Hedgehog.Gen as Gen
