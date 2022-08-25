@@ -142,24 +142,26 @@ prop_axi4_convert_write_id_rev =
             pure RDecodeError )
 
   fwdInfo
-    = ( Axi4WriteAddressInfo
-        0
-        0
-        (toKeepType 0)
-        (toKeepType Bs1)
-        (toKeepType NonExclusiveAccess)
-        (toKeepType (T4
-            NonBufferable
-            NonModifiable
-            OtherNoLookupCache
-            NoLookupCache ))
-        (toKeepType  (T3
-            Privileged
-            Secure
-            Instruction ))
-        (toKeepType 0)
-        0
-      , toKeepType 0, toKeepType BmFixed, C.repeat Nothing, 0 )
+    = (Axi4WriteAddressInfo
+    { _awiid = 0
+    , _awiaddr = 0
+    , _awiregion = toKeepType 0
+    , _awisize = toKeepType Bs1
+    , _awilock = toKeepType NonExclusiveAccess
+    , _awicache
+      = toKeepType (T4
+          NonBufferable
+          NonModifiable
+          OtherNoLookupCache
+          NoLookupCache )
+    , _awiprot
+      = toKeepType (T3
+          Privileged
+          Secure
+          Instruction )
+    , _awiqos = toKeepType 0
+    , _awiuser = 0
+    }, toKeepType 0, toKeepType BmFixed, C.repeat Nothing, 0 )
 
 prop_axi4_convert_read_id :: Property
 prop_axi4_convert_read_id =
@@ -226,28 +228,39 @@ prop_axi4_convert_read_id_rev =
     Reverse (Axi4ReadData dom ConfR Int Int))
   ckt = DfConv.convert Proxy Proxy
 
-  genInfo = (,,) <$> DfTest.genSmallInt <*> DfTest.genSmallInt <*> (toKeepType <$> (pure ROkay C.<|> pure RExclusiveOkay C.<|> pure RSlaveError C.<|> pure RDecodeError))
+  genInfo
+    =   (,,)
+    <$> DfTest.genSmallInt
+    <*> DfTest.genSmallInt
+    <*> (toKeepType
+      <$>  (pure ROkay
+      C.<|> pure RExclusiveOkay
+      C.<|> pure RSlaveError
+      C.<|> pure RDecodeError))
 
   fwdInfo
     = Axi4ReadAddressInfo
-    0
-    0
-    (toKeepType 0)
-    (toKeepType 0)
-    (toKeepType Bs1)
-    (toKeepType BmFixed)
-    (toKeepType NonExclusiveAccess)
-    (toKeepType (T4
-        NonBufferable
-        NonModifiable
-        OtherNoLookupCache
-        NoLookupCache ))
-    (toKeepType  (T3
-        Privileged
-        Secure
-        Instruction ))
-    (toKeepType 0)
-    0
+    { _ariid = 0
+    , _ariaddr = 0
+    , _ariregion = toKeepType 0
+    , _arilen = toKeepType 0
+    , _arisize = toKeepType Bs1
+    , _ariburst = toKeepType BmFixed
+    , _arilock = toKeepType NonExclusiveAccess
+    , _aricache
+      = toKeepType (T4
+          NonBufferable
+          NonModifiable
+          OtherNoLookupCache
+          NoLookupCache )
+    , _ariprot
+      = toKeepType (T3
+          Privileged
+          Secure
+          Instruction )
+    , _ariqos = toKeepType 0
+    , _ariuser = 0
+    }
 
 -- also test out the DfConv instance for Axi4Stream
 
