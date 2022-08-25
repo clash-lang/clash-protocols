@@ -150,6 +150,36 @@ prop_avalon_convert_subordinate_manager_rev =
     (AvalonMmManager dom ManagerConfig)
   ckt = DfConv.convert Proxy Proxy
 
+prop_interconnect_fabric_id :: Property
+prop_interconnect_fabric_id =
+  DfTest.idWithModelDf
+    defExpectOptions
+    (DfTest.genData $ (Left <$> genReadReqImpt) C.<|> (Right <$> genWriteImpt))
+    id
+    ( C.withClockResetEnable @C.System C.clockGen C.resetGen C.enableGen
+    $ DfConv.dfConvTestBench Proxy Proxy (repeat True)
+      (repeat (Df.Data readImpt)) ckt)
+ where
+  ckt :: (C.HiddenClockResetEnable dom) => Circuit
+    (AvalonMmManager dom ManagerConfig)
+    (AvalonMmSubordinate dom 0 SubordinateConfig)
+  ckt = interconnectFabricSingleMember (const True) 0 C.SNat
+
+prop_interconnect_fabric_2_id :: Property
+prop_interconnect_fabric_2_id =
+  DfTest.idWithModelDf
+    defExpectOptions
+    (DfTest.genData $ (Left <$> genReadReqImpt) C.<|> (Right <$> genWriteImpt))
+    id
+    ( C.withClockResetEnable @C.System C.clockGen C.resetGen C.enableGen
+    $ DfConv.dfConvTestBench Proxy Proxy (repeat True)
+      (repeat (Df.Data readImpt)) ckt)
+ where
+  ckt :: (C.HiddenClockResetEnable dom) => Circuit
+    (AvalonMmManager dom ManagerConfig)
+    (AvalonMmSubordinate dom 0 SubordinateConfig)
+  ckt = interconnectFabric2SingleMember (const $ Just 0)
+
 
 tests :: TestTree
 tests =
