@@ -293,7 +293,7 @@ driveStandard ExpectOptions {..} reqs =
       . C.fromList_lazy
       . (emptyWishboneM2S :)
       . go eoResetCycles reqs
-      . C.sample_lazy
+      . (\s -> C.sample_lazy s)
       . snd
   where
     transferToSignals ::
