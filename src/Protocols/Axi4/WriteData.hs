@@ -17,7 +17,7 @@ module Protocols.Axi4.WriteData
 
     -- * configuration
   , Axi4WriteDataConfig(..)
-  , GoodAxi4WriteDataConfig
+  , KnownAxi4WriteDataConfig
   , WKeepStrobe
   , WNBytes
   ) where
@@ -95,28 +95,21 @@ newtype S2M_WriteData = S2M_WriteData { _wready :: Bool }
 -- | Shorthand for a "well-behaved" write data config,
 -- so that we don't need to write out a bunch of type constraints later.
 -- Holds for every configuration; don't worry about implementing this class.
-class
+type KnownAxi4WriteDataConfig conf =
   ( KeepStrobeClass (WKeepStrobe conf)
   , C.KnownNat (WNBytes conf)
   , Show (StrobeDataType (WKeepStrobe conf))
   , C.NFDataX (StrobeDataType (WKeepStrobe conf))
-  ) => GoodAxi4WriteDataConfig conf
-
-instance
-  ( KeepStrobeClass (WKeepStrobe conf)
-  , C.KnownNat (WNBytes conf)
-  , Show (StrobeDataType (WKeepStrobe conf))
-  , C.NFDataX (StrobeDataType (WKeepStrobe conf))
-  ) => GoodAxi4WriteDataConfig conf
+  )
 
 deriving instance
-  ( GoodAxi4WriteDataConfig conf
+  ( KnownAxi4WriteDataConfig conf
   , Show userType
   ) =>
   Show (M2S_WriteData conf userType)
 
 deriving instance
-  ( GoodAxi4WriteDataConfig conf
+  ( KnownAxi4WriteDataConfig conf
   , C.NFDataX userType
   ) =>
   C.NFDataX (M2S_WriteData conf userType)

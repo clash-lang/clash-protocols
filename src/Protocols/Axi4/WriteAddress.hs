@@ -18,7 +18,7 @@ module Protocols.Axi4.WriteAddress
 
     -- * configuration
   , Axi4WriteAddressConfig(..)
-  , GoodAxi4WriteAddressConfig
+  , KnownAxi4WriteAddressConfig
   , AWKeepBurst
   , AWKeepSize
   , AWIdWidth
@@ -37,6 +37,7 @@ module Protocols.Axi4.WriteAddress
   ) where
 
 -- base
+import Control.DeepSeq (NFData)
 import Data.Coerce (coerce)
 import Data.Kind (Type)
 import GHC.Generics (Generic)
@@ -186,7 +187,7 @@ newtype S2M_WriteAddress = S2M_WriteAddress { _awready :: Bool }
 -- | Shorthand for a "well-behaved" write address config,
 -- so that we don't need to write out a bunch of type constraints later.
 -- Holds for every configuration; don't worry about implementing this class.
-class
+type KnownAxi4WriteAddressConfig conf =
   ( KeepTypeClass (AWKeepBurst conf)
   , KeepTypeClass (AWKeepSize conf)
   , KeepTypeClass (AWKeepRegion conf)
@@ -198,6 +199,15 @@ class
 
   , C.KnownNat (AWIdWidth conf)
   , C.KnownNat (AWAddrWidth conf)
+
+  , C.ShowX (RegionType (AWKeepRegion conf))
+  , C.ShowX (BurstLengthType (AWKeepBurstLength conf))
+  , C.ShowX (SizeType (AWKeepSize conf))
+  , C.ShowX (BurstType (AWKeepBurst conf))
+  , C.ShowX (LockType (AWKeepLock conf))
+  , C.ShowX (CacheType (AWKeepCache conf))
+  , C.ShowX (PermissionsType (AWKeepPermissions conf))
+  , C.ShowX (QosType (AWKeepQos conf))
 
   , Show (RegionType (AWKeepRegion conf))
   , Show (BurstLengthType (AWKeepBurstLength conf))
@@ -216,48 +226,34 @@ class
   , C.NFDataX (CacheType (AWKeepCache conf))
   , C.NFDataX (PermissionsType (AWKeepPermissions conf))
   , C.NFDataX (QosType (AWKeepQos conf))
-  ) => GoodAxi4WriteAddressConfig conf
 
-instance
-  ( KeepTypeClass (AWKeepBurst conf)
-  , KeepTypeClass (AWKeepSize conf)
-  , KeepTypeClass (AWKeepRegion conf)
-  , KeepTypeClass (AWKeepBurstLength conf)
-  , KeepTypeClass (AWKeepLock conf)
-  , KeepTypeClass (AWKeepCache conf)
-  , KeepTypeClass (AWKeepPermissions conf)
-  , KeepTypeClass (AWKeepQos conf)
+  , NFData (RegionType (AWKeepRegion conf))
+  , NFData (BurstLengthType (AWKeepBurstLength conf))
+  , NFData (SizeType (AWKeepSize conf))
+  , NFData (BurstType (AWKeepBurst conf))
+  , NFData (LockType (AWKeepLock conf))
+  , NFData (CacheType (AWKeepCache conf))
+  , NFData (PermissionsType (AWKeepPermissions conf))
+  , NFData (QosType (AWKeepQos conf))
 
-  , C.KnownNat (AWIdWidth conf)
-  , C.KnownNat (AWAddrWidth conf)
-
-  , Show (RegionType (AWKeepRegion conf))
-  , Show (BurstLengthType (AWKeepBurstLength conf))
-  , Show (SizeType (AWKeepSize conf))
-  , Show (BurstType (AWKeepBurst conf))
-  , Show (LockType (AWKeepLock conf))
-  , Show (CacheType (AWKeepCache conf))
-  , Show (PermissionsType (AWKeepPermissions conf))
-  , Show (QosType (AWKeepQos conf))
-
-  , C.NFDataX (RegionType (AWKeepRegion conf))
-  , C.NFDataX (BurstLengthType (AWKeepBurstLength conf))
-  , C.NFDataX (SizeType (AWKeepSize conf))
-  , C.NFDataX (BurstType (AWKeepBurst conf))
-  , C.NFDataX (LockType (AWKeepLock conf))
-  , C.NFDataX (CacheType (AWKeepCache conf))
-  , C.NFDataX (PermissionsType (AWKeepPermissions conf))
-  , C.NFDataX (QosType (AWKeepQos conf))
-  ) => GoodAxi4WriteAddressConfig conf
+  , Eq (RegionType (AWKeepRegion conf))
+  , Eq (BurstLengthType (AWKeepBurstLength conf))
+  , Eq (SizeType (AWKeepSize conf))
+  , Eq (BurstType (AWKeepBurst conf))
+  , Eq (LockType (AWKeepLock conf))
+  , Eq (CacheType (AWKeepCache conf))
+  , Eq (PermissionsType (AWKeepPermissions conf))
+  , Eq (QosType (AWKeepQos conf))
+  )
 
 deriving instance
-  ( GoodAxi4WriteAddressConfig conf
+  ( KnownAxi4WriteAddressConfig conf
   , Show userType
   ) =>
   Show (M2S_WriteAddress conf userType)
 
 deriving instance
-  ( GoodAxi4WriteAddressConfig conf
+  ( KnownAxi4WriteAddressConfig conf
   , C.NFDataX userType
   ) =>
   C.NFDataX (M2S_WriteAddress conf userType)
@@ -300,14 +296,29 @@ data Axi4WriteAddressInfo (conf :: Axi4WriteAddressConfig) (userType :: Type)
   deriving (Generic)
 
 deriving instance
-  ( GoodAxi4WriteAddressConfig conf
+  ( KnownAxi4WriteAddressConfig conf
   , Show userType ) =>
   Show (Axi4WriteAddressInfo conf userType)
 
 deriving instance
-  ( GoodAxi4WriteAddressConfig conf
+  ( KnownAxi4WriteAddressConfig conf
+  , C.ShowX userType ) =>
+  C.ShowX (Axi4WriteAddressInfo conf userType)
+
+deriving instance
+  ( KnownAxi4WriteAddressConfig conf
   , C.NFDataX userType ) =>
   C.NFDataX (Axi4WriteAddressInfo conf userType)
+
+deriving instance
+  ( KnownAxi4WriteAddressConfig conf
+  , NFData userType ) =>
+  NFData (Axi4WriteAddressInfo conf userType)
+
+deriving instance
+  ( KnownAxi4WriteAddressConfig conf
+  , Eq userType ) =>
+  Eq (Axi4WriteAddressInfo conf userType)
 
 -- | Convert 'M2S_WriteAddress' to 'Axi4WriteAddressInfo', dropping some info
 axi4WriteAddrMsgToWriteAddrInfo

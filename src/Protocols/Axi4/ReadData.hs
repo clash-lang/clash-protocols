@@ -17,7 +17,7 @@ module Protocols.Axi4.ReadData
 
     -- * configuration
   , Axi4ReadDataConfig(..)
-  , GoodAxi4ReadDataConfig
+  , KnownAxi4ReadDataConfig
   , RKeepResponse
   , RIdWidth
   ) where
@@ -101,29 +101,22 @@ newtype M2S_ReadData = M2S_ReadData { _rready :: Bool }
 -- | Shorthand for a "well-behaved" read data config,
 -- so that we don't need to write out a bunch of type constraints later.
 -- Holds for every configuration; don't worry about implementing this class.
-class
+type KnownAxi4ReadDataConfig conf =
   ( KeepTypeClass (RKeepResponse conf)
   , C.KnownNat (RIdWidth conf)
   , Show (ResponseType (RKeepResponse conf))
   , C.NFDataX (ResponseType (RKeepResponse conf))
-  ) => GoodAxi4ReadDataConfig conf
-
-instance
-  ( KeepTypeClass (RKeepResponse conf)
-  , C.KnownNat (RIdWidth conf)
-  , Show (ResponseType (RKeepResponse conf))
-  , C.NFDataX (ResponseType (RKeepResponse conf))
-  ) => GoodAxi4ReadDataConfig conf
+  )
 
 deriving instance
-  ( GoodAxi4ReadDataConfig conf
+  ( KnownAxi4ReadDataConfig conf
   , Show userType
   , Show dataType
   ) =>
   Show (S2M_ReadData conf userType dataType)
 
 deriving instance
-  ( GoodAxi4ReadDataConfig conf
+  ( KnownAxi4ReadDataConfig conf
   , C.NFDataX userType
   , C.NFDataX dataType
   ) =>

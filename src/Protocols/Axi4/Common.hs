@@ -4,12 +4,14 @@ Types and utilities shared between AXI4, AXI4-Lite, and AXI3.
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-} -- NFDataX and ShowX for T3 and T4
 
 module Protocols.Axi4.Common where
 
 -- base
 import GHC.Generics (Generic)
 import GHC.TypeNats (Nat)
+import Control.DeepSeq (NFData)
 
 -- clash-prelude
 import qualified Clash.Prelude as C
@@ -19,6 +21,32 @@ import Clash.Prelude (type (^), type (-))
 import Data.Tuple.Strict (T3, T4)
 
 import Protocols.Internal
+
+deriving instance
+  ( C.NFDataX a
+  , C.NFDataX b
+  , C.NFDataX c
+  ) => C.NFDataX (T3 a b c)
+
+deriving instance
+  ( C.NFDataX a
+  , C.NFDataX b
+  , C.NFDataX c
+  , C.NFDataX d
+  ) => C.NFDataX (T4 a b c d)
+
+deriving instance
+  ( C.ShowX a
+  , C.ShowX b
+  , C.ShowX c
+  ) => C.ShowX (T3 a b c)
+
+deriving instance
+  ( C.ShowX a
+  , C.ShowX b
+  , C.ShowX c
+  , C.ShowX d
+  ) => C.ShowX (T4 a b c d)
 
 -- | Enables or disables 'BurstMode'
 type BurstType (keep :: Bool) = KeepType keep BurstMode
@@ -136,7 +164,7 @@ data BurstMode
   -- This burst type is used for cache line accesses.
   --
   | BmWrap
-  deriving (Show, C.ShowX, Generic, C.NFDataX, Eq)
+  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq)
 
 -- | The maximum number of bytes to transfer in each data transfer, or beat,
 -- in a burst.
@@ -149,7 +177,7 @@ data BurstSize
   | Bs32
   | Bs64
   | Bs128
-  deriving (Show, C.ShowX, Generic, C.NFDataX)
+  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq)
 
 -- | Convert burst size to a numeric value
 burstSizeToNum :: Num a => BurstSize -> a
@@ -165,14 +193,17 @@ burstSizeToNum = \case
 
 -- | Whether a transaction is bufferable
 data Bufferable = NonBufferable | Bufferable
+  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq)
 
 -- | When set to "LookupCache", it is recommended that this transaction is
 -- allocated in the cache for performance reasons.
 data Allocate = NoLookupCache | LookupCache
+  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq)
 
 -- | When set to "OtherLookupCache", it is recommended that this transaction is
 -- allocated in the cache for performance reasons.
 data OtherAllocate = OtherNoLookupCache | OtherLookupCache
+  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq)
 
 -- | See Table A4-3 AWCACHE bit allocations
 type Cache = T4 Bufferable Modifiable OtherAllocate Allocate
@@ -191,29 +222,33 @@ data Resp
   -- | Decode error. Generated, typically by an interconnect component, to
   -- indicate that there is no slave at the transaction address.
   | RDecodeError
-  deriving (Show, C.ShowX, Generic, C.NFDataX)
+  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq)
 
 -- | Whether a resource is accessed with exclusive access or not
 data AtomicAccess
   = NonExclusiveAccess
   | ExclusiveAccess
+  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq)
 
 -- | Whether transaction can be modified
 data Modifiable
   = Modifiable
   | NonModifiable
+  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq)
 
 -- | An AXI master might support Secure and Non-secure operating states, and
 -- extend this concept of security to memory access.
 data Secure
   = Secure
   | NonSecure
+  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq)
 
 -- | An AXI master might support more than one level of operating privilege,
 -- and extend this concept of privilege to memory access.
 data Privileged
   = NotPrivileged
   | Privileged
+  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq)
 
 -- | Whether the transaction is an instruction access or a data access. The AXI
 -- protocol defines this indication as a hint. It is not accurate in all cases,
@@ -224,3 +259,4 @@ data Privileged
 data InstructionOrData
   = Data
   | Instruction
+  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq)
