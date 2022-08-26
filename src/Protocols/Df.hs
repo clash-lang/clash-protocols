@@ -153,8 +153,8 @@ instance (C.KnownDomain dom, C.NFDataX a, C.ShowX a, Show a) => Simulate (Df dom
 
   simToSigFwd _ = C.fromList_lazy
   simToSigBwd _ = C.fromList_lazy
-  sigToSimFwd _ = C.sample_lazy
-  sigToSimBwd _ = C.sample_lazy
+  sigToSimFwd _ s = C.sample_lazy s
+  sigToSimBwd _ s = C.sample_lazy s
 
   stallC conf (C.head -> (stallAck, stalls)) = stall conf stallAck stalls
 

@@ -3,6 +3,7 @@ A GHC source plugin providing a DSL for writing Circuit components. Credits to
 @circuit-notation@ at <https://github.com/cchalmers/circuit-notation>.
 -}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP #-}
 
 module Protocols.Plugin where
 
@@ -16,7 +17,11 @@ import           Protocols
 import qualified CircuitNotation as CN
 
 -- ghc
+#if __GLASGOW_HASKELL__ >= 900
+import qualified GHC.Plugins as GHC
+#else
 import qualified GhcPlugins as GHC
+#endif
 
 -- | Type inference helper used by circuit-notation plugin
 type CircuitT a b = (Fwd a, Bwd b) -> (Bwd a, Fwd b)

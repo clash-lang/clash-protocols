@@ -55,9 +55,10 @@ jobs:
         clash:
           - "1.6.1"
         cabal:
-          - "3.2"
+          - "3.6"
         ghc:
           - "8.10.7"
+          - "9.0.2"
 
     env:
       clash_version: ${{ matrix.clash }}

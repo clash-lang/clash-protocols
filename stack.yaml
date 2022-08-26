@@ -4,12 +4,8 @@ packages:
   - .
 
 extra-deps:
-- git: https://github.com/martijnbastiaan/haskell-hedgehog.git
-  commit: 41e87d110d3b2b7b522d29d7c0500672f2640dcc
-  subdirs:
-    - hedgehog
 - git: https://github.com/cchalmers/circuit-notation.git
-  commit: 2574640364eef12222517af059b9e4a7e6b503a7
+  commit: 618e37578e699df235f2e7150108b6401731919b
 - tasty-hedgehog-1.2.0.0
 - clash-prelude-1.6.3
 - clash-prelude-hedgehog-1.6.3

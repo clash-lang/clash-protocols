@@ -136,8 +136,8 @@ instance (KnownAxi4StreamConfig conf, NFDataX userType, KnownDomain dom) =>
 
   simToSigFwd _ = fromList_lazy
   simToSigBwd _ = fromList_lazy
-  sigToSimFwd _ = sample_lazy
-  sigToSimBwd _ = sample_lazy
+  sigToSimFwd _ s = sample_lazy s
+  sigToSimBwd _ s = sample_lazy s
 
   stallC conf (head -> (stallAck, stalls))
     = withClockResetEnable clockGen resetGen enableGen

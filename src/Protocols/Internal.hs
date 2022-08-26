@@ -6,6 +6,7 @@ Internal module to prevent hs-boot files (breaks Haddock)
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-} -- NFDataX and ShowX for Identity and Proxy
 
 module Protocols.Internal where
@@ -726,9 +727,11 @@ type family KeepType (keep :: Bool) (optionalType :: Type) = t | t -> keep optio
   KeepType 'False optionalType = Proxy optionalType
 
 -- TODO this should go into Clash.Prelude (?)
+#if __GLASGOW_HASKELL__ <= 900
 deriving instance (C.ShowX t) => (C.ShowX (Identity t))
-deriving instance (C.ShowX t) => (C.ShowX (Proxy t))
 deriving instance (C.NFDataX t) => (C.NFDataX (Identity t))
+#endif
+deriving instance (C.ShowX t) => (C.ShowX (Proxy t))
 deriving instance (C.NFDataX t) => (C.NFDataX (Proxy t))
 
 -- | We want to define operations on 'KeepType' that work for both possibilities

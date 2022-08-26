@@ -127,7 +127,7 @@ library
     , data-default
     , deepseq
     , extra
-    , ghc >= 8.6
+    , ghc >= 8.7
     , hashable
     , hedgehog >= 1.0.2
     , pretty-show
@@ -164,6 +164,7 @@ library
     Protocols.Hedgehog
     Protocols.Hedgehog.Internal
     Protocols.Internal
+
     Protocols.Plugin
 
     -- 'testProperty' is broken upstream, it reports wrong test names
@@ -218,4 +219,4 @@ test-suite doctests
     base,
     clash-protocols,
     process,
-    doctest >= 0.17 && < 0.18
+    doctest
