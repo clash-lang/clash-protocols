@@ -22,6 +22,7 @@ import Test.Tasty.Hedgehog (HedgehogTestLimit (HedgehogTestLimit))
 import Test.Tasty.Hedgehog.Extra (testProperty)
 import Test.Tasty.TH (testGroupGenerator)
 import Prelude hiding (undefined)
+import GHC.Stack (HasCallStack)
 
 smallInt :: Range Int
 smallInt = Range.linear 0 10
@@ -48,7 +49,7 @@ genWishboneTransfer genA =
 
 addrReadIdWb ::
   forall dom addressWidth.
-  (KnownNat addressWidth) =>
+  (HasCallStack, KnownNat addressWidth) =>
   Circuit (Wishbone dom 'Standard addressWidth (BitVector addressWidth)) ()
 addrReadIdWb = Circuit go
   where
@@ -64,21 +65,41 @@ addrReadIdWb = Circuit go
           }
       | otherwise = emptyWishboneS2M
 
+-- | Same as 'addrReadIdWb' but responses are delayed by one cycle.
+addrReadIdRegisterWb ::
+  forall dom addressWidth.
+  (HasCallStack, KnownNat addressWidth, HiddenClockResetEnable dom) =>
+  Circuit (Wishbone dom 'Standard addressWidth (BitVector addressWidth)) ()
+addrReadIdRegisterWb = Circuit go
+  where
+    go (m2s, ()) = (reply <$> register emptyWishboneM2S m2s <*> m2s, ())
+
+    reply prev cur
+      | not (busCycle cur && strobe cur) = emptyWishboneS2M
+      | busCycle prev && strobe prev && writeEnable prev =
+        emptyWishboneS2M { acknowledge = True }
+      | busCycle prev && strobe prev =
+        (emptyWishboneS2M @(BitVector addressWidth))
+          { acknowledge = True,
+            readData = addr prev
+          }
+      | otherwise = emptyWishboneS2M
+
 addrReadIdWbModel ::
-  (KnownNat addressWidth) =>
+  (HasCallStack, KnownNat addressWidth) =>
   WishboneMasterRequest addressWidth (BitVector addressWidth) ->
   WishboneS2M (BitVector addressWidth) ->
   -- | pure state
   () ->
   Either String ()
-addrReadIdWbModel (Read addr _) s@WishboneS2M {..} ()
-  | acknowledge && hasX readData == Right addr = Right ()
+addrReadIdWbModel req@(Read addr _) s@WishboneS2M {..} ()
+  | acknowledge && not (hasUndefined readData) && readData == addr = Right ()
   | otherwise =
-    Left $ "Read should have been acknowledged with address as DAT " <> showX s
-addrReadIdWbModel Write {} s@WishboneS2M {..} ()
+    Left $ "Read should have been acknowledged with address as DAT " <> showX req <> "\n" <> showX s
+addrReadIdWbModel req@Write{} s@WishboneS2M {..} ()
   | acknowledge && hasUndefined readData = Right ()
   | otherwise =
-    Left $ "Write should have been acknowledged with no DAT " <> showX s
+    Left $ "Write should have been acknowledged with no DAT " <> showX req <> "\n" <> showX s
 
 prop_addrReadIdWb_model :: Property
 prop_addrReadIdWb_model = withClockResetEnable clockGen resetGen enableGen $
@@ -86,6 +107,15 @@ prop_addrReadIdWb_model = withClockResetEnable clockGen resetGen enableGen $
     defExpectOptions
     addrReadIdWbModel
     addrReadIdWb
+    (genData $ genWishboneTransfer @10 genDefinedBitVector)
+    ()
+
+prop_addrReadIdRegisterWb_model :: Property
+prop_addrReadIdRegisterWb_model = withClockResetEnable clockGen resetGen enableGen $
+  wishbonePropWithModel @System
+    defExpectOptions
+    addrReadIdWbModel
+    addrReadIdRegisterWb
     (genData $ genWishboneTransfer @10 genDefinedBitVector)
     ()
 
@@ -144,7 +174,7 @@ tests :: TestTree
 tests =
   -- TODO: Move timeout option to hedgehog for better error messages.
   -- TODO: Does not seem to work for combinatorial loops like @let x = x in x@??
-  localOption (mkTimeout 12_000_000 {- 12 seconds -}) $
+  localOption (mkTimeout 25_000_000 {- 25 seconds -}) $
     localOption
       (HedgehogTestLimit (Just 1000))
       $(testGroupGenerator)

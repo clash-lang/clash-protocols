@@ -54,8 +54,10 @@ import GHC.Stack (HasCallStack)
 data WishboneMasterRequest addressWidth dat
   = Read (BitVector addressWidth) (BitVector (BitSize dat `DivRU` 8))
   | Write (BitVector addressWidth) (BitVector (BitSize dat `DivRU` 8)) dat
+  deriving (Generic)
 
 deriving instance (KnownNat addressWidth, KnownNat (BitSize a), Show a) => (Show (WishboneMasterRequest addressWidth a))
+deriving instance (KnownNat addressWidth, KnownNat (BitSize a), ShowX a) => (ShowX (WishboneMasterRequest addressWidth a))
 
 --
 -- Validation for (lenient) spec compliance
@@ -238,13 +240,13 @@ stallStandard stallsPerCycle =
           -- tell the master that the slave has no reply yet
           (emptyWishboneS2M :-)
           -- tell the slave that the cycle is over
-          (m :-)
+          (emptyWishboneM2S :-)
           (go (st - 1 : stalls) Nothing m2s s2m)
       -- done stalling, got a reply last second, pass through
       | busCycle m && strobe m && st == 0 && hasTerminateFlag s =
         B.bimap
           (s :-)
-          (m :-)
+          (emptyWishboneM2S :-)
           (go stalls Nothing m2s s2m)
       -- done stalling but no termination signal yet, just pass through to give the slave
       -- the chance to reply
@@ -284,15 +286,15 @@ driveStandard ::
     C.KnownNat (C.BitSize a)
   ) =>
   ExpectOptions ->
-  -- | Requests to send out
-  [WishboneMasterRequest addressWidth a] ->
+  -- | Requests to send out and maximum cycles a transfer is allowed to take
+  [(WishboneMasterRequest addressWidth a, Int)] ->
   Circuit () (Wishbone dom 'Standard addressWidth a)
 driveStandard ExpectOptions {..} reqs =
   Circuit $
     ((),)
       . C.fromList_lazy
       . (emptyWishboneM2S :)
-      . go eoResetCycles reqs
+      . go eoResetCycles 0 reqs
       . (\s -> C.sample_lazy s)
       . snd
   where
@@ -326,22 +328,25 @@ driveStandard ExpectOptions {..} reqs =
 
     go ::
       Int ->
-      [WishboneMasterRequest addressWidth a] ->
+      Int -> -- cycles in the current transaction
+      [(WishboneMasterRequest addressWidth a, Int)] ->
       [WishboneS2M a] ->
       [WishboneM2S addressWidth (BitSize a `DivRU` 8) a]
-    go nResets dat ~(rep : replies)
-      | nResets > 0 = emptyWishboneM2S : (rep `C.seqX` go (nResets - 1) dat replies)
+    go nResets _ dat ~(rep : replies)
+      | nResets > 0 = emptyWishboneM2S : (rep `C.seqX` go (nResets - 1) 0 dat replies)
     -- no more data to send
-    go _ [] ~(rep : replies) = emptyWishboneM2S : (rep `C.seqX` go 0 [] replies)
-    go _ (d : dat) ~(rep : replies)
+    go _ _ [] ~(rep : replies) = emptyWishboneM2S : (rep `C.seqX` go 0 0 [] replies)
+    go _ cycles ((d, timeOut) : dat) ~(rep : replies)
       -- the sent data was acknowledged, end the cycle before continuing
-      | acknowledge rep || err rep = emptyWishboneM2S : (rep `C.seqX` go 0 dat replies)
+      | acknowledge rep || err rep = emptyWishboneM2S : (rep `C.seqX` go 0 0 dat replies)
       -- end cycle, continue but send the previous request again
-      | retry rep = emptyWishboneM2S : (rep `C.seqX` go 0 (d : dat) replies)
-      -- not a termination signal, so keep sending the data
+      | retry rep = emptyWishboneM2S : (rep `C.seqX` go 0 0 ((d, timeOut) : dat) replies)
+      -- not a termination signal, the transfer timed out
+      | cycles == timeOut = emptyWishboneM2S : (rep `C.seqX` go 0 0 dat replies)
+      -- not a termination signal, no timeout, keep sending request
       | otherwise -- trace "D in-cycle wait for ACK" $
         =
-        transferToSignals d : (rep `C.seqX` go 0 (d : dat) replies)
+        transferToSignals d : (rep `C.seqX` go 0 (cycles + 1) ((d, timeOut) : dat) replies)
 
 -- | Circuit which validates the wishbone communication signals between a
 --   master and a slave circuit.
@@ -410,7 +415,8 @@ validatorCircuitLenient =
 -- | Test a wishbone 'Standard' circuit against a pure model.
 wishbonePropWithModel ::
   forall dom a addressWidth st.
-  ( Eq a,
+  ( HasCallStack,
+    Eq a,
     C.ShowX a,
     Show a,
     C.NFDataX a,
@@ -436,36 +442,44 @@ wishbonePropWithModel eOpts model circuit0 inputGen st = H.property $ do
 
   let
     n = P.length input
-    genStall = Gen.integral (Range.linear 0 10)
+    genStall = Gen.integral (Range.linear 0 15)
+    genTimeOut = Gen.integral (Range.linear 1 15)
 
+  timeOuts <- H.forAll (Gen.list (Range.singleton n) genTimeOut)
   stalls <- H.forAll (Gen.list (Range.singleton n) genStall)
 
   let
     resets = 50
-    driver = driveStandard @dom (defExpectOptions {eoResetCycles = resets}) input
+    inputs = P.zip input timeOuts
+    driver = driveStandard @dom (defExpectOptions {eoResetCycles = resets}) inputs |> validatorCircuit |> stallC
     stallC = stallStandard stalls
-    circuit1 = stallC |> validatorCircuit |> circuit0
-    (_, _ : s2m) = observeComposedWishboneCircuit (eoTimeout eOpts) driver circuit1
+    circuit1 = validatorCircuit |> circuit0
+    (m2s, s2m) = observeComposedWishboneCircuit (eoTimeout eOpts) driver circuit1
 
-  matchModel 0 s2m input st === Right ()
+  matchModel 0 m2s s2m st === Right ()
+
   where
+    m2sToReq WishboneM2S{..}
+      | not (busCycle && strobe) = Nothing
+      | writeEnable = Just $ Write addr busSelect writeData
+      | otherwise = Just $ Read addr busSelect
+
     matchModel ::
       Int ->
+      [WishboneM2S addressWidth (BitSize a `DivRU` 8) a] ->
       [WishboneS2M a] ->
-      [WishboneMasterRequest addressWidth a] ->
       st ->
       Either (Int, String) ()
-    matchModel _ [] _ _ = Right () -- so far everything is good but the sampling stopped
+    matchModel _ [] _ _ = Right ()
     matchModel _ _ [] _ = Right ()
-    matchModel cyc (s : s2m) (req : reqs0) state
-      | not (hasTerminateFlag s) = s `C.seqX` matchModel (succ cyc) s2m (req : reqs0) state
-      | otherwise = case model req s state of
-        Left err -> Left (cyc, err)
-        Right st1 -> s `C.seqX` matchModel (succ cyc) s2m reqs1 st1
-          where
-            reqs1
-              | retry s = req : reqs0
-              | otherwise = reqs0
+    matchModel cyc (m : m2s) (s : s2m) state
+      | Nothing <- m2sToReq m, hasTerminateFlag s =
+          Left (cyc, "Termination flag outside of bus cycle")
+      | Just req <- m2sToReq m, hasTerminateFlag s =
+        case model req s state of
+          Left err -> Left (cyc, err)
+          Right st1 -> s `C.seqX` matchModel (succ cyc) m2s s2m st1
+      | otherwise = s `C.seqX` matchModel (succ cyc) m2s s2m state
 
 observeComposedWishboneCircuit ::
   (KnownDomain dom) =>
