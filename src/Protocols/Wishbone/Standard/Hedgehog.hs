@@ -409,7 +409,7 @@ validatorCircuitLenient =
 
 -- | Test a wishbone 'Standard' circuit against a pure model.
 wishbonePropWithModel ::
-  forall dom a addressWidth st.
+  forall dom a addressWidth st m.
   ( Eq a,
     C.ShowX a,
     Show a,
@@ -417,7 +417,8 @@ wishbonePropWithModel ::
     C.KnownNat addressWidth,
     C.HiddenClockResetEnable dom,
     C.KnownNat (C.BitSize a),
-    C.BitPack a
+    C.BitPack a,
+    Monad m
   ) =>
   ExpectOptions ->
   -- | Check whether a S2M signal for a given request is matching a pure model using @st@
@@ -430,8 +431,8 @@ wishbonePropWithModel ::
   H.Gen [WishboneMasterRequest addressWidth a] ->
   -- | Initial state of the model
   st ->
-  H.Property
-wishbonePropWithModel eOpts model circuit0 inputGen st = H.property $ do
+  H.PropertyT m ()
+wishbonePropWithModel eOpts model circuit0 inputGen st = do
   input <- H.forAll inputGen
 
   let

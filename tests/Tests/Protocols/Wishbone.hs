@@ -81,13 +81,14 @@ addrReadIdWbModel Write {} s@WishboneS2M {..} ()
     Left $ "Write should have been acknowledged with no DAT " <> showX s
 
 prop_addrReadIdWb_model :: Property
-prop_addrReadIdWb_model = withClockResetEnable clockGen resetGen enableGen $
-  wishbonePropWithModel @System
-    defExpectOptions
-    addrReadIdWbModel
-    addrReadIdWb
-    (genData $ genWishboneTransfer @10 genDefinedBitVector)
-    ()
+prop_addrReadIdWb_model = property $
+  withClockResetEnable clockGen resetGen enableGen $
+    wishbonePropWithModel @System
+      defExpectOptions
+      addrReadIdWbModel
+      addrReadIdWb
+      (genData $ genWishboneTransfer @10 genDefinedBitVector)
+      ()
 
 --
 -- memory element circuit
@@ -131,7 +132,7 @@ memoryWbModel (Write addr sel a) s st
   | otherwise = Left $ "Write should be acked : " <> showX s
 
 prop_memoryWb_model :: Property
-prop_memoryWb_model =
+prop_memoryWb_model = property $
   withClockResetEnable clockGen resetGen enableGen $
     wishbonePropWithModel @System
       defExpectOptions
