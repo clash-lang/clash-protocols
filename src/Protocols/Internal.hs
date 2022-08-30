@@ -726,8 +726,8 @@ type family KeepType (keep :: Bool) (optionalType :: Type) = t | t -> keep optio
   KeepType 'True optionalType = Identity optionalType
   KeepType 'False optionalType = Proxy optionalType
 
--- TODO this should go into Clash.Prelude (?)
-#if __GLASGOW_HASKELL__ <= 900
+#if !MIN_VERSION_clash_prelude(1, 6, 4)
+-- This is part of clash-prelude 1.6.4 and upwards, older versions need this workaround
 deriving instance (C.ShowX t) => (C.ShowX (Identity t))
 deriving instance (C.NFDataX t) => (C.NFDataX (Identity t))
 #endif
