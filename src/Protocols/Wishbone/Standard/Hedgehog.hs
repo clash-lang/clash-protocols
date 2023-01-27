@@ -72,7 +72,8 @@ nextStateLenient ::
   LenientValidationState ->
   WishboneM2S addressWidth (BitSize a `DivRU` 8) a ->
   WishboneS2M a ->
-  Either String LenientValidationState
+  Either String (Bool, LenientValidationState)
+--               ^ go to next cycle
 nextStateLenient _ m2s s2m
   | P.length (filter ($ s2m) [acknowledge, err, retry]) > 1 =
     Left "More than one termination signal asserted"
@@ -81,20 +82,20 @@ nextStateLenient _ m2s s2m
 nextStateLenient state m2s s2m = case state of
   LVSQuiet ->
     if
-    | busCycle m2s && P.not (strobe m2s) -> Right LVSInCycleNoStrobe
-    | busCycle m2s && strobe m2s -> Right LVSWaitForSlave
-    | otherwise -> Right LVSQuiet
+    | busCycle m2s && P.not (strobe m2s) -> Right (False, LVSInCycleNoStrobe)
+    | busCycle m2s && strobe m2s -> Right (False, LVSWaitForSlave)
+    | otherwise -> Right (True, LVSQuiet)
   LVSInCycleNoStrobe ->
     if
-    | not (busCycle m2s) -> Right LVSQuiet
-    | busCycle m2s && strobe m2s -> Right LVSWaitForSlave
-    | otherwise -> Right LVSInCycleNoStrobe
+    | not (busCycle m2s) -> Right (False, LVSQuiet)
+    | busCycle m2s && strobe m2s -> Right (False, LVSWaitForSlave)
+    | otherwise -> Right (True, LVSInCycleNoStrobe)
   LVSWaitForSlave ->
     if
-    | busCycle m2s && P.not (strobe m2s) -> Right LVSInCycleNoStrobe
-    | not (busCycle m2s) -> Right LVSQuiet
-    | acknowledge s2m || err s2m || retry s2m -> Right LVSQuiet
-    | otherwise -> Right LVSWaitForSlave
+    | busCycle m2s && P.not (strobe m2s) -> Right (False, LVSInCycleNoStrobe)
+    | not (busCycle m2s) -> Right (False, LVSQuiet)
+    | acknowledge s2m || err s2m || retry s2m -> Right (True, LVSQuiet)
+    | otherwise -> Right (True, LVSWaitForSlave)
 
 
 --
@@ -405,7 +406,8 @@ validatorCircuitLenient =
         <> "\n\n"
         <> "M2S: " <> show m2s0 <> "\n"
         <> "S2M: " <> show s2m0
-      Right state1 -> ((cycle + 1, (m2s1, s2m1), state1), (s2m1, m2s1))
+      Right (True, state1) -> ((cycle + 1, (m2s1, s2m1), state1), (s2m1, m2s1))
+      Right (False, state1) -> go (cycle, (m2s0, s2m0), state1) (m2s1, s2m1)
 
 -- | Test a wishbone 'Standard' circuit against a pure model.
 wishbonePropWithModel ::
