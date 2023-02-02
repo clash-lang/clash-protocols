@@ -46,6 +46,12 @@ genWishboneTransfer genA =
       Write <$> genDefinedBitVector <*> genDefinedBitVector <*> genA
     ]
 
+genWbTransferPair ::
+  (KnownNat addressWidth, KnownNat (BitSize a)) =>
+  Gen a ->
+  Gen (WishboneMasterRequest addressWidth a, Int)
+genWbTransferPair genA = liftA2 (,) (genWishboneTransfer genA) genSmallInt
+
 --
 -- 'addrReadId' circuit
 --
@@ -78,11 +84,11 @@ addrReadIdWbModel ::
 addrReadIdWbModel (Read addr _) s@WishboneS2M {..} ()
   | acknowledge && hasX readData == Right addr = Right ()
   | otherwise =
-    Left $ "Read should have been acknowledged with address as DAT " <> showX s
+    Left $ "Read should have been acknowledged with address as DAT " <> show s
 addrReadIdWbModel Write {} s@WishboneS2M {..} ()
   | acknowledge && hasUndefined readData = Right ()
   | otherwise =
-    Left $ "Write should have been acknowledged with no DAT " <> showX s
+    Left $ "Write should have been acknowledged with no DAT " <> show s
 
 prop_addrReadIdWb_model :: Property
 prop_addrReadIdWb_model = property $
@@ -122,18 +128,18 @@ memoryWbModel (Read addr sel) s st
         "Read from a known address did not yield the same value "
           <> showX x
           <> " : "
-          <> showX s
+          <> show s
     Nothing | acknowledge s && hasX (readData s) == Right def -> Right st
     Nothing | otherwise ->
       Left $
         "Read from unknown address did no ACK with undefined result : "
-          <> showX s
+          <> show s
 memoryWbModel (Write addr sel a) s st
   | sel /= maxBound && err s = Right st
   | sel /= maxBound && not (err s) =
     Left "Write with non maxBound SEL should cause ERR response"
   | acknowledge s = Right ((addr, a) : st)
-  | otherwise = Left $ "Write should be acked : " <> showX s
+  | otherwise = Left $ "Write should be acked : " <> show s
 
 prop_memoryWb_model :: Property
 prop_memoryWb_model = property $
@@ -172,7 +178,7 @@ evaluateUnitCircuit n a b =
 
 prop_addrReadId_validator :: Property
 prop_addrReadId_validator = property $ do
-  reqs <- forAll $ genData (genWishboneTransfer @8 genDefinedBitVector)
+  reqs <- forAll $ genData (genWbTransferPair @8 genDefinedBitVector)
 
   let
     circuitSignalsN = withClockResetEnable @System clockGen resetGen enableGen $
@@ -186,7 +192,7 @@ prop_addrReadId_validator = property $ do
 
 prop_memoryWb_validator :: Property
 prop_memoryWb_validator = property $ do
-  reqs <- forAll $ genData (genWishboneTransfer @8 genDefinedBitVector)
+  reqs <- forAll $ genData (genWbTransferPair @8 genDefinedBitVector)
 
   let
     circuitSignalsN = withClockResetEnable @System clockGen resetGen enableGen $
@@ -206,7 +212,7 @@ prop_memoryWb_validator = property $ do
 
 prop_addrReadId_validator_lenient :: Property
 prop_addrReadId_validator_lenient = property $ do
-  reqs <- forAll $ genData (genWishboneTransfer @8 genDefinedBitVector)
+  reqs <- forAll $ genData (genWbTransferPair @8 genDefinedBitVector)
 
   let
     circuitSignalsN = withClockResetEnable @System clockGen resetGen enableGen $
@@ -221,7 +227,7 @@ prop_addrReadId_validator_lenient = property $ do
 
 prop_memoryWb_validator_lenient :: Property
 prop_memoryWb_validator_lenient = property $ do
-  reqs <- forAll $ genData (genWishboneTransfer @8 genDefinedBitVector)
+  reqs <- forAll $ genData (genWbTransferPair @8 genDefinedBitVector)
 
   let
     circuitSignalsN = withClockResetEnable @System clockGen resetGen enableGen $
@@ -237,7 +243,7 @@ prop_memoryWb_validator_lenient = property $ do
 prop_specViolation_lenient :: Property
 prop_specViolation_lenient = property $ do
   -- need AT LEAST one transaction so that multiple termination signals can be emitted
-  reqs <- forAll $ Gen.list (Range.linear 1 500) (genWishboneTransfer @8 genDefinedBitVector)
+  reqs <- forAll $ Gen.list (Range.linear 1 500) (genWbTransferPair @8 genDefinedBitVector)
 
   let
     circuitSignalsN = withClockResetEnable @System clockGen resetGen enableGen $
