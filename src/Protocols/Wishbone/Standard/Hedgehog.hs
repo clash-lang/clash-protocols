@@ -72,7 +72,8 @@ nextStateLenient ::
   LenientValidationState ->
   WishboneM2S addressWidth (BitSize a `DivRU` 8) a ->
   WishboneS2M a ->
-  Either String LenientValidationState
+  Either String (Bool, LenientValidationState)
+--               ^ go to next cycle
 nextStateLenient _ m2s s2m
   | P.length (filter ($ s2m) [acknowledge, err, retry]) > 1 =
     Left "More than one termination signal asserted"
@@ -81,20 +82,20 @@ nextStateLenient _ m2s s2m
 nextStateLenient state m2s s2m = case state of
   LVSQuiet ->
     if
-    | busCycle m2s && P.not (strobe m2s) -> Right LVSInCycleNoStrobe
-    | busCycle m2s && strobe m2s -> Right LVSWaitForSlave
-    | otherwise -> Right LVSQuiet
+    | busCycle m2s && P.not (strobe m2s) -> Right (False, LVSInCycleNoStrobe)
+    | busCycle m2s && strobe m2s -> Right (False, LVSWaitForSlave)
+    | otherwise -> Right (True, LVSQuiet)
   LVSInCycleNoStrobe ->
     if
-    | not (busCycle m2s) -> Right LVSQuiet
-    | busCycle m2s && strobe m2s -> Right LVSWaitForSlave
-    | otherwise -> Right LVSInCycleNoStrobe
+    | not (busCycle m2s) -> Right (False, LVSQuiet)
+    | busCycle m2s && strobe m2s -> Right (False, LVSWaitForSlave)
+    | otherwise -> Right (True, LVSInCycleNoStrobe)
   LVSWaitForSlave ->
     if
-    | busCycle m2s && P.not (strobe m2s) -> Right LVSInCycleNoStrobe
-    | not (busCycle m2s) -> Right LVSQuiet
-    | acknowledge s2m || err s2m || retry s2m -> Right LVSQuiet
-    | otherwise -> Right LVSWaitForSlave
+    | busCycle m2s && P.not (strobe m2s) -> Right (False, LVSInCycleNoStrobe)
+    | not (busCycle m2s) -> Right (False, LVSQuiet)
+    | acknowledge s2m || err s2m || retry s2m -> Right (True, LVSQuiet)
+    | otherwise -> Right (True, LVSWaitForSlave)
 
 
 --
@@ -205,6 +206,7 @@ stallStandard stallsPerCycle =
     B.second (emptyWishboneM2S :-)
       . uncurry (go stallsPerCycle Nothing)
   where
+
     go ::
       [Int] ->
       Maybe (WishboneS2M a) ->
@@ -273,6 +275,19 @@ stallStandard stallsPerCycle =
       -- master cancelled cycle
       | otherwise = B.bimap (emptyWishboneS2M :-) (m :-) (go stalls Nothing m2s s2m)
 
+
+data DriverState addressWidth a
+  = -- | State in which the driver still needs to perform N resets
+    DSReset Int [(WishboneMasterRequest addressWidth a, Int)]
+    -- | State in which the driver is issuing a new request to the slave
+  | DSNewRequest (WishboneMasterRequest addressWidth a) Int [(WishboneMasterRequest addressWidth a, Int)]
+    -- | State in which the driver is waiting (and holding the request) for the slave to reply
+  | DSWaitForReply (WishboneMasterRequest addressWidth a) Int [(WishboneMasterRequest addressWidth a, Int)]
+    -- | State in which the driver is waiting for N cycles before starting a new request
+  | DSStall Int [(WishboneMasterRequest addressWidth a, Int)]
+    -- | State in which the driver has no more work to do
+  | DSDone
+
 -- | Create a wishbone 'Standard' circuit to drive other circuits.
 driveStandard ::
   forall dom a addressWidth.
@@ -285,17 +300,22 @@ driveStandard ::
   ) =>
   ExpectOptions ->
   -- | Requests to send out
-  [WishboneMasterRequest addressWidth a] ->
+  [(WishboneMasterRequest addressWidth a, Int)] ->
   Circuit () (Wishbone dom 'Standard addressWidth a)
-driveStandard ExpectOptions {..} reqs =
+driveStandard ExpectOptions {..} requests =
   Circuit $
     ((),)
       . C.fromList_lazy
       . (emptyWishboneM2S :)
-      . go eoResetCycles reqs
+      . go (DSReset eoResetCycles requests)
       . (\s -> C.sample_lazy s)
       . snd
   where
+
+    go st0 ~(s2m : s2ms) =
+      let (st1, m2s) = step st0 s2m
+      in m2s : (s2m `C.seqX` go st1 s2ms)
+
     transferToSignals ::
       forall b addrWidth.
       ( C.ShowX b,
@@ -324,24 +344,23 @@ driveStandard ExpectOptions {..} reqs =
           writeData = dat
         }
 
-    go ::
-      Int ->
-      [WishboneMasterRequest addressWidth a] ->
-      [WishboneS2M a] ->
-      [WishboneM2S addressWidth (BitSize a `DivRU` 8) a]
-    go nResets dat ~(rep : replies)
-      | nResets > 0 = emptyWishboneM2S : (rep `C.seqX` go (nResets - 1) dat replies)
-    -- no more data to send
-    go _ [] ~(rep : replies) = emptyWishboneM2S : (rep `C.seqX` go 0 [] replies)
-    go _ (d : dat) ~(rep : replies)
-      -- the sent data was acknowledged, end the cycle before continuing
-      | acknowledge rep || err rep = emptyWishboneM2S : (rep `C.seqX` go 0 dat replies)
-      -- end cycle, continue but send the previous request again
-      | retry rep = emptyWishboneM2S : (rep `C.seqX` go 0 (d : dat) replies)
-      -- not a termination signal, so keep sending the data
-      | otherwise -- trace "D in-cycle wait for ACK" $
-        =
-        transferToSignals d : (rep `C.seqX` go 0 (d : dat) replies)
+    step ::
+      DriverState addressWidth a ->
+      -- | respone from *last* cycle
+      WishboneS2M a ->
+      (DriverState addressWidth a, WishboneM2S addressWidth (BitSize a `DivRU` 8) a)
+    step (DSReset _ []) _s2m = (DSDone, emptyWishboneM2S)
+    step (DSReset 0 ((req, n):reqs)) s2m = step (DSNewRequest req n reqs) s2m
+    step (DSReset n reqs) _s2m = (DSReset (n - 1) reqs, emptyWishboneM2S)
+    step (DSNewRequest req n reqs) _s2m = (DSWaitForReply req n reqs, transferToSignals req)
+    step (DSWaitForReply req n reqs) s2m
+      | acknowledge s2m || err s2m = step (DSStall n reqs) s2m
+      | retry s2m = (DSNewRequest req n reqs, emptyWishboneM2S)
+      | otherwise = (DSWaitForReply req n reqs, transferToSignals req)
+    step (DSStall 0 []) _s2m = (DSDone, emptyWishboneM2S)
+    step (DSStall 0 ((req, n):reqs)) s2m = step (DSNewRequest req n reqs) s2m
+    step (DSStall n reqs) _s2m = (DSStall (n - 1) reqs, emptyWishboneM2S)
+    step DSDone _s2m = (DSDone, emptyWishboneM2S)
 
 -- | Circuit which validates the wishbone communication signals between a
 --   master and a slave circuit.
@@ -405,7 +424,8 @@ validatorCircuitLenient =
         <> "\n\n"
         <> "M2S: " <> show m2s0 <> "\n"
         <> "S2M: " <> show s2m0
-      Right state1 -> ((cycle + 1, (m2s1, s2m1), state1), (s2m1, m2s1))
+      Right (True, state1) -> ((cycle + 1, (m2s1, s2m1), state1), (s2m1, m2s1))
+      Right (False, state1) -> go (cycle, (m2s0, s2m0), state1) (m2s1, s2m1)
 
 -- | Test a wishbone 'Standard' circuit against a pure model.
 wishbonePropWithModel ::
@@ -439,14 +459,13 @@ wishbonePropWithModel eOpts model circuit0 inputGen st = do
     n = P.length input
     genStall = Gen.integral (Range.linear 0 10)
 
-  stalls <- H.forAll (Gen.list (Range.singleton n) genStall)
+  reqStalls <- H.forAll (Gen.list (Range.singleton n) genStall)
 
   let
-    resets = 50
-    driver = driveStandard @dom (defExpectOptions {eoResetCycles = resets}) input
-    stallC = stallStandard stalls
-    circuit1 = stallC |> validatorCircuit |> circuit0
-    (_, _ : s2m) = observeComposedWishboneCircuit (eoTimeout eOpts) driver circuit1
+    resets = 5
+    driver = driveStandard @dom (defExpectOptions {eoResetCycles = resets}) (P.zip input reqStalls)
+    circuit1 = validatorCircuit |> circuit0
+    (_, s2m) = observeComposedWishboneCircuit (eoTimeout eOpts) driver circuit1
 
   matchModel 0 s2m input st === Right ()
   where

@@ -2,6 +2,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -fconstraint-solver-iterations=10 #-}
+{-# LANGUAGE RecordWildCards #-}
 
 -- |
 -- Types modelling the Wishbone bus protocol.
@@ -62,14 +63,48 @@ data WishboneM2S addressWidth selWidth dat = WishboneM2S
     --   signals.
     burstTypeExtension :: "BTE" ::: BurstTypeExtension
   }
-  deriving (NFData, C.Generic, C.NFDataX, C.ShowX, Eq, C.BitPack)
+  deriving (NFData, C.Generic, C.NFDataX, Eq, C.BitPack)
 
--- M2S signals can contain undefined values, hence 'Show' is implemented through 'ShowX'
+instance
+  (C.ShowX dat, C.KnownNat addressWidth, C.KnownNat selWidth) =>
+  C.ShowX (WishboneM2S addressWidth selWidth dat)
+  where
+    showX = show
+
+-- Compact printing for M2S values. This handles undefined values in the
+-- structure too.
 instance
   (C.ShowX dat, C.KnownNat addressWidth, C.KnownNat selWidth) =>
   Show (WishboneM2S addressWidth selWidth dat)
   where
-  show = C.showX
+
+  show WishboneM2S{..} =
+    "WishboneM2S [ " <>
+    prefix busCycle <> "CYC " <>
+    prefix strobe <> "STB " <>
+    prefix writeEnable <> "WE, " <>
+    "ADR = " <> C.showX addr <> ", " <>
+    "DAT = " <> C.showX writeData <> ", " <>
+    "SEL = " <> C.showX busSelect <> ", " <>
+    "CTE = " <> cycle' <> ", " <>
+    "BTE = " <> burst <>
+    " ]"
+   where
+    prefix True = " "
+    prefix False = "!"
+
+    burst = case burstTypeExtension of
+      LinearBurst -> "linear"
+      Beat4Burst -> "beat 4"
+      Beat8Burst -> "beat 8"
+      Beat16Burst -> "beat 16"
+
+    cycle' = case cycleTypeIdentifier of
+      Classic -> "classic"
+      ConstantAddressBurst -> "constant addr"
+      IncrementingBurst -> "incrementing"
+      EndOfBurst -> "end-of-burst"
+      CycleTypeIdentifier val -> "reserved (" <> C.showX val <> ")"
 
 -- | Data communicated from a Wishbone Slave to a Wishbone Master
 data WishboneS2M dat = WishboneS2M
@@ -92,11 +127,25 @@ data WishboneS2M dat = WishboneS2M
     --   is defined by the IP core supplier. Also see the [ERR_O] and [RTY_O] signal descriptions.
     retry :: "RTY" ::: Bool
   }
-  deriving (NFData, C.Generic, C.NFDataX, C.ShowX, Eq, C.BitPack)
+  deriving (NFData, C.Generic, C.NFDataX, Eq, C.BitPack)
 
--- S2M signals can contain undefined values, hence 'Show' is implemented through 'ShowX'
+instance (C.ShowX dat) => C.ShowX (WishboneS2M dat) where
+  showX = show
+
+-- Compact printing for S2M values. This handles undefined values in the
+-- structure too.
 instance (C.ShowX dat) => Show (WishboneS2M dat) where
-  show = C.showX
+  show WishboneS2M{..} =
+    "WishboneS2M [ " <>
+    prefix acknowledge <> "ACK " <>
+    prefix err <> "ERR " <>
+    prefix stall <> "STALL " <>
+    prefix stall <> "RETRY, " <>
+    "DAT = " <> C.showX readData <>
+    " ]"
+   where
+    prefix True = " "
+    prefix False = "!"
 
 -- | Identifier for different types of cycle-modes, used to potentially
 --   increase throughput by reducing handshake-overhead
