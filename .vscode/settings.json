@@ -13,5 +13,9 @@
     "editor.tabSize": 2,
     "[haskell]": {
         "editor.formatOnSave": false
-    }
+    },
+    "editor.rulers": [
+        80,
+        90
+      ],
 }
