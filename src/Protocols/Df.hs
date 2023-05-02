@@ -17,7 +17,7 @@ carries data, no metadata. For documentation see:
 
 module Protocols.Df
   ( -- * Types
-    Df, Data(..)
+    Df, Data(..), FifoMeta(..)
 
     -- * Operations on Df protocol
   , const, void, pure
@@ -635,64 +635,100 @@ registerBwd
      ra1 = if oAck then iDat else ra0
      s = if Maybe.isNothing (dataToMaybe rb) || iAck then (NoData, ra1) else (ra1, rb)
 
--- | A fifo buffer with user-provided depth. Uses blockram to store data. Can
--- handle simultaneous write and read (full throughput rate).
+-- | A generic First-In-First-Out (FIFO) circuit with a specified depth.
+-- At least one cycle latency. When the reset is high or the enable is low, there
+-- will be no outgoing transactions and incoming transactions are not acknowledged.
 fifo ::
-  forall dom a depth.
-  (C.HiddenClockResetEnable dom, C.KnownNat depth, C.NFDataX a, 1 C.<= depth) =>
+  forall dom a depth .
+  (C.HiddenClockResetEnable dom,  1 C.<= depth, C.NFDataX a) =>
+  -- | The depth of the FIFO, should be at least 1.
   C.SNat depth ->
-  Circuit (Df dom a) (Df dom a)
-fifo fifoDepth = Circuit $ C.hideReset circuitFunction where
+  -- | Consumes `Df dom a`, produces `Df dom a` along with ready signal and data count.
+    Circuit (Df dom a) (Df dom a)
+fifo depth = Circuit go
+ where
+  go (m2sL, s2mR) = (s2mL, m2sR)
+   where
+    (s2mL, (m2sR, _)) =
+      toSignals (fifoWithMeta depth)
+      (m2sL, (s2mR, CSignal (C.pure ())))
 
-  -- implemented using a fixed-size array
-  --   write location and read location are both stored
-  --   to write, write to current location and move one to the right
-  --   to read, read from current location and move one to the right
-  --   loop around from the end to the beginning if necessary
+-- | State record for the FIFO circuit.
+data FifoState depth = FifoState
+  { readPointer   :: C.Index depth
+  , dataCount     :: C.Index (depth C.+ 1)
+  } deriving (Generic, C.NFDataX)
 
-  circuitFunction reset (inpA, inpB) = (otpA, otpB) where
-    -- initialize bram
-    brRead = C.readNew
-             (C.blockRamU C.NoClearOnReset fifoDepth (C.errorX "No reset function"))
-             brReadAddr brWrite
-    -- run the state machine (a mealy machine)
-    (brReadAddr, brWrite, otpA, otpB)
-      = C.unbundle
-      $ C.mealy machineAsFunction s0
-      $ C.bundle (brRead, C.unsafeToHighPolarity reset, inpA, inpB)
+-- | Meta information from `fifoWithMeta`.
+data FifoMeta depth = FifoMeta
+  { fifoEmpty     :: Bool
+  , fifoFull      :: Bool
+  , fifoDataCount :: C.Index (depth C.+ 1)
+  } deriving (Generic, C.NFDataX)
 
-  -- when reset is on, set state to initial state and output blank outputs
-  machineAsFunction _ (_, True, _, _) = (s0, (0, Nothing, Ack False, NoData))
-  machineAsFunction (rAddr0,wAddr0,amtLeft0) (brRead0, False, pushData, Ack popped) =
-    let -- potentially push an item onto blockram
-        maybePush = if amtLeft0 > 0 then dataToMaybe pushData else Nothing
-        brWrite = (wAddr0,) <$> maybePush
-        -- adjust write address and amount left
-        --   (output state machine doesn't see amountLeft')
-        (wAddr1, amtLeft1)
-          | Just _ <- maybePush = (C.satSucc C.SatWrap wAddr0, amtLeft0 - 1)
-          | otherwise           = (wAddr0, amtLeft0)
-        -- if we're about to push onto an empty queue, we can pop immediately instead
-        (brRead1, amtLeft2)
-          | Just push <- maybePush, amtLeft0 == maxBound = (push, amtLeft1)
-          | otherwise                                    = (brRead0, amtLeft0)
-        -- adjust blockram read address and amount left
-        (rAddr1, amtLeft3)
-          | amtLeft2 < maxBound && popped = (C.satSucc C.SatWrap rAddr0, amtLeft1 + 1)
-          | otherwise                     = (rAddr0, amtLeft1)
-        brReadAddr = rAddr1
-        -- return our new state and outputs
-        otpAck = Maybe.isJust maybePush
-        otpDat = if amtLeft2 < maxBound then Data brRead1 else NoData
-    in  ((rAddr1, wAddr1, amtLeft3), (brReadAddr, brWrite, Ack otpAck, otpDat))
+-- | A generic First-In-First-Out (FIFO) circuit with a specified depth that exposes
+-- meta information such as in `FifoMeta`. At least one cycle latency.
+-- When the reset is high or the enable is low, there will be no outgoing transactions and
+-- incoming transactions are not acknowledged.
+fifoWithMeta ::
+  forall dom a depth .
+  (C.HiddenClockResetEnable dom,  1 C.<= depth, C.NFDataX a) =>
+  -- | The depth of the FIFO, should be at least 1.
+  C.SNat depth ->
+  -- | Consumes `Df dom a`, produces `Df dom a` along with ready signal and data count.
+    Circuit (Df dom a) (Df dom a, CSignal dom (FifoMeta depth))
+fifoWithMeta depth@C.SNat = Circuit circuitFunction
+ where
+  circuitFunction (fifoIn, (readyIn, _)) = (Ack <$> readyOut, (fifoOut, CSignal fifoMeta))
+   where
+    circuitActive = C.unsafeToLowPolarity C.hasReset C..&&. C.fromEnable C.hasEnable
+    bramOut =
+      C.readNew (C.blockRamU C.NoClearOnReset depth (C.errorX "No reset function"))
+      readAddr writeOp
+    (readAddr, writeOp, fifoOut, readyOut, fifoMeta) =
+      C.mealyB go initialState (circuitActive, fifoIn, readyIn, bramOut)
 
-  -- initial state
-  -- (next read address in bram, next write address in bram, space left in bram)
-  -- Addresses only go from 0 to depth-1.
-  -- Space left goes from 0 to depth because the fifo could be empty
-  -- (space left = depth) or full (space left = 0).
-  s0 :: (C.Index depth, C.Index depth, C.Index (depth C.+ 1))
-  s0 = (0, 0, maxBound)
+  -- Initial state of the FIFO
+  initialState = FifoState
+    { readPointer  = 0
+    , dataCount    = 0
+    }
+  go ::
+    FifoState depth ->
+    (Bool, Data a, Ack, a) ->
+    ( FifoState depth
+    , (C.Index depth, C.Maybe (C.Index depth, a), Data a, Bool, FifoMeta depth))
+  go state@FifoState{..} (False, _, _,_) = (state,(readPointer, Nothing, NoData, False, fifoMeta))
+   where
+    fifoEmpty = dataCount == 0
+    fifoFull = dataCount == maxBound
+    fifoMeta = FifoMeta {fifoEmpty, fifoFull, fifoDataCount = dataCount}
+  go FifoState{..} (True, dataToMaybe -> fifoIn, Ack readyIn, bramOut) = (nextState, output)
+   where
+    fifoEmpty = dataCount == 0
+    fifoFull = dataCount == maxBound
+    writePointer = C.satAdd C.SatWrap readPointer $ C.resize dataCount
+
+    readSuccess = not fifoEmpty && readyIn
+    writeSuccess = not fifoFull && Maybe.isJust fifoIn
+
+    readPointerNext = if readSuccess then C.satSucc C.SatWrap readPointer else readPointer
+    writeOpGo = if writeSuccess then (writePointer,) <$> fifoIn else Nothing
+    fifoOutGo = if fifoEmpty then NoData else Data bramOut
+
+    dataCountNext = dataCountDx dataCount
+    dataCountDx = case (writeSuccess, readSuccess) of
+      (True, False) -> C.satSucc C.SatError
+      (False, True) -> C.satPred C.SatError
+      _             -> id
+
+    nextState = FifoState
+      { readPointer  = readPointerNext
+      , dataCount    = dataCountNext
+      }
+
+    fifoMeta = FifoMeta {fifoEmpty, fifoFull, fifoDataCount = dataCount}
+    output = (readPointerNext, writeOpGo, fifoOutGo, not fifoFull, fifoMeta)
 
 --------------------------------- SIMULATE -------------------------------------
 
