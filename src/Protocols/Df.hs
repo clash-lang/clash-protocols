@@ -635,14 +635,48 @@ registerBwd
      ra1 = if oAck then iDat else ra0
      s = if Maybe.isNothing (dataToMaybe rb) || iAck then (NoData, ra1) else (ra1, rb)
 
+-- | A fifo buffer with user-provided depth. Uses blockram to store data
+-- and allows bypassing when empty. Can handle simultaneous write and read (full throughput rate).
+-- Specialized version of `fifoWithMeta`.
+fifo ::
+  forall dom a depth .
+  (C.HiddenClockResetEnable dom,  C.KnownNat depth, 1 C.<= depth, C.NFDataX a) =>
+  -- | Allow Bypassing
+  Bool ->
+  -- | The depth of the FIFO, should be at least 1.
+  C.SNat depth ->
+  -- | Consumes `Df dom a`, produces `Df dom a` along with ready signal and data count.
+    Circuit (Df dom a) (Df dom a)
+fifo allowBypass depth = Circuit go
+ where
+  go (m2sL, s2mR) = (s2mL, m2sR)
+   where
+    (s2mL, (m2sR, _)) =
+      toSignals (fifoWithMeta allowBypass depth)
+      (m2sL, (s2mR, CSignal (C.pure ())))
+
+-- | Meta information from `fifoWithMeta`.
+data FifoMeta depth = FifoMeta
+  { fifoEmpty     :: Bool
+  , fifoFull      :: Bool
+  , fifoDataCount :: C.Index (depth C.+ 1)
+  } deriving (Generic, C.NFDataX)
+
+-- | A fifo buffer with user-provided depth. Uses blockram to store data
+-- and features configurable bypass. Can handle simultaneous write and
+-- read (full throughput rate).
+fifoWithMeta ::
+  forall dom a depth .
+  (C.HiddenClockResetEnable dom,  C.KnownNat depth, 1 C.<= depth, C.NFDataX a) =>
+  -- | Whether the fifo allows bypassing
+  Bool ->
+  -- | The depth of the FIFO, should be at least 1.
+  C.SNat depth ->
+  -- | Consumes `Df dom a`, produces `Df dom a` along with ready signal and data count.
+    Circuit (Df dom a) (Df dom a, CSignal dom (FifoMeta depth))
 -- | A fifo buffer with user-provided depth. Uses blockram to store data. Can
 -- handle simultaneous write and read (full throughput rate).
-fifo ::
-  forall dom a depth.
-  (C.HiddenClockResetEnable dom, C.KnownNat depth, C.NFDataX a, 1 C.<= depth) =>
-  C.SNat depth ->
-  Circuit (Df dom a) (Df dom a)
-fifo fifoDepth = Circuit $ C.hideReset circuitFunction where
+fifoWithMeta allowBypass fifoDepth = Circuit $ C.hideReset circuitFunction where
 
   -- implemented using a fixed-size array
   --   write location and read location are both stored
@@ -650,19 +684,25 @@ fifo fifoDepth = Circuit $ C.hideReset circuitFunction where
   --   to read, read from current location and move one to the right
   --   loop around from the end to the beginning if necessary
 
-  circuitFunction reset (inpA, inpB) = (otpA, otpB) where
+  circuitFunction reset (inpA, (inpB,_)) = (otpA, (dataOut, CSignal fifoMeta)) where
     -- initialize bram
     brRead = C.readNew
              (C.blockRamU C.NoClearOnReset fifoDepth (C.errorX "No reset function"))
              brReadAddr brWrite
     -- run the state machine (a mealy machine)
-    (brReadAddr, brWrite, otpA, otpB)
+    (brReadAddr, brWrite, otpA, dataOut, fifoMeta)
       = C.unbundle
       $ C.mealy machineAsFunction s0
       $ C.bundle (brRead, C.unsafeToHighPolarity reset, inpA, inpB)
 
   -- when reset is on, set state to initial state and output blank outputs
-  machineAsFunction _ (_, True, _, _) = (s0, (0, Nothing, Ack False, NoData))
+  machineAsFunction (_,_,amtLeft) (_, True, _, _) =
+    (s0, (0, Nothing, Ack False, NoData, fifoMeta))
+   where
+    fifoEmpty = amtLeft == maxBound
+    fifoFull = amtLeft == 0
+    fifoMeta = FifoMeta {fifoEmpty, fifoFull, fifoDataCount = amtLeft}
+
   machineAsFunction (rAddr0,wAddr0,amtLeft0) (brRead0, False, pushData, Ack popped) =
     let -- potentially push an item onto blockram
         maybePush = if amtLeft0 > 0 then dataToMaybe pushData else Nothing
@@ -678,13 +718,19 @@ fifo fifoDepth = Circuit $ C.hideReset circuitFunction where
           | otherwise                                    = (brRead0, amtLeft0)
         -- adjust blockram read address and amount left
         (rAddr1, amtLeft3)
-          | amtLeft2 < maxBound && popped = (C.satSucc C.SatWrap rAddr0, amtLeft1 + 1)
-          | otherwise                     = (rAddr0, amtLeft1)
+          | allowBypass && amtLeft2 < maxBound && popped
+            = (C.satSucc C.SatWrap rAddr0, amtLeft1 + 1)
+          | otherwise
+            = (rAddr0, amtLeft1)
         brReadAddr = rAddr1
         -- return our new state and outputs
         otpAck = Maybe.isJust maybePush
         otpDat = if amtLeft2 < maxBound then Data brRead1 else NoData
-    in  ((rAddr1, wAddr1, amtLeft3), (brReadAddr, brWrite, Ack otpAck, otpDat))
+
+        fifoEmpty = amtLeft0 == maxBound
+        fifoFull = amtLeft0 == 0
+        fifoMeta = FifoMeta {fifoEmpty, fifoFull, fifoDataCount = amtLeft0}
+    in  ((rAddr1, wAddr1, amtLeft3), (brReadAddr, brWrite, Ack otpAck, otpDat, fifoMeta))
 
   -- initial state
   -- (next read address in bram, next write address in bram, space left in bram)
