@@ -176,7 +176,11 @@ forceResetSanity
  where
   f (True,  _,   _  ) = (Ack False, NoData)
   f (False, fwd, bwd) = (bwd, fwd)
+#if MIN_VERSION_clash_prelude(1,8,0)
+  rstLow = C.unsafeToActiveHigh C.hasReset
+#else
   rstLow = C.unsafeToHighPolarity C.hasReset
+#endif
 
 -- | Like 'P.map', but over payload (/a/) of a Df stream.
 map :: (a -> b) -> Circuit (Df dom a) (Df dom b)
@@ -208,7 +212,15 @@ second f = map (B.second f)
 
 -- | Acknowledge but ignore data from LHS protocol. Send a static value /b/.
 const :: C.HiddenReset dom => b -> Circuit (Df dom a) (Df dom b)
-const b = Circuit (P.const (Ack <$> C.unsafeToLowPolarity C.hasReset, P.pure (Data b)))
+const b = Circuit (P.const (Ack <$>
+#if MIN_VERSION_clash_prelude(1,8,0)
+                              C.unsafeToActiveLow C.hasReset
+#else
+                              C.unsafeToLowPolarity C.hasReset
+#endif
+                           , P.pure (Data b)
+                           )
+                  )
 
 -- | Drive a constant value composed of /a/.
 pure :: a -> Circuit () (Df dom a)
@@ -216,7 +228,15 @@ pure a = Circuit (P.const ((), P.pure (Data a)))
 
 -- | Drive a constant value composed of /a/.
 void :: C.HiddenReset dom => Circuit (Df dom a) ()
-void = Circuit (P.const (Ack <$> C.unsafeToLowPolarity C.hasReset, ()))
+void = Circuit (P.const (Ack <$>
+#if MIN_VERSION_clash_prelude(1,8,0)
+                           C.unsafeToActiveLow C.hasReset
+#else
+                           C.unsafeToLowPolarity C.hasReset
+#endif
+                        , ()
+                        )
+               )
 
 -- | Like 'Data.Maybe.catMaybes', but over a Df stream.
 --
@@ -659,7 +679,15 @@ fifo fifoDepth = Circuit $ C.hideReset circuitFunction where
     (brReadAddr, brWrite, otpA, otpB)
       = C.unbundle
       $ C.mealy machineAsFunction s0
-      $ C.bundle (brRead, C.unsafeToHighPolarity reset, inpA, inpB)
+      $ C.bundle ( brRead
+#if MIN_VERSION_clash_prelude(1,8,0)
+                 , C.unsafeToActiveHigh reset
+#else
+                 , C.unsafeToHighPolarity reset
+#endif
+                 , inpA
+                 , inpB
+                 )
 
   -- when reset is on, set state to initial state and output blank outputs
   machineAsFunction _ (_, True, _, _) = (s0, (0, Nothing, Ack False, NoData))
@@ -835,5 +863,10 @@ simulate conf@SimulationConfig{..} circ inputs =
 -- | Like 'C.resetGenN', but works on 'Int' instead of 'C.SNat'. Not
 -- synthesizable.
 resetGen :: C.KnownDomain dom => Int -> C.Reset dom
-resetGen n = C.unsafeFromHighPolarity
-  (C.fromList (replicate n True <> repeat False))
+resetGen n =
+#if MIN_VERSION_clash_prelude(1,8,0)
+  C.unsafeFromActiveHigh
+#else
+  C.unsafeFromHighPolarity
+#endif
+    (C.fromList (replicate n True <> repeat False))

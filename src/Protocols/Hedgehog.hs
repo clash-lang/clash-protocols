@@ -53,7 +53,12 @@ data StallMode = NoStall | Stall
 -- | Like 'C.resetGenN', but works on 'Int' instead of 'C.SNat'. Not
 -- synthesizable.
 resetGen :: C.KnownDomain dom => Int -> C.Reset dom
-resetGen n = C.unsafeFromHighPolarity
+resetGen n =
+#if MIN_VERSION_clash_prelude(1,8,0)
+  C.unsafeFromActiveHigh
+#else
+  C.unsafeFromHighPolarity
+#endif
   (C.fromList (replicate n True <> repeat False))
 
 -- | Test a protocol against a pure model implementation. Circuit under test will

@@ -30,6 +30,7 @@ common common-options
     BangPatterns
     BinaryLiterals
     ConstraintKinds
+    CPP
     DataKinds
     DefaultSignatures
     DeriveAnyClass
@@ -87,7 +88,7 @@ common common-options
     Cabal,
 
     -- clash-prelude will set suitable version bounds for the plugins
-    clash-prelude >= 1.4.0 && < 1.8,
+    clash-prelude >= 1.4.0 && < 1.10,
     ghc-typelits-natnormalise,
     ghc-typelits-extra,
     ghc-typelits-knownnat

@@ -691,7 +691,13 @@ simulateCSE c = simulateCS (c clk rst ena)
   rst = resetGen (resetCycles def)
   ena = C.enableGen
 
-  resetGen n = C.unsafeFromHighPolarity (C.fromList (replicate n True <> repeat False))
+  resetGen n =
+#if MIN_VERSION_clash_prelude(1,8,0)
+    C.unsafeFromActiveHigh
+#else
+    C.unsafeFromHighPolarity
+#endif
+      $ C.fromList (replicate n True <> repeat False)
 
 -- | Applies conversion functions defined in the 'Simulate' instance of @a@ and @b@ to
 -- the given simulation types, and applies the results to the internal function of the

@@ -54,6 +54,7 @@ jobs:
         os: [ubuntu-latest]
         clash:
           - "1.6.1"
+          - "1.8.1"
         cabal:
           - "3.6"
         ghc:
