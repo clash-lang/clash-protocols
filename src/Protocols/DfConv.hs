@@ -182,7 +182,15 @@ toDfCircuitHelper _ s0 blankOtp stateFn
   . bundle
   . (bundle *** bundle)
  where
-  cktFn reset inp = mealy transFn s0 ((,) <$> unsafeToHighPolarity reset <*> inp)
+  cktFn reset inp =
+    let rstLow =
+#if MIN_VERSION_clash_prelude(1,8,0)
+          unsafeToActiveHigh reset
+#else
+          unsafeToHighPolarity reset
+#endif
+     in mealy transFn s0 ((,) <$> rstLow <*> inp)
+
   transFn _ (True, _) = (s0, ((Ack False, NoData), blankOtp))
   transFn s (False, ((toOtp, Ack inpAck), inp)) = let
     ((otp, inputted, otpAck), s') = runState
