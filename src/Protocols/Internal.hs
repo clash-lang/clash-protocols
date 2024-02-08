@@ -737,8 +737,10 @@ type family KeepType (keep :: Bool) (optionalType :: Type) = t | t -> keep optio
 deriving instance (C.ShowX t) => (C.ShowX (Identity t))
 deriving instance (C.NFDataX t) => (C.NFDataX (Identity t))
 #endif
+#if !MIN_VERSION_clash_prelude(1, 8, 2)
 deriving instance (C.ShowX t) => (C.ShowX (Proxy t))
 deriving instance (C.NFDataX t) => (C.NFDataX (Proxy t))
+#endif
 
 -- | We want to define operations on 'KeepType' that work for both possibilities
 -- (@keep = 'True@ and @keep = 'False@), but we can't pattern match directly.
