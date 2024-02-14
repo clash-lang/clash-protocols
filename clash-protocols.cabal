@@ -25,6 +25,14 @@ flag ci
     Manual: True
     Default: False
 
+flag large-tuples
+  description:
+    Generate instances for classes such as `Units` and `TaggedBundle` for tuples
+    up to and including 62 elements - the GHC imposed maximum. Note that this
+    greatly increases compile times for `clash-protocols`.
+  default: False
+  manual: True
+
 common common-options
   default-extensions:
     BangPatterns
@@ -122,6 +130,10 @@ custom-setup
 library
   import: common-options
   hs-source-dirs: src
+
+  if flag(large-tuples)
+    CPP-Options: -DLARGE_TUPLES
+
   build-depends:
       -- inline-circuit-notation
       circuit-notation
@@ -131,10 +143,11 @@ library
     , ghc >= 8.7
     , hashable
     , hedgehog >= 1.0.2
+    , mtl
     , pretty-show
     , strict-tuple
-    , mtl
-    , hashable
+    , tagged
+    , template-haskell
 
       -- To be removed; we need 'Test.Tasty.Hedgehog.Extra' to fix upstream issues
     , tasty >= 1.2 && < 1.5
@@ -160,13 +173,19 @@ library
     Protocols.Wishbone.Standard
     Protocols.Wishbone.Standard.Hedgehog
 
+    Protocols.Cpp
     Protocols.Df
     Protocols.DfConv
     Protocols.Hedgehog
     Protocols.Hedgehog.Internal
     Protocols.Internal
+    Protocols.Internal.TaggedBundle
+    Protocols.Internal.TaggedBundle.TH
+    Protocols.Internal.Units
+    Protocols.Internal.Units.TH
 
     Protocols.Plugin
+    Protocols.Plugin.Internal
 
     -- 'testProperty' is broken upstream, it reports wrong test names
     -- TODO: test / upstream ^

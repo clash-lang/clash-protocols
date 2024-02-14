@@ -9,6 +9,9 @@ Internal module to prevent hs-boot files (breaks Haddock)
 {-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-} -- NFDataX and ShowX for Identity and Proxy
 
+-- TODO: Hide internal documentation
+-- {-# OPTIONS_HADDOCK hide #-}
+
 module Protocols.Internal where
 
 import           Control.DeepSeq (NFData)

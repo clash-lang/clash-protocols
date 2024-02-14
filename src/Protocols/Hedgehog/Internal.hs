@@ -1,10 +1,13 @@
 {-|
 Internals for "Protocols.Hedgehog".
 -}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE UndecidableSuperClasses #-}
+
+{-# OPTIONS_HADDOCK hide #-}
 
 module Protocols.Hedgehog.Internal where
 

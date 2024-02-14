@@ -13,4 +13,14 @@ package clash-prelude
 source-repository-package
   type: git
   location: https://github.com/cchalmers/circuit-notation.git
-  tag: 618e37578e699df235f2e7150108b6401731919b
+  tag: 565d4811cff6a597ee577dabd81b460e941fcb14
+
+package clash-protocols
+  -- Reduces compile times by ~20%
+  ghc-options: +RTS -qn4 -A128M -RTS -j4
+
+  -- Workaround for Haddock/CPP #if issues https://github.com/haskell/haddock/issues/1382
+  haddock-options: --optghc="-optP -P"
+
+  -- Don't pollute docs with large tuple instances
+  haddock-options: --optghc=-DHADDOCK_ONLY

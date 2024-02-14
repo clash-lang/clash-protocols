@@ -4,6 +4,9 @@
 -- want to add this to 'ghc-options' in your cabal file.
 {-# OPTIONS -fplugin=Protocols.Plugin #-}
 
+-- For debugging purposes:
+-- {-# OPTIONS -fplugin-opt=Protocols.Plugin:debug #-}
+
 module Tests.Protocols.Plugin where
 
 import qualified Clash.Prelude as C
