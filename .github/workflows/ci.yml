@@ -75,6 +75,10 @@ jobs:
           ghc-version: ${{ matrix.ghc }}
           cabal-version: ${{ matrix.cabal }}
 
+      - name: Use CI specific settings
+        run: |
+          cp .ci/cabal.project.local .
+
       - name: Setup CI
         run: |
           cabal v2-freeze
