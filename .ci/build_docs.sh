@@ -32,5 +32,17 @@ if grep -q "If you qualify the identifier, haddock can try to link it anyway" ha
   exit 1
 fi
 
+if grep -q "could not find link destinations for" haddock_log; then
+  echo -e "\e[1m\e[31mAn identifier could not be linked! Scroll up for full log.\e[0m"
+  grep --color=always -n -C 5 "could not find link destinations for" haddock_log
+  exit 1
+fi
+
+if grep -E -q "^Warning:" haddock_log; then
+  echo -e "\e[1m\e[31mAn unknown warning occured. Scroll up for full log.\e[0m"
+  grep --color=always -n -C 5 -E "^Warning:" haddock_log
+  exit 1
+fi
+
 # Copy documention to docs/
 ln -s "$(dirname "$(tail -n1 haddock_log)")" docs
