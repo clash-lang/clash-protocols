@@ -1,5 +1,8 @@
 {-# LANGUAGE NumericUnderscores #-}
 
+-- TODO: Fix warnings introduced by GHC 9.2 w.r.t. incomplete lazy pattern matches
+{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
+
 module Tests.Protocols.DfConv where
 
 -- base

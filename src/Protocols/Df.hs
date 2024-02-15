@@ -15,6 +15,9 @@ carries data, no metadata. For documentation see:
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
+-- TODO: Fix warnings introduced by GHC 9.2 w.r.t. incomplete lazy pattern matches
+{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
+
 module Protocols.Df
   ( -- * Types
     Df, Data(..)
@@ -59,7 +62,10 @@ module Protocols.Df
   ) where
 
 -- base
-import           Control.Applicative (Alternative((<|>)), Applicative(liftA2))
+#if !MIN_VERSION_base(4,18,0)
+import           Control.Applicative (Applicative(liftA2))
+#endif
+import           Control.Applicative (Alternative((<|>)))
 import           Control.DeepSeq (NFData)
 import           GHC.Generics (Generic)
 import           GHC.Stack (HasCallStack)

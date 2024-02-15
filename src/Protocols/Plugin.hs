@@ -45,4 +45,5 @@ plugin = CN.mkPlugin $ CN.ExternalNames
   , CN.tagName = CN.thName 'Tagged
   , CN.tagTName = CN.thName ''Tagged
   , CN.trivialBwd = CN.thName 'units
+  , CN.consPat = CN.thName '(:>!)
   }
