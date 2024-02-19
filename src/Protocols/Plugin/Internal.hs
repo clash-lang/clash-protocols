@@ -1,8 +1,11 @@
+{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE PatternSynonyms #-}
 
 {-# OPTIONS_HADDOCK hide #-}
 
 module Protocols.Plugin.Internal where
+
+import Clash.Explicit.Prelude
 
 import Data.Tagged
 import Protocols.Internal
@@ -30,3 +33,11 @@ taggedCircuit (Circuit c) (aFwd, bBwd) =
 pattern TaggedCircuit :: TaggedCircuitT a b -> Circuit a b
 pattern TaggedCircuit f <- (taggedCircuit -> f) where
   TaggedCircuit f = unTaggedCircuit f
+
+-- | Unsafe version of ':>'. Will fail if applied to empty vectors. This is used to
+-- work around spurious incomplete pattern match warnings generated in newer GHC
+-- versions.
+pattern (:>!) :: a -> Vec n a -> Vec (n + 1) a
+pattern (:>!) x xs <- (\ys -> (head ys, tail ys) -> (x,xs))
+{-# COMPLETE (:>!) #-}
+infixr 5 :>!

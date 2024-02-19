@@ -3,6 +3,9 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE MultiWayIf #-}
 
+-- TODO: Fix warnings introduced by GHC 9.2 w.r.t. incomplete lazy pattern matches
+{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
+
 -- |
 -- Types and functions to aid with testing Wishbone circuits.
 --

@@ -5,7 +5,7 @@ packages:
 
 extra-deps:
 - git: https://github.com/cchalmers/circuit-notation.git
-  commit: 565d4811cff6a597ee577dabd81b460e941fcb14
+  commit: 19b386c4aa3ff690758ae089c7754303f3500cc9
 - tasty-hedgehog-1.2.0.0
 - clash-prelude-1.6.3
 - clash-prelude-hedgehog-1.6.3

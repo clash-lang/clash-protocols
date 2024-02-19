@@ -140,7 +140,7 @@ library
     , data-default
     , deepseq
     , extra
-    , ghc >= 8.7
+    , ghc >= 8.7 && < 9.7
     , hashable
     , hedgehog >= 1.0.2
     , mtl
