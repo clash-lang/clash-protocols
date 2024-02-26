@@ -124,16 +124,12 @@ type family ARKeepQos (conf :: Axi4ReadAddressConfig) where
   ARKeepQos ('Axi4ReadAddressConfig _ _ _ _ _ _ _ _ _ a) = a
 
 -- | AXI4 Read Address channel protocol
-data Axi4ReadAddress
+type Axi4ReadAddress
   (dom :: C.Domain)
   (conf :: Axi4ReadAddressConfig)
   (userType :: Type)
-
-instance Protocol (Axi4ReadAddress dom conf userType) where
-  type Fwd (Axi4ReadAddress dom conf userType) =
-    C.Signal dom (M2S_ReadAddress conf userType)
-  type Bwd (Axi4ReadAddress dom conf userType) =
-    C.Signal dom S2M_ReadAddress
+  =  C.Signal dom (M2S_ReadAddress conf userType)
+  >< C.Signal dom S2M_ReadAddress
 
 instance Backpressure (Axi4ReadAddress dom conf userType) where
   boolsToBwd _ = C.fromList_lazy . coerce

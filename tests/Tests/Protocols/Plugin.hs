@@ -16,14 +16,14 @@ import qualified Protocols.Df as Df
 
 -- | Simply swap two streams. Note that the 'circuit' is a magic keyword the
 -- 'Protocols.Plugin' looks for in order to do its work.
-swapC :: Circuit (a, b) (b, a)
+swapC :: Circuit ((fa, fb) >< (ba, bb)) ((fb, fa) >< (bb, ba))
 swapC = circuit $ \(a, b) -> (b, a)
 
 
 -- | Put 'registerFwd' on both 'Df' input streams.
 registerBoth ::
   (C.NFDataX a, C.NFDataX b, C.HiddenClockResetEnable dom) =>
-  Circuit (Df dom a, Df dom b) (Df dom a, Df dom b)
+  Circuit (I2 (Df dom a) (Df dom b)) (I2 (Df dom a) (Df dom b))
 registerBoth = circuit $ \(a, b) -> do
   -- We route /a/ to into a 'registerFwd'. Note that this takes care of routing
   -- both the /forward/ and /backward/ parts, even though it seems that it only
@@ -41,7 +41,7 @@ registerBoth = circuit $ \(a, b) -> do
 -- | Fanout a stream and interact with some of the result streams.
 fanOutThenRegisterMiddle ::
   C.HiddenClockResetEnable dom =>
-  Circuit (Df dom Int) (Df dom Int, Df dom Int, Df dom Int)
+  Circuit (Df dom Int) (I3 (Df dom Int) (Df dom Int) (Df dom Int))
 fanOutThenRegisterMiddle = circuit $ \a -> do
   -- List notation can be used to specify a Vec. In this instance, fanout will
   -- infer that it needs to produce a 'Vec 3 Int'.
@@ -59,7 +59,7 @@ fanOutThenRegisterMiddle = circuit $ \a -> do
 
 
 -- | Forget the /left/ part of a tuple of 'Df' streams
-forgetLeft :: Circuit (Df dom a, Df dom b) (Df dom b)
+forgetLeft :: Circuit (I2 (Df dom a) (Df dom b)) (Df dom b)
 forgetLeft = circuit $ \(a, b) -> do
   -- We can use an underscore to indicate that we'd like to throw away any
   -- data from stream 'a'. For 'Df' like protocols, a constant acknowledgement
@@ -70,7 +70,7 @@ forgetLeft = circuit $ \(a, b) -> do
 
 
 -- | Forget the /left/ part of a tuple of 'Df' streams.
-forgetLeft2 :: Circuit (Df dom a, Df dom b) (Df dom b)
+forgetLeft2 :: Circuit (I2 (Df dom a) (Df dom b)) (Df dom b)
 forgetLeft2 =
   -- If we know right from the start that'd we'd like to ignore an incoming
   -- stream, we can simply mark it with an underscore.
@@ -78,7 +78,7 @@ forgetLeft2 =
 
 
 -- | Convert a 2-vector into a 2-tuple
-unvec :: Circuit (C.Vec 2 a) (a, a)
+unvec :: Circuit (C.Vec 2 fwd >< C.Vec 2 bwd) ((fwd, fwd) >< (bwd, bwd))
 unvec =
   -- We don't always need /do/ notation
   circuit \[x,y] -> (x, y)

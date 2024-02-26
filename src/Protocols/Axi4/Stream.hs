@@ -101,11 +101,9 @@ newtype Axi4StreamS2M = Axi4StreamS2M { _tready :: Bool }
   deriving (Generic, C.NFDataX, C.ShowX, Eq, NFData, Show, Bundle)
 
 -- | Type for AXI4 Stream protocol.
-data Axi4Stream (dom :: Domain) (conf :: Axi4StreamConfig) (userType :: Type)
-
-instance Protocol (Axi4Stream dom conf userType) where
-  type Fwd (Axi4Stream dom conf userType) = Signal dom (Maybe (Axi4StreamM2S conf userType))
-  type Bwd (Axi4Stream dom conf userType) = Signal dom Axi4StreamS2M
+type Axi4Stream (dom :: Domain) (conf :: Axi4StreamConfig) (userType :: Type)
+  =  Signal dom (Maybe (Axi4StreamM2S conf userType))
+  >< Signal dom Axi4StreamS2M
 
 instance Backpressure (Axi4Stream dom conf userType) where
   boolsToBwd _ = C.fromList_lazy . fmap Axi4StreamS2M

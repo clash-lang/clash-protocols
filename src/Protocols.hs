@@ -13,9 +13,15 @@ definitions in @circuit-notation@ at <https://github.com/cchalmers/circuit-notat
 module Protocols
   ( -- * Circuit definition
     Circuit(Circuit)
-  , Protocol(Fwd, Bwd)
+  , Fwd
+  , Bwd
   , Backpressure(boolsToBwd)
   , Ack(..)
+  , NC
+  , I2
+  , I3
+  , IVec
+  , type (><)
 
     -- * Combinators & functions
   , (|>), (<|)

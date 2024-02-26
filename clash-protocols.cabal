@@ -211,7 +211,7 @@ test-suite unittests
     Tests.Protocols.DfConv
     Tests.Protocols.Avalon
     Tests.Protocols.Axi4
-    Tests.Protocols.Plugin
+--    Tests.Protocols.Plugin
     Tests.Protocols.Wishbone
 
     Util

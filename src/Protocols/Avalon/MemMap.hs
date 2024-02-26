@@ -85,8 +85,8 @@ module Protocols.Avalon.MemMap
   , subordinateInRemoveNonDf
 
     -- * Protocols
-  , AvalonMmManager(..)
-  , AvalonMmSubordinate(..)
+  , AvalonMmManager
+  , AvalonMmSubordinate
   ) where
 
 -- base
@@ -1001,25 +1001,17 @@ mmManagerInToBool ::
 mmManagerInToBool = not . mi_waitRequest
 
 -- | Datatype for the manager end of the Avalon memory-mapped protocol.
-data AvalonMmManager (dom :: Domain) (config :: AvalonMmManagerConfig)
-  = AvalonMmManager
+type AvalonMmManager (dom :: Domain) (config :: AvalonMmManagerConfig)
+  =  (Signal dom (AvalonManagerOut config))
+  >< (Signal dom (AvalonManagerIn config))
 
 -- | Datatype for the subordinate end of the Avalon memory-mapped protocol.
-data AvalonMmSubordinate
+type AvalonMmSubordinate
        (dom :: Domain)
        (fixedWaitTime :: Nat)
        (config :: AvalonMmSubordinateConfig)
-       = AvalonMmSubordinate
-
-instance Protocol (AvalonMmManager dom config) where
-  type Fwd (AvalonMmManager dom config) = Signal dom (AvalonManagerOut config)
-  type Bwd (AvalonMmManager dom config) = Signal dom (AvalonManagerIn config)
-
-instance Protocol (AvalonMmSubordinate dom fixedWaitTime config) where
-  type Fwd (AvalonMmSubordinate dom fixedWaitTime config)
-         = Signal dom (AvalonSubordinateIn config)
-  type Bwd (AvalonMmSubordinate dom fixedWaitTime config)
-         = Signal dom (AvalonSubordinateOut config)
+  =  (Signal dom (AvalonSubordinateIn config))
+  >< (Signal dom (AvalonSubordinateOut config))
 
 instance (KnownSubordinateConfig config, KeepWaitRequest config ~ 'True) =>
   Backpressure (AvalonMmSubordinate dom 0 config) where

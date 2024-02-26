@@ -192,19 +192,14 @@ data WishboneMode
   deriving (C.Generic, Show, Eq)
 
 -- | The Wishbone protocol (http://cdn.opencores.org/downloads/wbspec_b4.pdf)
-data
+type
   Wishbone
     (dom :: C.Domain)
     (mode :: WishboneMode)
     (addressWidth :: Nat)
     (userType :: Type)
-
-instance Protocol (Wishbone dom mode addressWidth dat) where
-  type
-    Fwd (Wishbone dom mode addressWidth dat) =
-      Signal dom (WishboneM2S addressWidth (C.BitSize dat `DivRU` 8) dat)
-
-  type Bwd (Wishbone dom mode addressWidth dat) = Signal dom (WishboneS2M dat)
+  =  Signal dom (WishboneM2S addressWidth (C.BitSize userType `DivRU` 8) userType)
+  >< Signal dom (WishboneS2M userType)
 
 -- | Construct "default" Wishbone M2S signals
 emptyWishboneM2S ::

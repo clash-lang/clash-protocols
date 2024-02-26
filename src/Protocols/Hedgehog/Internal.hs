@@ -161,12 +161,13 @@ instance (TestType a, C.KnownDomain dom) => Test (Df dom a) where
 
 instance
   ( Test a
+  , a ~ (fwd >< bwd)
   , C.KnownNat n
   , 1 <= (n * SimulateChannels a)
-  , 1 <= n ) => Test (C.Vec n a) where
+  , 1 <= n ) => Test (C.Vec n fwd >< C.Vec n bwd) where
   expectToLengths ::
-    Proxy (C.Vec n a) ->
-    ExpectType (C.Vec n a) ->
+    Proxy (IVec n a) ->
+    ExpectType (IVec n a) ->
     C.Vec (n * SimulateChannels a) Int
   expectToLengths Proxy =
     C.concatMap (expectToLengths (Proxy @a))
@@ -174,7 +175,7 @@ instance
   expectN ::
     forall m.
     (HasCallStack, H.MonadTest m) =>
-    Proxy (C.Vec n a) ->
+    Proxy (IVec n a) ->
     ExpectOptions ->
     C.Vec (n * SimulateChannels a) Int ->
     C.Vec n (SimulateFwdType a) ->
@@ -188,9 +189,11 @@ instance
 
 instance
   ( Test a, Test b
-  , 1 <= (SimulateChannels a + SimulateChannels b) ) => Test (a, b) where
+  , a ~ (fa >< ba), b ~ (fb >< bb)
+  , 1 <= (SimulateChannels a + SimulateChannels b)
+  ) => Test ((fa, fb) >< (ba, bb)) where
   expectToLengths ::
-    Proxy (a, b) ->
+    Proxy (I2 a b) ->
     (ExpectType a, ExpectType b) ->
     C.Vec (SimulateChannels a + SimulateChannels b) Int
   expectToLengths Proxy (t1, t2) =
@@ -199,7 +202,7 @@ instance
   expectN ::
     forall m.
     (HasCallStack, H.MonadTest m) =>
-    Proxy (a, b) ->
+    Proxy (I2 a b) ->
     ExpectOptions ->
     C.Vec (SimulateChannels a + SimulateChannels b) Int ->
     (SimulateFwdType a, SimulateFwdType b) ->

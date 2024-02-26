@@ -24,7 +24,7 @@ roundrobin ::
   ) =>
   Circuit
     (Wishbone dom 'Standard addressWidth a)
-    (Vec n (Wishbone dom 'Standard addressWidth a))
+    (IVec n (Wishbone dom 'Standard addressWidth a))
 roundrobin = Circuit $ \(m2s, s2ms) -> B.first head $ fn (singleton m2s, s2ms)
  where
   Circuit fn = sharedBus selectFn
@@ -53,8 +53,8 @@ sharedBus ::
     Signal dom (Index n, Index m)
   ) ->
   Circuit
-    (Vec n (Wishbone dom 'Standard addressWidth a))
-    (Vec m (Wishbone dom 'Standard addressWidth a))
+    (IVec n (Wishbone dom 'Standard addressWidth a))
+    (IVec m (Wishbone dom 'Standard addressWidth a))
 sharedBus selectFn = Circuit go
  where
   go (bundle -> m2ss0, bundle -> s2ms0) = (unbundle s2ms1, unbundle m2ss1)
@@ -83,10 +83,10 @@ crossbarSwitch ::
     KnownNat (BitSize a)
   ) =>
   Circuit
-    ( CSignal dom (Vec n (Index m)), -- route
-      Vec n (Wishbone dom 'Standard addressWidth a) -- masters
+    (I2 (CSignal dom (Vec n (Index m)) >< CSignal dom ()) -- route
+        (IVec n (Wishbone dom 'Standard addressWidth a)) -- masters
     )
-    (Vec m (Wishbone dom 'Standard addressWidth a)) -- slaves
+    (IVec m (Wishbone dom 'Standard addressWidth a)) -- slaves
 crossbarSwitch = Circuit go
  where
   go ((CSignal route, bundle -> m2ss0), bundle -> s2ms0) =
@@ -123,7 +123,7 @@ memoryWb ::
     Default a
   ) =>
   (Signal dom (BitVector addressWidth) -> Signal dom (Maybe (BitVector addressWidth, a)) -> Signal dom a) ->
-  Circuit (Wishbone dom 'Standard addressWidth a) ()
+  Circuit (Wishbone dom 'Standard addressWidth a) NC
 memoryWb ram = Circuit go
  where
   go (m2s, ()) = (mux inCycle s2m1 (pure emptyWishboneS2M), ())

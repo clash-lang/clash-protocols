@@ -14,6 +14,7 @@ Internal module to prevent hs-boot files (breaks Haddock)
 
 module Protocols.Internal where
 
+import qualified Control.Category as Cat
 import           Control.DeepSeq (NFData)
 import           Data.Hashable (Hashable)
 import           Data.Maybe (fromMaybe)
@@ -21,7 +22,7 @@ import           Data.Proxy
 import           GHC.Base (Any)
 import           Prelude hiding (map, const)
 
-import           Clash.Prelude (Signal, type (+), type (*))
+import           Clash.Prelude (Signal, type (+), type (*), Nat)
 import qualified Clash.Prelude as C
 import qualified Clash.Explicit.Prelude as CE
 
@@ -148,8 +149,47 @@ import           GHC.Generics (Generic)
 --
 --   2. It eliminates the need for manually routing acknowledgement lines
 --
-newtype Circuit a b =
+newtype Circuit (a :: CircuitInterface) (b :: CircuitInterface) =
   Circuit ( (Fwd a, Bwd b) -> (Bwd a, Fwd b) )
+
+instance Cat.Category Circuit where
+  id = Circuit swap
+  c2 . c1 = c1 |> c2
+
+type CircuitInterface = (Type, Type)
+
+infixl ><
+type (><) a b = '(a, b)
+
+type family Fwd (a :: CircuitInterface) :: Type  where
+  Fwd (x >< _) = x
+
+type family Bwd (a :: CircuitInterface) :: Type  where
+  Bwd (_ >< x) = x
+
+type NC = (() >< ())
+
+type I0 = (() >< ())
+
+type I1
+  (a :: CircuitInterface)
+  = a
+
+type I2
+  (a :: CircuitInterface)
+  (b :: CircuitInterface)
+  = (Fwd a, Fwd b) >< (Bwd a, Bwd b)
+
+type I3
+  (a :: CircuitInterface)
+  (b :: CircuitInterface)
+  (c :: CircuitInterface)
+  = (Fwd a, Fwd b, Fwd c) >< (Bwd a, Bwd b, Bwd c)
+
+type IVec
+  (n :: Nat)
+  (a :: CircuitInterface)
+  = (C.Vec n (Fwd a) >< C.Vec n (Bwd a))
 
 -- | Protocol-agnostic acknowledgement
 newtype Ack = Ack Bool
@@ -166,41 +206,6 @@ data CSignal dom a = CSignal (Signal dom a)
 
 instance Default a => Default (CSignal dom a) where
   def = CSignal def
-
--- | A protocol describes the in- and outputs of one side of a 'Circuit'.
-class Protocol a where
-  -- | Sender to receiver type family. See 'Circuit' for an explanation on the
-  -- existence of 'Fwd'.
-  type Fwd (a :: Type)
-
-  -- | Receiver to sender type family. See 'Circuit' for an explanation on the
-  -- existence of 'Bwd'.
-  type Bwd (a :: Type)
-
-instance Protocol () where
-  type Fwd () = ()
-  type Bwd () = ()
-
-instance Protocol (a, b) where
-  type Fwd (a, b) = (Fwd a, Fwd b)
-  type Bwd (a, b) = (Bwd a, Bwd b)
-
-instance Protocol (a, b, c) where
-  type Fwd (a, b, c) = (Fwd a, Fwd b, Fwd c)
-  type Bwd (a, b, c) = (Bwd a, Bwd b, Bwd c)
-
-instance Protocol (a, b, c, d) where
-  type Fwd (a, b, c, d) = (Fwd a, Fwd b, Fwd c, Fwd d)
-  type Bwd (a, b, c, d) = (Bwd a, Bwd b, Bwd c, Bwd d)
-
-instance C.KnownNat n => Protocol (C.Vec n a) where
-  type Fwd (C.Vec n a) = C.Vec n (Fwd a)
-  type Bwd (C.Vec n a) = C.Vec n (Bwd a)
-
--- XXX: Type families with Signals on LHS are currently broken on Clash:
-instance Protocol (CSignal dom a) where
-  type Fwd (CSignal dom a) = CSignal dom a
-  type Bwd (CSignal dom a) = CSignal dom ()
 
 -- | Left-to-right circuit composition.
 --
@@ -232,28 +237,49 @@ infixr 1 |>
     (r2sAb, s2rBc)
 
 -- | Conversion from booleans to protocol specific acknowledgement values.
-class Protocol a => Backpressure a where
+class Backpressure (a :: CircuitInterface) where
   -- | Interpret list of booleans as a list of acknowledgements at every cycle.
   -- Implementations don't have to account for finite lists.
   boolsToBwd :: Proxy a -> [Bool] -> Bwd a
 
-instance Backpressure () where
+instance Backpressure (a >< ()) where
   boolsToBwd _ _ = ()
 
-instance (Backpressure a, Backpressure b) => Backpressure (a, b) where
-  boolsToBwd _ bs = (boolsToBwd (Proxy @a) bs, boolsToBwd (Proxy @b) bs)
-
-instance (Backpressure a, Backpressure b, Backpressure c) => Backpressure (a, b, c) where
+instance
+  ( Backpressure (f0 >< b0)
+  , Backpressure (f1 >< b1)
+  ) =>
+    Backpressure ((f0, f1) >< (b0, b1))
+ where
   boolsToBwd _ bs =
-    ( boolsToBwd (Proxy @a) bs
-    , boolsToBwd (Proxy @b) bs
-    , boolsToBwd (Proxy @c) bs )
+    ( boolsToBwd (Proxy @(f0 >< b0)) bs
+    , boolsToBwd (Proxy @(f1 >< b1)) bs
+    )
 
-instance (C.KnownNat n, Backpressure a) => Backpressure (C.Vec n a) where
-  boolsToBwd _ bs = C.repeat (boolsToBwd (Proxy @a) bs)
+instance
+  ( Backpressure (f0 >< b0)
+  , Backpressure (f1 >< b1)
+  , Backpressure (f2 >< b2)
+  ) =>
+    Backpressure ((f0, f1, f2) >< (b0, b1, b2))
+ where
+  boolsToBwd _ bs =
+    ( boolsToBwd (Proxy @(f0 >< b0)) bs
+    , boolsToBwd (Proxy @(f1 >< b1)) bs
+    , boolsToBwd (Proxy @(f2 >< b2)) bs
+    )
 
-instance Backpressure (CSignal dom a) where
-  boolsToBwd _ _ = CSignal (pure ())
+instance
+  ( C.KnownNat n
+  , Backpressure (fwd >< bwd)
+  ) =>
+    Backpressure (C.Vec n fwd >< C.Vec n bwd)
+ where
+  boolsToBwd _ bs = C.repeat (boolsToBwd (Proxy @(fwd >< bwd)) bs)
+
+instance Backpressure (CSignal dom a >< CSignal dom ())
+ where
+  boolsToBwd _ _ = CSignal $ pure ()
 
 -- | Right-to-left circuit composition.
 --
@@ -312,7 +338,7 @@ idC = Circuit swap
 repeatC ::
   forall n a b.
   Circuit a b ->
-  Circuit (C.Vec n a) (C.Vec n b)
+  Circuit (IVec n a) (IVec n b)
 repeatC (Circuit f) =
   Circuit (C.unzip . C.map f . uncurry C.zip)
 
@@ -322,7 +348,9 @@ prod2C ::
   forall a c b d.
   Circuit a b ->
   Circuit c d ->
-  Circuit (a, c) (b, d)
+  Circuit
+    ((Fwd a, Fwd c) >< (Bwd a, Bwd c))
+    ((Fwd b, Fwd d) >< (Bwd b, Bwd d))
 prod2C (Circuit a) (Circuit c) =
   Circuit (\((aFwd, cFwd), (bBwd, dBwd)) ->
     let
@@ -426,13 +454,13 @@ class (C.KnownNat (SimulateChannels a), Backpressure a, Simulate a) => Drivable 
   driveC ::
     SimulationConfig ->
     SimulateFwdType a ->
-    Circuit () a
+    Circuit NC a
 
   -- | Sample a circuit that is trivially drivable. Use 'driveC'  to create
   -- such a circuit. Related: 'simulateC'.
   sampleC ::
     SimulationConfig ->
-    Circuit () a ->
+    Circuit NC a ->
     SimulateFwdType a
 
 
@@ -444,7 +472,7 @@ class (C.KnownNat (SimulateChannels a), Backpressure a, Simulate a) => Drivable 
 -- The 'simulateCircuit' function can thus receive the necessary simulation types, convert
 -- them to types on the 'Signal' level, pass those signals to the circuit, and convert the
 -- result of the circuit back to the simulation types giving the final result.
-class (C.KnownNat (SimulateChannels a), Protocol a) => Simulate a where
+class C.KnownNat (SimulateChannels a) => Simulate (a :: CircuitInterface) where
   -- | The type that a test must provide to the 'simulateCircuit' function in the forward direction.
   -- Usually this is some sort of list.
   type SimulateFwdType a :: Type
@@ -487,10 +515,10 @@ class (C.KnownNat (SimulateChannels a), Protocol a) => Simulate a where
     Circuit a a
 
 
-instance Simulate () where
-  type SimulateFwdType () = ()
-  type SimulateBwdType () = ()
-  type SimulateChannels () = 0
+instance Simulate NC where
+  type SimulateFwdType NC = ()
+  type SimulateBwdType NC = ()
+  type SimulateChannels NC = 0
 
   simToSigFwd _ = id
   simToSigBwd _ = id
@@ -499,8 +527,9 @@ instance Simulate () where
 
   stallC _ _ = idC
 
-instance Drivable () where
-  type ExpectType () = ()
+
+instance Drivable NC where
+  type ExpectType NC = ()
 
   toSimulateType Proxy () = ()
   fromSimulateType Proxy () = ()
@@ -508,22 +537,49 @@ instance Drivable () where
   driveC _ _ = idC
   sampleC _  _ = ()
 
+instance
+  ( Simulate (f0 >< b0)
+  , Simulate (f1 >< b1)
+  ) =>
+    Simulate ((f0, f1) >< (b0, b1)) where
+  type SimulateFwdType ((f0, f1) >< (b0, b1)) =
+    (SimulateFwdType (f0 >< b0), SimulateFwdType (f1 >< b1))
 
-instance (Simulate a, Simulate b) => Simulate (a, b) where
-  type SimulateFwdType (a, b) = (SimulateFwdType a, SimulateFwdType b)
-  type SimulateBwdType (a, b) = (SimulateBwdType a, SimulateBwdType b)
-  type SimulateChannels (a, b) = SimulateChannels a + SimulateChannels b
+  type SimulateBwdType ((f0, f1) >< (b0, b1)) =
+    (SimulateBwdType (f0 >< b0), SimulateBwdType (f1 >< b1))
 
-  simToSigFwd Proxy (fwdsA, fwdsB) = (simToSigFwd (Proxy @a) fwdsA, simToSigFwd (Proxy @b) fwdsB)
-  simToSigBwd Proxy (bwdsA, bwdsB) = (simToSigBwd (Proxy @a) bwdsA, simToSigBwd (Proxy @b) bwdsB)
-  sigToSimFwd Proxy (fwdSigA, fwdSigB) = (sigToSimFwd (Proxy @a) fwdSigA, sigToSimFwd (Proxy @b) fwdSigB)
-  sigToSimBwd Proxy (bwdSigA, bwdSigB) = (sigToSimBwd (Proxy @a) bwdSigA, sigToSimBwd (Proxy @b) bwdSigB)
+  type SimulateChannels ((f0, f1) >< (b0, b1)) =
+    SimulateChannels (f0 >< b0) + SimulateChannels (f1 >< b1)
+
+  simToSigFwd Proxy (fwdsA, fwdsB) =
+    ( simToSigFwd (Proxy @(f0 >< b0)) fwdsA
+    , simToSigFwd (Proxy @(f1 >< b1)) fwdsB
+    )
+
+  simToSigBwd Proxy (bwdsA, bwdsB) =
+    ( simToSigBwd (Proxy @(f0 >< b0)) bwdsA
+    , simToSigBwd (Proxy @(f1 >< b1)) bwdsB
+    )
+
+  sigToSimFwd Proxy (fwdSigA, fwdSigB) =
+    ( sigToSimFwd (Proxy @(f0 >< b0)) fwdSigA
+    , sigToSimFwd (Proxy @(f1 >< b1)) fwdSigB
+    )
+
+  sigToSimBwd Proxy (bwdSigA, bwdSigB) =
+    ( sigToSimBwd (Proxy @(f0 >< b0)) bwdSigA
+    , sigToSimBwd (Proxy @(f1 >< b1)) bwdSigB
+    )
 
   stallC conf stalls =
     let
-      (stallsL, stallsR) = C.splitAtI @(SimulateChannels a) @(SimulateChannels b) stalls
-      Circuit stalledL = stallC @a conf stallsL
-      Circuit stalledR = stallC @b conf stallsR
+      (stallsL, stallsR) =
+        C.splitAtI
+          @(SimulateChannels (f0 >< b0))
+          @(SimulateChannels (f1 >< b1))
+          stalls
+      Circuit stalledL = stallC @(f0 >< b0) conf stallsL
+      Circuit stalledR = stallC @(f1 >< b1) conf stallsR
     in
       Circuit $ \((fwdL0, fwdR0), (bwdL0, bwdR0)) ->
         let
@@ -532,73 +588,104 @@ instance (Simulate a, Simulate b) => Simulate (a, b) where
         in
           ((fwdL1, fwdR1), (bwdL1, bwdR1))
 
-instance (Drivable a, Drivable b) => Drivable (a, b) where
-  type ExpectType (a, b) = (ExpectType a, ExpectType b)
+instance
+  ( Drivable (f0 >< b0)
+  , Drivable (f1 >< b1)
+  ) =>
+    Drivable ((f0, f1) >< (b0, b1))
+ where
+  type ExpectType ((f0, f1) >< (b0, b1)) =
+    ( ExpectType (f0 >< b0)
+    , ExpectType (f1 >< b1)
+    )
 
   toSimulateType Proxy (t1, t2) =
-    ( toSimulateType (Proxy @a) t1
-    , toSimulateType (Proxy @b) t2 )
+    ( toSimulateType (Proxy @(f0 >< b0)) t1
+    , toSimulateType (Proxy @(f1 >< b1)) t2 )
 
   fromSimulateType Proxy (t1, t2) =
-    ( fromSimulateType (Proxy @a) t1
-    , fromSimulateType (Proxy @b) t2 )
+    ( fromSimulateType (Proxy @(f0 >< b0)) t1
+    , fromSimulateType (Proxy @(f1 >< b1)) t2 )
 
   driveC conf (fwd1, fwd2) =
-    let (Circuit f1, Circuit f2) = (driveC @a conf fwd1, driveC @b conf fwd2) in
-    Circuit (\(_, ~(bwd1, bwd2)) -> ((), (snd (f1 ((), bwd1)), snd (f2 ((), bwd2)))))
+    let
+      (Circuit f1, Circuit f2) =
+        ( driveC @(f0 >< b0) conf fwd1
+        , driveC @(f1 >< b1) conf fwd2
+        )
+     in
+      Circuit $ \(_, ~(bwd1, bwd2)) ->
+        ( (), ( snd (f1 ((), bwd1))
+              , snd (f2 ((), bwd2))
+              )
+        )
 
   sampleC conf (Circuit f) =
     let
       bools = replicate (resetCycles conf) False <> repeat True
-      (_, (fwd1, fwd2)) = f ((), (boolsToBwd (Proxy @a) bools, boolsToBwd (Proxy @b) bools))
+      (_, (fwd1, fwd2)) =
+        f ((), ( boolsToBwd (Proxy @(f0 >< b0)) bools
+               , boolsToBwd (Proxy @(f1 >< b1)) bools
+               )
+          )
     in
-      ( sampleC @a conf (Circuit $ \_ -> ((), fwd1))
-      , sampleC @b conf (Circuit $ \_ -> ((), fwd2)) )
+      ( sampleC @(f0 >< b0) conf (Circuit $ \_ -> ((), fwd1))
+      , sampleC @(f1 >< b1) conf (Circuit $ \_ -> ((), fwd2)) )
 
 
 -- TODO TemplateHaskell?
 -- instance SimulateType (a, b, c)
 -- instance SimulateType (a, b, c, d)
 
-instance (CE.KnownNat n, Simulate a) => Simulate (C.Vec n a) where
-  type SimulateFwdType (C.Vec n a) = C.Vec n (SimulateFwdType a)
-  type SimulateBwdType (C.Vec n a) = C.Vec n (SimulateBwdType a)
-  type SimulateChannels (C.Vec n a) = n * SimulateChannels a
+instance (CE.KnownNat n, Simulate (fwd >< bwd)) =>
+  Simulate (C.Vec n fwd >< C.Vec n bwd)
+ where
+  type SimulateFwdType (C.Vec n fwd >< C.Vec n bwd) =
+    C.Vec n (SimulateFwdType (fwd >< bwd))
 
-  simToSigFwd Proxy = C.map (simToSigFwd (Proxy @a))
-  simToSigBwd Proxy = C.map (simToSigBwd (Proxy @a))
-  sigToSimFwd Proxy = C.map (sigToSimFwd (Proxy @a))
-  sigToSimBwd Proxy = C.map (sigToSimBwd (Proxy @a))
+  type SimulateBwdType (C.Vec n fwd >< C.Vec n bwd) =
+    C.Vec n (SimulateBwdType (fwd >< bwd))
+
+  type SimulateChannels (C.Vec n fwd >< C.Vec n bwd) =
+    n * SimulateChannels (fwd >< bwd)
+
+  simToSigFwd Proxy = C.map (simToSigFwd (Proxy @(fwd >< bwd)))
+  simToSigBwd Proxy = C.map (simToSigBwd (Proxy @(fwd >< bwd)))
+  sigToSimFwd Proxy = C.map (sigToSimFwd (Proxy @(fwd >< bwd)))
+  sigToSimBwd Proxy = C.map (sigToSimBwd (Proxy @(fwd >< bwd)))
 
   stallC conf stalls0 =
     let
-      stalls1 = C.unconcatI @n @(SimulateChannels a) stalls0
-      stalled = C.map (toSignals . stallC @a conf) stalls1
+      stalls1 = C.unconcatI @n @(SimulateChannels (fwd >< bwd)) stalls0
+      stalled = C.map (toSignals . stallC @(fwd >< bwd) conf) stalls1
     in
       Circuit $ \(fwds, bwds) -> C.unzip (C.zipWith ($) stalled (C.zip fwds bwds))
 
-instance (C.KnownNat n, Drivable a) => Drivable (C.Vec n a) where
-  type ExpectType (C.Vec n a) = C.Vec n (ExpectType a)
+instance (C.KnownNat n, Drivable (fwd >< bwd)) =>
+  Drivable (C.Vec n fwd >< C.Vec n bwd)
+ where
+  type ExpectType (C.Vec n fwd >< C.Vec n bwd) =
+    C.Vec n (ExpectType (fwd >< bwd))
 
-  toSimulateType Proxy = C.map (toSimulateType (Proxy @a))
-  fromSimulateType Proxy = C.map (fromSimulateType (Proxy @a))
+  toSimulateType Proxy = C.map (toSimulateType (Proxy @(fwd >< bwd)))
+  fromSimulateType Proxy = C.map (fromSimulateType (Proxy @(fwd >< bwd)))
 
   driveC conf fwds =
-    let circuits = C.map (($ ()) . curry . (toSignals @_ @a) . driveC conf) fwds in
+    let circuits = C.map (($ ()) . curry . (toSignals @_ @(fwd >< bwd)) . driveC conf) fwds in
     Circuit (\(_, bwds) -> ((), C.map snd (C.zipWith ($) circuits bwds)))
 
   sampleC conf (Circuit f) =
     let
       bools = replicate (resetCycles conf) False <> repeat True
-      (_, fwds) = f ((), (C.repeat (boolsToBwd (Proxy @a) bools)))
+      (_, fwds) = f ((), (C.repeat (boolsToBwd (Proxy @(fwd >< bwd)) bools)))
     in
-      C.map (\fwd -> sampleC @a conf (Circuit $ \_ -> ((), fwd))) fwds
+      C.map (\fwd -> sampleC @(fwd >< bwd) conf (Circuit $ \_ -> ((), fwd))) fwds
 
 
-instance (C.KnownDomain dom) => Simulate (CSignal dom a) where
-  type SimulateFwdType (CSignal dom a) = [a]
-  type SimulateBwdType (CSignal dom a) = ()
-  type SimulateChannels (CSignal dom a) = 1
+instance (C.KnownDomain dom) => Simulate (CSignal dom a >< CSignal dom ()) where
+  type SimulateFwdType (CSignal dom a >< CSignal dom ()) = [a]
+  type SimulateBwdType (CSignal dom a >< CSignal dom ()) = ()
+  type SimulateChannels (CSignal dom a >< CSignal dom ()) = 1
 
   simToSigFwd Proxy list = CSignal (C.fromList_lazy list)
   simToSigBwd Proxy () = def
@@ -610,8 +697,10 @@ instance (C.KnownDomain dom) => Simulate (CSignal dom a) where
 instance Default (CSignal dom (Const () a)) where
   def = CSignal (pure (Const ()))
 
-instance (C.NFDataX a, C.ShowX a, Show a, C.KnownDomain dom) => Drivable (CSignal dom a) where
-  type ExpectType (CSignal dom a) = [a]
+instance (C.NFDataX a, C.ShowX a, Show a, C.KnownDomain dom) =>
+  Drivable (CSignal dom a >< CSignal dom ())
+ where
+  type ExpectType (CSignal dom a >< CSignal dom ()) = [a]
 
   toSimulateType Proxy = id
   fromSimulateType Proxy = id
@@ -624,7 +713,6 @@ instance (C.NFDataX a, C.ShowX a, Show a, C.KnownDomain dom) => Drivable (CSigna
   sampleC SimulationConfig{resetCycles, ignoreReset} (Circuit f) =
     let sampled = CE.sample_lazy ((\(CSignal s) -> s) (snd (f ((), def)))) in
     if ignoreReset then drop resetCycles sampled else sampled
-
 
 -- | Simulate a circuit. Includes samples while reset is asserted.
 -- Not synthesizable.
@@ -803,14 +891,9 @@ keepTypeFalse = Proxy
 fromKeepTypeTrue :: KeepType 'True t -> t
 fromKeepTypeTrue = runIdentity
 
--- | Protocol to reverse a circuit.
--- 'Fwd' becomes 'Bwd' and vice versa.
--- No changes are made otherwise.
-data Reverse a
-
-instance Protocol a => Protocol (Reverse a) where
-  type Fwd (Reverse a) = Bwd a
-  type Bwd (Reverse a) = Fwd a
+-- | Reverse a circuit. 'Fwd' becomes 'Bwd' and vice versa. No
+-- changes are made otherwise.
+type Reverse a = Bwd a >< Fwd a
 
 -- | Apply 'Reverse' both sides of a circuit, and then switch them.
 -- Input and output of the underlying circuit are the same,
@@ -832,12 +915,12 @@ mapCircuit ia oa ob ib (Circuit f) = Circuit ((oa *** ob) . f . (ia *** ib))
 
 -- | "Bundle" together a 'C.Vec' of 'Circuit's into a 'Circuit' with 'C.Vec' input and output.
 -- The 'Circuit's all run in parallel.
-vecCircuits :: (C.KnownNat n) => C.Vec n (Circuit a b) -> Circuit (C.Vec n a) (C.Vec n b)
+vecCircuits :: (C.KnownNat n) => C.Vec n (Circuit a b) -> Circuit (IVec n a) (IVec n b)
 vecCircuits fs = Circuit (\inps -> C.unzip $ f <$> fs <*> uncurry C.zip inps) where
   f (Circuit ff) x = ff x
 
 -- | "Bundle" together a pair of 'Circuit's into a 'Circuit' with two inputs and outputs.
 -- The 'Circuit's run in parallel.
-tupCircuits :: Circuit a b -> Circuit c d -> Circuit (a,c) (b,d)
+tupCircuits :: Circuit a b -> Circuit c d -> Circuit (I2 a c) (I2 b d)
 tupCircuits (Circuit f) (Circuit g) = Circuit (reorder . (f *** g) . reorder) where
   reorder ~(~(a,b),~(c,d)) = ((a,c),(b,d))

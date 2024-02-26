@@ -53,16 +53,12 @@ type family BIdWidth (conf :: Axi4WriteResponseConfig) where
   BIdWidth ('Axi4WriteResponseConfig _ a) = a
 
 -- | AXI4 Read Data channel protocol
-data Axi4WriteResponse
+type Axi4WriteResponse
   (dom :: C.Domain)
   (conf :: Axi4WriteResponseConfig)
   (userType :: Type)
-
-instance Protocol (Axi4WriteResponse dom conf userType) where
-  type Fwd (Axi4WriteResponse dom conf userType) =
-    C.Signal dom (S2M_WriteResponse conf userType)
-  type Bwd (Axi4WriteResponse dom conf userType) =
-    C.Signal dom M2S_WriteResponse
+  =  C.Signal dom (S2M_WriteResponse conf userType)
+  >< C.Signal dom M2S_WriteResponse
 
 instance Backpressure (Axi4WriteResponse dom conf userType) where
   boolsToBwd _ = C.fromList_lazy . coerce

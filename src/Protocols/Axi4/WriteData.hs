@@ -55,16 +55,12 @@ type family WNBytes (conf :: Axi4WriteDataConfig) where
   WNBytes ('Axi4WriteDataConfig _ a) = a
 
 -- | AXI4 Write Data channel protocol
-data Axi4WriteData
+type Axi4WriteData
   (dom :: C.Domain)
   (conf :: Axi4WriteDataConfig)
   (userType :: Type)
-
-instance Protocol (Axi4WriteData dom conf userType) where
-  type Fwd (Axi4WriteData dom conf userType) =
-    C.Signal dom (M2S_WriteData conf userType)
-  type Bwd (Axi4WriteData dom conf userType) =
-    C.Signal dom S2M_WriteData
+  =  C.Signal dom (M2S_WriteData conf userType)
+  >< C.Signal dom S2M_WriteData
 
 instance Backpressure (Axi4WriteData dom conf userType) where
   boolsToBwd _ = C.fromList_lazy . coerce
