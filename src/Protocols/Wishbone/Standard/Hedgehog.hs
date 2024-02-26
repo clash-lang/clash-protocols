@@ -304,7 +304,7 @@ driveStandard ::
   ExpectOptions ->
   -- | Requests to send out
   [(WishboneMasterRequest addressWidth a, Int)] ->
-  Circuit () (Wishbone dom 'Standard addressWidth a)
+  Circuit NC (Wishbone dom 'Standard addressWidth a)
 driveStandard ExpectOptions {..} requests =
   Circuit $
     ((),)
@@ -449,7 +449,7 @@ wishbonePropWithModel ::
   --   Return an error message 'Left' or the updated state 'Right'
   (WishboneMasterRequest addressWidth a -> WishboneS2M a -> st -> Either String st) ->
   -- | The circuit to run the test against.
-  Circuit (Wishbone dom 'Standard addressWidth a) () ->
+  Circuit (Wishbone dom 'Standard addressWidth a) NC ->
   -- | Inputs to the circuit and model
   H.Gen [WishboneMasterRequest addressWidth a] ->
   -- | Initial state of the model
@@ -493,8 +493,8 @@ wishbonePropWithModel eOpts model circuit0 inputGen st = do
 observeComposedWishboneCircuit ::
   (KnownDomain dom) =>
   Maybe Int ->
-  Circuit () (Wishbone dom mode addressWidth a) ->
-  Circuit (Wishbone dom mode addressWidth a) () ->
+  Circuit NC (Wishbone dom mode addressWidth a) ->
+  Circuit (Wishbone dom mode addressWidth a) NC ->
   ( [WishboneM2S addressWidth (BitSize a `DivRU` 8) a],
     [WishboneS2M a]
   )

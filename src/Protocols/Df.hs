@@ -103,15 +103,11 @@ import           Protocols.Internal
 -- __N.B.__: For performance reasons 'Protocols.Data' is strict on
 -- its data field. That is, if 'Protocols.Data' is evaluated to WHNF,
 -- its fields will be evaluated to WHNF too.
-data Df (dom :: C.Domain) (a :: Type)
-
-instance Protocol (Df dom a) where
-  -- | Forward part of simple dataflow: @Signal dom (Data meta a)@
-  type Fwd (Df dom a) = Signal dom (Data a)
-
-  -- | Backward part of simple dataflow: @Signal dom Bool@
-  type Bwd (Df dom a) = Signal dom Ack
-
+type Df (dom :: C.Domain) (a :: Type)
+  =  Signal dom (Data a)
+     -- ^ Forward part of simple dataflow: @Signal dom (Data meta a)@
+  >< Signal dom Ack
+     -- ^ Backward part of simple dataflow: @Signal dom Bool@
 
 instance Backpressure (Df dom a) where
   boolsToBwd _ = C.fromList_lazy . coerce
@@ -229,11 +225,11 @@ const b = Circuit (P.const (Ack <$>
                   )
 
 -- | Drive a constant value composed of /a/.
-pure :: a -> Circuit () (Df dom a)
+pure :: a -> Circuit NC (Df dom a)
 pure a = Circuit (P.const ((), P.pure (Data a)))
 
 -- | Drive a constant value composed of /a/.
-void :: C.HiddenReset dom => Circuit (Df dom a) ()
+void :: C.HiddenReset dom => Circuit (Df dom a) NC
 void = Circuit (P.const (Ack <$>
 #if MIN_VERSION_clash_prelude(1,8,0)
                            C.unsafeToActiveLow C.hasReset
@@ -300,7 +296,7 @@ zipWith ::
   forall dom a b c.
   (a -> b -> c) ->
   Circuit
-    (Df dom a, Df dom b)
+    (I2 (Df dom a) (Df dom b))
     (Df dom c)
 zipWith f
   = Circuit (B.first C.unbundle . C.unbundle . fmap go . C.bundle . B.first C.bundle)
@@ -309,7 +305,7 @@ zipWith f
   go _ = ((Ack False, Ack False), NoData)
 
 -- | Like 'P.zip', but over two 'Df' streams.
-zip :: forall a b dom. Circuit (Df dom a, Df dom b) (Df dom (a, b))
+zip :: forall a b dom. Circuit (I2 (Df dom a) (Df dom b)) (Df dom (a, b))
 zip = zipWith (,)
 
 -- | Like 'P.partition', but over 'Df' streams
@@ -321,7 +317,7 @@ zip = zipWith (,)
 -- >>> B.bimap (take 3) (take 4) output
 -- ([7,9,11],[1,3,5,2])
 --
-partition :: forall dom a. (a -> Bool) -> Circuit (Df dom a) (Df dom a, Df dom a)
+partition :: forall dom a. (a -> Bool) -> Circuit (Df dom a) (I2 (Df dom a) (Df dom a))
 partition f
   = Circuit (B.second C.unbundle . C.unbundle . fmap go . C.bundle . B.second C.bundle)
  where
@@ -348,7 +344,7 @@ partition f
 --
 route ::
   forall n dom a. C.KnownNat n =>
-  Circuit (Df dom (C.Index n, a)) (C.Vec n (Df dom a))
+  Circuit (Df dom (C.Index n, a)) (IVec n (Df dom a))
 route
   = Circuit (B.second C.unbundle . C.unbundle . fmap go . C.bundle . B.second C.bundle)
  where
@@ -373,7 +369,7 @@ route
 select ::
   forall n dom a.
   C.KnownNat n =>
-  Circuit (C.Vec n (Df dom a), Df dom (C.Index n)) (Df dom a)
+  Circuit (I2 (IVec n (Df dom a)) (Df dom (C.Index n))) (Df dom a)
 select = selectUntil (P.const True)
 
 -- | Select /selectN/ samples from channel /n/.
@@ -393,7 +389,7 @@ selectN ::
   , C.KnownNat n
   ) =>
   Circuit
-    (C.Vec n (Df dom a), Df dom (C.Index n, C.Index selectN))
+    (I2 (IVec n (Df dom a)) (Df dom (C.Index n, C.Index selectN)))
     (Df dom a)
 selectN
   = Circuit
@@ -445,7 +441,7 @@ selectUntil ::
   C.KnownNat n =>
   (a -> Bool) ->
   Circuit
-    (C.Vec n (Df dom a), Df dom (C.Index n))
+    (I2 (IVec n (Df dom a)) (Df dom (C.Index n)))
     (Df dom a)
 selectUntil f
   = Circuit
@@ -471,7 +467,7 @@ selectUntil f
 fanout ::
   forall n dom a .
   (C.KnownNat n, C.HiddenClockResetEnable dom, 1 <= n) =>
-  Circuit (Df dom a) (C.Vec n (Df dom a))
+  Circuit (Df dom a) (IVec n (Df dom a))
 fanout = forceResetSanity |> goC
  where
   goC =
@@ -502,21 +498,21 @@ fanin ::
   forall n dom a .
   (C.KnownNat n, 1 <= n) =>
   (a -> a -> a) ->
-  Circuit (C.Vec n (Df dom a)) (Df dom a)
+  Circuit (IVec n (Df dom a)) (Df dom a)
 fanin f = bundleVec |> map (C.fold @(n C.- 1) f)
 
 -- | Merge data of multiple 'Df' streams using Monoid's '<>'.
 mfanin ::
   forall n dom a .
   (C.KnownNat n, Monoid a, 1 <= n) =>
-  Circuit (C.Vec n (Df dom a)) (Df dom a)
+  Circuit (IVec n (Df dom a)) (Df dom a)
 mfanin = fanin (<>)
 
 -- | Bundle a vector of 'Df' streams into one.
 bundleVec ::
   forall n dom a .
   (C.KnownNat n, 1 <= n) =>
-  Circuit (C.Vec n (Df dom a)) (Df dom (C.Vec n a))
+  Circuit (IVec n (Df dom a)) (Df dom (C.Vec n a))
 bundleVec
   = Circuit (B.first C.unbundle . C.unbundle . fmap go . C.bundle . B.first C.bundle)
  where
@@ -529,7 +525,7 @@ bundleVec
 unbundleVec ::
   forall n dom a .
   (C.KnownNat n, C.NFDataX a, C.HiddenClockResetEnable dom, 1 <= n) =>
-  Circuit (Df dom (C.Vec n a)) (C.Vec n (Df dom a))
+  Circuit (Df dom (C.Vec n a)) (IVec n (Df dom a))
 unbundleVec
   = Circuit (B.second C.unbundle . C.mealyB go initState . B.second C.bundle)
  where
@@ -557,7 +553,7 @@ unbundleVec
 roundrobin ::
   forall n dom a .
   (C.KnownNat n, C.HiddenClockResetEnable dom, 1 <= n) =>
-  Circuit (Df dom a) (C.Vec n (Df dom a))
+  Circuit (Df dom a) (IVec n (Df dom a))
 roundrobin
   = Circuit
   ( B.second C.unbundle
@@ -592,7 +588,7 @@ roundrobinCollect ::
   forall n dom a .
   (C.KnownNat n, C.HiddenClockResetEnable dom, 1 <= n) =>
   CollectMode ->
-  Circuit (C.Vec n (Df dom a)) (Df dom a)
+  Circuit (IVec n (Df dom a)) (Df dom a)
 roundrobinCollect NoSkip
   = Circuit (B.first C.unbundle . C.mealyB go minBound . B.first C.bundle)
  where
@@ -737,7 +733,7 @@ drive ::
   ( C.KnownDomain dom ) =>
   SimulationConfig ->
   [Maybe a] ->
-  Circuit () (Df dom a)
+  Circuit NC (Df dom a)
 drive SimulationConfig{resetCycles} s0 = Circuit $
     ((),)
   . C.fromList_lazy
@@ -762,7 +758,7 @@ sample ::
   forall dom b.
   ( C.KnownDomain dom ) =>
   SimulationConfig ->
-  Circuit () (Df dom b) ->
+  Circuit NC (Df dom b) ->
   [Maybe b]
 sample SimulationConfig{..} c =
     fmap dataToMaybe

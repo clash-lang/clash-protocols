@@ -80,8 +80,11 @@ prop_df_zipwith_add =
     (uncurry (zipWith (+)))
     (C.withClockResetEnable @C.System C.clockGen C.resetGen C.enableGen ckt)
   where
-  ckt :: (C.HiddenClockResetEnable dom) => Circuit (Df dom Int, Df dom Int) (Df dom Int)
-  ckt = DfConv.zipWith (Proxy, Proxy) Proxy (+)
+  ckt ::
+    forall dom.
+    (C.HiddenClockResetEnable dom) =>
+    Circuit (I2 (Df dom Int) (Df dom Int)) (Df dom Int)
+  ckt = DfConv.zipWith (Proxy @(Df dom Int), Proxy @(Df dom Int)) Proxy (+)
 
 prop_df_fanout1 :: Property
 prop_df_fanout1 =
@@ -92,8 +95,11 @@ prop_df_fanout1 =
     (C.exposeClockResetEnable C.repeat)
     (C.exposeClockResetEnable ckt)
   where
-  ckt :: (C.HiddenClockResetEnable dom) => Circuit (Df dom Int) (C.Vec 1 (Df dom Int))
-  ckt = DfConv.fanout Proxy Proxy
+  ckt ::
+    forall dom.
+    (C.HiddenClockResetEnable dom) =>
+    Circuit (Df dom Int) (IVec 1 (Df dom Int))
+  ckt = DfConv.fanout Proxy (Proxy @(Df dom Int))
 
 prop_df_fanout2 :: Property
 prop_df_fanout2 =
@@ -104,8 +110,11 @@ prop_df_fanout2 =
     (C.exposeClockResetEnable C.repeat)
     (C.exposeClockResetEnable ckt)
   where
-  ckt :: (C.HiddenClockResetEnable dom) => Circuit (Df dom Int) (C.Vec 2 (Df dom Int))
-  ckt = DfConv.fanout Proxy Proxy
+  ckt ::
+    forall dom.
+    (C.HiddenClockResetEnable dom) =>
+    Circuit (Df dom Int) (IVec 2 (Df dom Int))
+  ckt = DfConv.fanout Proxy (Proxy @(Df dom Int))
 
 prop_df_fanout7 :: Property
 prop_df_fanout7 =
@@ -116,8 +125,11 @@ prop_df_fanout7 =
     (C.exposeClockResetEnable C.repeat)
     (C.exposeClockResetEnable ckt)
   where
-  ckt :: (C.HiddenClockResetEnable dom) => Circuit (Df dom Int) (C.Vec 7 (Df dom Int))
-  ckt = DfConv.fanout Proxy Proxy
+  ckt ::
+    forall dom.
+    (C.HiddenClockResetEnable dom) =>
+    Circuit (Df dom Int) (IVec 7 (Df dom Int))
+  ckt = DfConv.fanout Proxy (Proxy @(Df dom Int))
 
 prop_df_partition :: Property
 prop_df_partition =
@@ -128,8 +140,11 @@ prop_df_partition =
     (C.exposeClockResetEnable $ partition (>5))
     (C.exposeClockResetEnable ckt)
   where
-  ckt :: (C.HiddenClockResetEnable dom) => Circuit (Df dom Int) (Df dom Int, Df dom Int)
-  ckt = DfConv.partition Proxy (Proxy, Proxy) (> 5)
+  ckt ::
+    forall dom.
+    (C.HiddenClockResetEnable dom) =>
+    Circuit (Df dom Int) (I2 (Df dom Int) (Df dom Int))
+  ckt = DfConv.partition Proxy (Proxy @(Df dom Int), Proxy @(Df dom Int)) (> 5)
 
 prop_df_fanin :: Property
 prop_df_fanin =
@@ -140,8 +155,11 @@ prop_df_fanin =
     (C.exposeClockResetEnable $ map sum . transpose . C.toList)
     (C.exposeClockResetEnable ckt)
   where
-  ckt :: (C.HiddenClockResetEnable dom) => Circuit (C.Vec 3 (Df dom Int)) (Df dom Int)
-  ckt = DfConv.fanin Proxy Proxy (+)
+  ckt ::
+    forall dom.
+    (C.HiddenClockResetEnable dom) =>
+    Circuit (IVec 3 (Df dom Int)) (Df dom Int)
+  ckt = DfConv.fanin (Proxy @(Df dom Int)) Proxy (+)
 
 prop_df_fifo_id :: Property
 prop_df_fifo_id = propWithModelSingleDomain
@@ -163,7 +181,10 @@ prop_select =
     (snd . uncurry (mapAccumL goModel))
     (C.withClockResetEnable @C.System C.clockGen C.resetGen C.enableGen ckt)
  where
-  ckt :: (C.HiddenClockResetEnable dom) => Circuit (C.Vec 3 (Df dom Int), Df dom (C.Index 3)) (Df dom Int)
+  ckt :: (C.HiddenClockResetEnable dom) =>
+    Circuit
+      (I2 (IVec 3 (Df dom Int)) (Df dom (C.Index 3)))
+      (Df dom Int)
   ckt = DfConv.select (Proxy @(Df _ Int), (Proxy @(Df _ (C.Index 3)))) (Proxy @(Df _ Int))
 
   goModel :: C.Vec 3 [Int] -> C.Index 3 -> (C.Vec 3 [Int], Int)
@@ -203,8 +224,8 @@ prop_test_bench_id =
  where
   ckt :: (C.HiddenClockResetEnable dom) =>
    Circuit
-   (Df dom Int, Reverse (Df dom Int))
-   (Df dom Int, Reverse (Df dom Int))
+     (I2 (Df dom Int) (Reverse (Df dom Int)))
+     (I2 (Df dom Int) (Reverse (Df dom Int)))
   ckt = DfConv.convert Proxy Proxy
 
 prop_test_bench_rev_id :: Property
@@ -219,8 +240,8 @@ prop_test_bench_rev_id =
  where
   ckt :: (C.HiddenClockResetEnable dom) =>
    Circuit
-   (Df dom Int, Reverse (Df dom Int))
-   (Df dom Int, Reverse (Df dom Int))
+     (I2 (Df dom Int) (Reverse (Df dom Int)))
+     (I2 (Df dom Int) (Reverse (Df dom Int)))
   ckt = DfConv.convert Proxy Proxy
 
 

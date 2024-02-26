@@ -69,12 +69,12 @@ prop_axi4_convert_write_id =
  where
   ckt :: (C.HiddenClockResetEnable dom) =>
    Circuit
-    (Axi4WriteAddress dom ConfAW Int,
-     Axi4WriteData dom ConfW Int,
-     Reverse (Axi4WriteResponse dom ConfB Int))
-    (Axi4WriteAddress dom ConfAW Int,
-     Axi4WriteData dom ConfW Int,
-     Reverse (Axi4WriteResponse dom ConfB Int))
+    (I3 (Axi4WriteAddress dom ConfAW Int)
+        (Axi4WriteData dom ConfW Int)
+        (Reverse (Axi4WriteResponse dom ConfB Int)))
+    (I3 (Axi4WriteAddress dom ConfAW Int)
+        (Axi4WriteData dom ConfW Int)
+        (Reverse (Axi4WriteResponse dom ConfB Int)))
   ckt = DfConv.convert Proxy Proxy
 
   genInfo =   (,,,,)
@@ -126,12 +126,12 @@ prop_axi4_convert_write_id_rev =
  where
   ckt :: (C.HiddenClockResetEnable dom) =>
    Circuit
-    (Axi4WriteAddress dom ConfAW Int,
-     Axi4WriteData dom ConfW Int,
-     Reverse (Axi4WriteResponse dom ConfB Int))
-    (Axi4WriteAddress dom ConfAW Int,
-     Axi4WriteData dom ConfW Int,
-     Reverse (Axi4WriteResponse dom ConfB Int))
+    (I3 (Axi4WriteAddress dom ConfAW Int)
+        (Axi4WriteData dom ConfW Int)
+        (Reverse (Axi4WriteResponse dom ConfB Int)))
+    (I3 (Axi4WriteAddress dom ConfAW Int)
+        (Axi4WriteData dom ConfW Int)
+        (Reverse (Axi4WriteResponse dom ConfB Int)))
   ckt = DfConv.convert Proxy Proxy
 
   genInfo = (,) <$> genResp <*> DfTest.genSmallInt
@@ -175,10 +175,10 @@ prop_axi4_convert_read_id =
  where
   ckt :: (C.HiddenClockResetEnable dom) =>
    Circuit
-   (Axi4ReadAddress dom ConfAR Int,
-    Reverse (Axi4ReadData dom ConfR Int Int))
-   (Axi4ReadAddress dom ConfAR Int,
-    Reverse (Axi4ReadData dom ConfR Int Int))
+     (I2 (Axi4ReadAddress dom ConfAR Int)
+         (Reverse (Axi4ReadData dom ConfR Int Int)))
+     (I2 (Axi4ReadAddress dom ConfAR Int)
+         (Reverse (Axi4ReadData dom ConfR Int Int)))
   ckt = DfConv.convert Proxy Proxy
 
   genInfo
@@ -222,10 +222,10 @@ prop_axi4_convert_read_id_rev =
  where
   ckt :: (C.HiddenClockResetEnable dom) =>
    Circuit
-   (Axi4ReadAddress dom ConfAR Int,
-    Reverse (Axi4ReadData dom ConfR Int Int))
-   (Axi4ReadAddress dom ConfAR Int,
-    Reverse (Axi4ReadData dom ConfR Int Int))
+     (I2 (Axi4ReadAddress dom ConfAR Int)
+         (Reverse (Axi4ReadData dom ConfR Int Int)))
+     (I2 (Axi4ReadAddress dom ConfAR Int)
+         (Reverse (Axi4ReadData dom ConfR Int Int)))
   ckt = DfConv.convert Proxy Proxy
 
   genInfo

@@ -59,7 +59,7 @@ genWbTransferPair genA = liftA2 (,) (genWishboneTransfer genA) genSmallInt
 addrReadIdWb ::
   forall dom addressWidth.
   (KnownNat addressWidth) =>
-  Circuit (Wishbone dom 'Standard addressWidth (BitVector addressWidth)) ()
+  Circuit (Wishbone dom 'Standard addressWidth (BitVector addressWidth)) NC
 addrReadIdWb = Circuit go
   where
     go (m2s, ()) = (reply <$> m2s, ())
@@ -156,7 +156,7 @@ prop_memoryWb_model = property $
 -- Helpers
 --
 
-(|>>) :: Circuit () b -> Circuit b () -> (Fwd b, Bwd b)
+(|>>) :: Circuit NC b -> Circuit b NC -> (Fwd b, Bwd b)
 Circuit aFn |>> Circuit bFn = (s2rAb, r2sBc)
   where
     ~((), s2rAb) = aFn ((), r2sBc)
@@ -165,8 +165,8 @@ Circuit aFn |>> Circuit bFn = (s2rAb, r2sBc)
 evaluateUnitCircuit ::
   (KnownDomain dom, KnownNat (BitSize a), KnownNat addressWidth, NFDataX a) =>
   Int ->
-  Circuit () (Wishbone dom 'Standard addressWidth a) ->
-  Circuit (Wishbone dom 'Standard addressWidth a) () ->
+  Circuit NC (Wishbone dom 'Standard addressWidth a) ->
+  Circuit (Wishbone dom 'Standard addressWidth a) NC ->
   Int
 evaluateUnitCircuit n a b =
   let (bundle -> signals) = a |>> b
@@ -260,7 +260,7 @@ prop_specViolation_lenient = property $ do
   assert $ isLeft res
   where
     -- a circuit that terminates a cycle with more than one termination signal
-    invalidCircuit :: Circuit (Wishbone dom 'Standard 8 (BitVector 8)) ()
+    invalidCircuit :: Circuit (Wishbone dom 'Standard 8 (BitVector 8)) NC
     invalidCircuit = Circuit go
       where
         go (m2s, ()) = (reply <$> m2s, ())

@@ -4,6 +4,7 @@ Types and instance declarations for the Avalon-stream protocol.
 
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MagicHash #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -136,22 +137,28 @@ newtype AvalonStreamS2M (readyLatency :: Nat) = AvalonStreamS2M { _ready :: Bool
   deriving (Generic, C.NFDataX, C.ShowX, Eq, NFData, Show, Bundle)
 
 -- | Type for Avalon Stream protocol.
-data AvalonStream (dom :: Domain) (conf :: AvalonStreamConfig) (dataType :: Type)
+type AvalonStream (dom :: Domain) (conf :: AvalonStreamConfig) (dataType :: Type)
+  = AvalonStream# dom conf dataType (ReadyLatency conf)
 
-instance Protocol (AvalonStream dom conf dataType) where
-  type Fwd (AvalonStream dom conf dataType)
-    = Signal dom (Maybe (AvalonStreamM2S conf dataType))
-  type Bwd (AvalonStream dom conf dataType)
-    = Signal dom (AvalonStreamS2M (ReadyLatency conf))
+type AvalonStream#
+  (dom :: Domain)
+  (conf :: AvalonStreamConfig)
+  (dataType :: Type)
+  (n :: Nat)
+  =  (Signal dom (Maybe (AvalonStreamM2S conf dataType)))
+  >< (Signal dom (AvalonStreamS2M n))
 
 instance (ReadyLatency conf ~ 0) =>
-  Backpressure (AvalonStream dom conf dataType) where
+  Backpressure (AvalonStream# dom conf dataType 0) where
   boolsToBwd _ = C.fromList_lazy . fmap AvalonStreamS2M
 
-instance (KnownAvalonStreamConfig conf, NFDataX dataType) =>
-  DfConv.DfConv    (AvalonStream dom conf dataType) where
-  type Dom         (AvalonStream dom conf dataType) = dom
-  type FwdPayload  (AvalonStream dom conf dataType)
+instance
+  ( ReadyLatency conf ~ n
+  , KnownAvalonStreamConfig conf
+  , NFDataX dataType ) =>
+  DfConv.DfConv    (AvalonStream# dom conf dataType n) where
+  type Dom         (AvalonStream# dom conf dataType n) = dom
+  type FwdPayload  (AvalonStream# dom conf dataType n)
     = AvalonStreamM2S conf dataType
 
   toDfCircuit proxy = DfConv.toDfCircuitHelper proxy s0 blankOtp stateFn where
@@ -181,11 +188,11 @@ instance
   , KnownAvalonStreamConfig conf
   , NFDataX dataType
   , KnownDomain dom ) =>
-  Simulate (AvalonStream dom conf dataType) where
-  type SimulateFwdType (AvalonStream dom conf dataType)
+  Simulate (AvalonStream# dom conf dataType 0) where
+  type SimulateFwdType (AvalonStream# dom conf dataType 0)
     = [Maybe (AvalonStreamM2S conf dataType)]
-  type SimulateBwdType (AvalonStream dom conf dataType) = [AvalonStreamS2M 0]
-  type SimulateChannels (AvalonStream dom conf dataType) = 1
+  type SimulateBwdType (AvalonStream# dom conf dataType 0) = [AvalonStreamS2M 0]
+  type SimulateChannels (AvalonStream# dom conf dataType 0) = 1
 
   simToSigFwd _ = fromList_lazy
   simToSigBwd _ = fromList_lazy
@@ -201,8 +208,8 @@ instance
   , KnownAvalonStreamConfig conf
   , NFDataX dataType
   , KnownDomain dom ) =>
-  Drivable (AvalonStream dom conf dataType) where
-  type ExpectType (AvalonStream dom conf dataType)
+  Drivable (AvalonStream# dom conf dataType 0) where
+  type ExpectType (AvalonStream# dom conf dataType 0)
     = [AvalonStreamM2S conf dataType]
 
   toSimulateType Proxy = P.map Just
@@ -225,7 +232,7 @@ instance
   , Show dataType
   , Eq dataType
   , KnownDomain dom ) =>
-  Test (AvalonStream dom conf dataType) where
+  Test (AvalonStream# dom conf dataType 0) where
 
   expectToLengths Proxy = pure . P.length
   expectN Proxy options nExpected sampled

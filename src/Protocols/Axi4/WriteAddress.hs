@@ -124,16 +124,12 @@ type family AWKeepQos (c :: Axi4WriteAddressConfig) where
   AWKeepQos ('Axi4WriteAddressConfig _ _ _ _ _ _ _ _ _ a) = a
 
 -- | AXI4 Write Address channel protocol
-data Axi4WriteAddress
+type Axi4WriteAddress
   (dom :: C.Domain)
   (conf :: Axi4WriteAddressConfig)
   (userType :: Type)
-
-instance Protocol (Axi4WriteAddress dom conf userType) where
-  type Fwd (Axi4WriteAddress dom conf userType) =
-    C.Signal dom (M2S_WriteAddress conf userType)
-  type Bwd (Axi4WriteAddress dom conf userType) =
-    C.Signal dom S2M_WriteAddress
+  =  C.Signal dom (M2S_WriteAddress conf userType)
+  >< C.Signal dom S2M_WriteAddress
 
 instance Backpressure (Axi4WriteAddress dom conf userType) where
   boolsToBwd _ = C.fromList_lazy . coerce

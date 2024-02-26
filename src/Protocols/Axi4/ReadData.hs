@@ -55,17 +55,13 @@ type family RIdWidth (conf :: Axi4ReadDataConfig) where
   RIdWidth ('Axi4ReadDataConfig _ a) = a
 
 -- | AXI4 Read Data channel protocol
-data Axi4ReadData
+type Axi4ReadData
   (dom :: C.Domain)
   (conf :: Axi4ReadDataConfig)
   (userType :: Type)
   (dataType :: Type)
-
-instance Protocol (Axi4ReadData dom conf userType dataType) where
-  type Fwd (Axi4ReadData dom conf userType dataType) =
-    C.Signal dom (S2M_ReadData conf userType dataType)
-  type Bwd (Axi4ReadData dom conf userType dataType) =
-    C.Signal dom M2S_ReadData
+  =  C.Signal dom (S2M_ReadData conf userType dataType)
+  >< C.Signal dom M2S_ReadData
 
 instance Backpressure (Axi4ReadData dom conf userType dataType) where
   boolsToBwd _ = C.fromList_lazy . coerce
