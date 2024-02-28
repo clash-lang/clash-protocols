@@ -83,10 +83,21 @@ deriving instance
   , C.NFDataX userType
   ) => C.NFDataX (Axi4StreamM2S conf userType)
 
-deriving instance
-  ( KnownAxi4StreamConfig conf
-  , Eq userType
-  ) => Eq (Axi4StreamM2S conf userType)
+instance ( KnownAxi4StreamConfig conf, Eq userType) => Eq (Axi4StreamM2S conf userType) where
+  axiA == axiB = lastSame && idSame && destSame && userSame && and keepsSame && and bytesValid
+   where
+    keepsSame = (==) <$> _tkeep axiA <*> _tkeep axiB
+    lastSame = _tlast axiA == _tlast axiB
+    idSame = _tid axiA == _tid axiB
+    destSame = _tdest axiA == _tdest axiB
+    userSame = _tuser axiA == _tuser axiB
+
+    -- For all bytes where the keep is high, the data and strb must be the same.
+    keeps = (||) <$> _tkeep axiA <*> _tkeep axiB
+    dataSame = (==) <$> _tdata axiA <*> _tdata axiB
+    strbSame = (==) <$> _tstrb axiA <*> _tstrb axiB
+    bytesValid = zipWith3 (\ k d s -> (not k) || (d && s)) keeps strbSame dataSame
+
 
 deriving instance
   ( KnownAxi4StreamConfig conf
