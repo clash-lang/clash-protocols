@@ -1,13 +1,17 @@
 {-|
 Internal module to prevent hs-boot files (breaks Haddock)
 -}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE RoleAnnotations #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE CPP #-}
+
+#if !MIN_VERSION_clash_prelude(1, 8, 2)
 {-# OPTIONS_GHC -fno-warn-orphans #-} -- NFDataX and ShowX for Identity and Proxy
+#endif
 
 -- TODO: Hide internal documentation
 -- {-# OPTIONS_HADDOCK hide #-}
@@ -25,7 +29,6 @@ import           Clash.Prelude (Signal, type (+), type (*))
 import qualified Clash.Prelude as C
 import qualified Clash.Explicit.Prelude as CE
 
-import           Control.Applicative (Const(..))
 import           Control.Arrow ((***))
 import           Data.Coerce (coerce)
 import           Data.Default (Default(def))
@@ -159,13 +162,14 @@ newtype Ack = Ack Bool
 instance Default Ack where
   def = Ack True
 
--- | Circuit protocol with /CSignal dom a/ in its forward direction, and
--- /CSignal dom ()/ in its backward direction. Convenient for exposing
--- protocol internals.
-data CSignal dom a = CSignal (Signal dom a)
-
-instance Default a => Default (CSignal dom a) where
-  def = CSignal def
+-- | Circuit protocol with /Signal dom a/ in its forward direction, and
+-- /()/ in its backward direction. Convenient for exposing protocol
+-- internals, or simply for undirectional streams.
+--
+-- Note: 'CSignal' exists to work around [issue 760](https://github.com/clash-lang/clash-compiler/issues/760)
+--       in Clash, where type families with 'Signal' on the LHS are broken.
+data CSignal (dom :: CE.Domain) (a :: Type)
+type role CSignal nominal representational
 
 -- | A protocol describes the in- and outputs of one side of a 'Circuit'.
 class Protocol a where
@@ -199,8 +203,8 @@ instance C.KnownNat n => Protocol (C.Vec n a) where
 
 -- XXX: Type families with Signals on LHS are currently broken on Clash:
 instance Protocol (CSignal dom a) where
-  type Fwd (CSignal dom a) = CSignal dom a
-  type Bwd (CSignal dom a) = CSignal dom ()
+  type Fwd (CSignal dom a) = Signal dom a
+  type Bwd (CSignal dom a) = ()
 
 -- | Left-to-right circuit composition.
 --
@@ -253,7 +257,7 @@ instance (C.KnownNat n, Backpressure a) => Backpressure (C.Vec n a) where
   boolsToBwd _ bs = C.repeat (boolsToBwd (Proxy @a) bs)
 
 instance Backpressure (CSignal dom a) where
-  boolsToBwd _ _ = CSignal (pure ())
+  boolsToBwd _ _ = ()
 
 -- | Right-to-left circuit composition.
 --
@@ -600,15 +604,12 @@ instance (C.KnownDomain dom) => Simulate (CSignal dom a) where
   type SimulateBwdType (CSignal dom a) = ()
   type SimulateChannels (CSignal dom a) = 1
 
-  simToSigFwd Proxy list = CSignal (C.fromList_lazy list)
+  simToSigFwd Proxy list = C.fromList_lazy list
   simToSigBwd Proxy () = def
-  sigToSimFwd Proxy (CSignal sig) = C.sample_lazy sig
+  sigToSimFwd Proxy sig = C.sample_lazy sig
   sigToSimBwd Proxy _ = ()
 
   stallC _ _ = idC
-
-instance Default (CSignal dom (Const () a)) where
-  def = CSignal (pure (Const ()))
 
 instance (C.NFDataX a, C.ShowX a, Show a, C.KnownDomain dom) => Drivable (CSignal dom a) where
   type ExpectType (CSignal dom a) = [a]
@@ -619,10 +620,10 @@ instance (C.NFDataX a, C.ShowX a, Show a, C.KnownDomain dom) => Drivable (CSigna
   driveC _conf [] = error "CSignal.driveC: Can't drive with empty list"
   driveC SimulationConfig{resetCycles} fwd0@(f:_) =
     let fwd1 = C.fromList_lazy (replicate resetCycles f <> fwd0 <> repeat f) in
-    Circuit ( \_ -> ((), CSignal fwd1) )
+    Circuit ( \_ -> ((), fwd1) )
 
   sampleC SimulationConfig{resetCycles, ignoreReset} (Circuit f) =
-    let sampled = CE.sample_lazy ((\(CSignal s) -> s) (snd (f ((), def)))) in
+    let sampled = CE.sample_lazy (id (snd (f ((), def)))) in
     if ignoreReset then drop resetCycles sampled else sampled
 
 
