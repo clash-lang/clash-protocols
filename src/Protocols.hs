@@ -22,6 +22,7 @@ module Protocols
   , fromSignals, toSignals
 
     -- * Protocol types
+  , CSignal
   , Df
 
     -- * Basic circuits
