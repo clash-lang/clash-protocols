@@ -8,7 +8,6 @@ module Protocols.Wishbone.Standard where
 import Clash.Prelude
 import qualified Data.Bifunctor as B
 import Protocols
-import Protocols.Internal
 import Protocols.Wishbone
 import Prelude hiding (head, not, repeat, (!!), (&&), (||))
 
