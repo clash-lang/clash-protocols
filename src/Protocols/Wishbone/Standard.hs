@@ -8,7 +8,6 @@ module Protocols.Wishbone.Standard where
 import Clash.Prelude
 import qualified Data.Bifunctor as B
 import Protocols
-import Protocols.Internal
 import Protocols.Wishbone
 import Prelude hiding (head, not, repeat, (!!), (&&), (||))
 
@@ -89,8 +88,8 @@ crossbarSwitch ::
     (Vec m (Wishbone dom 'Standard addressWidth a)) -- slaves
 crossbarSwitch = Circuit go
  where
-  go ((CSignal route, bundle -> m2ss0), bundle -> s2ms0) =
-    ((CSignal (pure ()), unbundle s2ms1), unbundle m2ss1)
+  go ((route, bundle -> m2ss0), bundle -> s2ms0) =
+    (((), unbundle s2ms1), unbundle m2ss1)
    where
     m2ss1 = scatter @_ @_ @_ @_ @0 (repeat emptyWishboneM2S) <$> route <*> m2ss0
     s2ms1 = gather <$> s2ms0 <*> route
