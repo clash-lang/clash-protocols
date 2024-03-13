@@ -89,7 +89,7 @@ crossbarSwitch ::
 crossbarSwitch = Circuit go
  where
   go ((route, bundle -> m2ss0), bundle -> s2ms0) =
-    (((), unbundle s2ms1), unbundle m2ss1)
+    ((pure (), unbundle s2ms1), unbundle m2ss1)
    where
     m2ss1 = scatter @_ @_ @_ @_ @0 (repeat emptyWishboneM2S) <$> route <*> m2ss0
     s2ms1 = gather <$> s2ms0 <*> route

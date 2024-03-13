@@ -204,7 +204,7 @@ instance C.KnownNat n => Protocol (C.Vec n a) where
 -- XXX: Type families with Signals on LHS are currently broken on Clash:
 instance Protocol (CSignal dom a) where
   type Fwd (CSignal dom a) = Signal dom a
-  type Bwd (CSignal dom a) = ()
+  type Bwd (CSignal dom a) = Signal dom ()
 
 -- | Left-to-right circuit composition.
 --
@@ -257,7 +257,7 @@ instance (C.KnownNat n, Backpressure a) => Backpressure (C.Vec n a) where
   boolsToBwd _ bs = C.repeat (boolsToBwd (Proxy @a) bs)
 
 instance Backpressure (CSignal dom a) where
-  boolsToBwd _ _ = ()
+  boolsToBwd _ _ = pure ()
 
 -- | Right-to-left circuit composition.
 --
