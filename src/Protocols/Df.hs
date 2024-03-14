@@ -59,6 +59,10 @@ module Protocols.Df
   , forceResetSanity
   , dataToMaybe
   , maybeToData
+  , hasData
+  , noData
+  , fromData
+  , toData
   ) where
 
 -- base
@@ -151,6 +155,26 @@ dataToMaybe (Data a) = Just a
 maybeToData :: Maybe a -> Data a
 maybeToData Nothing = NoData
 maybeToData (Just a) = Data a
+
+-- | True if `Data` contains a value.
+hasData :: Data a -> Bool
+hasData NoData = False
+hasData (Data _) = True
+
+-- | True if `Data` contains no value.
+noData :: Data a -> Bool
+noData NoData = True
+noData (Data _) = False
+
+-- | Extract value from `Data`, Bottom on `NoData`.
+fromData :: (HasCallStack, C.NFDataX a) => Data a -> a
+fromData NoData = C.deepErrorX "fromData: NoData"
+fromData (Data a) = a
+
+-- | Construct a `Data` if bool is True, `NoData` otherwise.
+toData :: Bool -> a -> Data a
+toData False _ = NoData
+toData True a = Data a
 
 instance (C.KnownDomain dom, C.NFDataX a, C.ShowX a, Show a) => Simulate (Df dom a) where
   type SimulateFwdType (Df dom a) = [Data a]
@@ -632,7 +656,7 @@ roundrobinCollect Parallel
       | Maybe.isJust (dataToMaybe dat) = Just (i, dat)
       | otherwise = Nothing
 
--- | Place register on /forward/ part of a circuit.
+-- | Place register on /forward/ part of a circuit. This adds combinational delay on the /backward/ path.
 registerFwd ::
   forall dom a .
   (C.NFDataX a, C.HiddenClockResetEnable dom) =>
@@ -645,21 +669,21 @@ registerFwd
      oAck = Maybe.isNothing (dataToMaybe s0) || iAck
      s1 = if oAck then iDat else s0
 
--- | Place register on /backward/ part of a circuit. This is implemented using a
--- in-logic two-element shift register.
+-- | Place register on /backward/ part of a circuit. This adds combinational delay on the /forward/ path.
 registerBwd ::
   forall dom a .
   (C.NFDataX a, C.HiddenClockResetEnable dom) =>
   Circuit (Df dom a) (Df dom a)
 registerBwd
-  = forceResetSanity |> Circuit (C.mealyB go (NoData, NoData))
+  = forceResetSanity |> Circuit go
  where
-   go (ra0, rb) (iDat, Ack iAck) =
-     (s, (Ack oAck, rb))
-    where
-     oAck = Maybe.isNothing (dataToMaybe ra0)
-     ra1 = if oAck then iDat else ra0
-     s = if Maybe.isNothing (dataToMaybe rb) || iAck then (NoData, ra1) else (ra1, rb)
+   go (iDat, iAck) = (Ack <$> oAck, oDat)
+     where
+       oAck = C.regEn True valid (coerce <$> iAck)
+       valid = (hasData <$> iDat) C..||. (fmap not oAck)
+       iDatX0 = fromData <$> iDat
+       iDatX1 = C.regEn (C.errorX "registerBwd") oAck iDatX0
+       oDat = toData <$> valid <*> (C.mux oAck iDatX0 iDatX1)
 
 -- | A fifo buffer with user-provided depth. Uses blockram to store data. Can
 -- handle simultaneous write and read (full throughput rate).
