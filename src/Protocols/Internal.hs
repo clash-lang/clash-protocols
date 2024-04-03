@@ -29,6 +29,9 @@ import           Clash.Prelude (Signal, type (+), type (*))
 import qualified Clash.Prelude as C
 import qualified Clash.Explicit.Prelude as CE
 
+import           Protocols.Internal.TH (protocolTupleInstances)
+import           Protocols.Cpp (maxTupleSize)
+
 import           Control.Arrow ((***))
 import           Data.Coerce (coerce)
 import           Data.Default (Default(def))
@@ -185,33 +188,17 @@ instance Protocol () where
   type Fwd () = ()
   type Bwd () = ()
 
+-- | __NB__: The documentation only shows instances up to /3/-tuples. By
+-- default, instances up to and including /12/-tuples will exist. If the flag
+-- @large-tuples@ is set instances up to the GHC imposed limit will exist. The
+-- GHC imposed limit is either 62 or 64 depending on the GHC version.
 instance Protocol (a, b) where
   type Fwd (a, b) = (Fwd a, Fwd b)
   type Bwd (a, b) = (Bwd a, Bwd b)
 
-instance Protocol (a, b, c) where
-  type Fwd (a, b, c) = (Fwd a, Fwd b, Fwd c)
-  type Bwd (a, b, c) = (Bwd a, Bwd b, Bwd c)
 
-instance Protocol (a, b, c, d) where
-  type Fwd (a, b, c, d) = (Fwd a, Fwd b, Fwd c, Fwd d)
-  type Bwd (a, b, c, d) = (Bwd a, Bwd b, Bwd c, Bwd d)
-
-instance Protocol (a, b, c, d, e) where
-  type Fwd (a, b, c, d, e) = (Fwd a, Fwd b, Fwd c, Fwd d, Fwd e)
-  type Bwd (a, b, c, d, e) = (Bwd a, Bwd b, Bwd c, Bwd d, Bwd e)
-
-instance Protocol (a, b, c, d, e, f) where
-  type Fwd (a, b, c, d, e, f) = (Fwd a, Fwd b, Fwd c, Fwd d, Fwd e, Fwd f)
-  type Bwd (a, b, c, d, e, f) = (Bwd a, Bwd b, Bwd c, Bwd d, Bwd e, Bwd f)
-
-instance Protocol (a, b, c, d, e, f, g) where
-  type Fwd (a, b, c, d, e, f, g) = (Fwd a, Fwd b, Fwd c, Fwd d, Fwd e, Fwd f, Fwd g)
-  type Bwd (a, b, c, d, e, f, g) = (Bwd a, Bwd b, Bwd c, Bwd d, Bwd e, Bwd f, Bwd g)
-
-instance Protocol (a, b, c, d, e, f, g, h) where
-  type Fwd (a, b, c, d, e, f, g, h) = (Fwd a, Fwd b, Fwd c, Fwd d, Fwd e, Fwd f, Fwd g, Fwd h)
-  type Bwd (a, b, c, d, e, f, g, h) = (Bwd a, Bwd b, Bwd c, Bwd d, Bwd e, Bwd f, Bwd g, Bwd h)
+-- Generate n-tuple instances, where n > 2
+protocolTupleInstances maxTupleSize
 
 instance C.KnownNat n => Protocol (C.Vec n a) where
   type Fwd (C.Vec n a) = C.Vec n (Fwd a)

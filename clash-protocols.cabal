@@ -181,6 +181,7 @@ library
     Protocols.Internal
     Protocols.Internal.TaggedBundle
     Protocols.Internal.TaggedBundle.TH
+    Protocols.Internal.TH
     Protocols.Internal.Units
     Protocols.Internal.Units.TH
 
