@@ -27,6 +27,7 @@ module Protocols.Df
   , map, bimap
   , fst, snd
   , mapMaybe, catMaybes
+  , coerce
   , filter
   , either
   , first, {-firstT,-} mapLeft
@@ -79,7 +80,7 @@ import           Prelude hiding
 
 import qualified Data.Bifunctor as B
 import           Data.Bool (bool)
-import           Data.Coerce (coerce)
+import qualified Data.Coerce as Coerce
 import           Data.Kind (Type)
 import           Data.List ((\\))
 import qualified Data.List.NonEmpty
@@ -118,7 +119,7 @@ instance Protocol (Df dom a) where
 
 
 instance Backpressure (Df dom a) where
-  boolsToBwd _ = C.fromList_lazy . coerce
+  boolsToBwd _ = C.fromList_lazy . Coerce.coerce
 
 -- | Data sent over forward channel of 'Df'. Note that this data type is strict
 -- on its data field.
@@ -211,6 +212,10 @@ forceResetSanity
 #else
   rstLow = C.unsafeToHighPolarity C.hasReset
 #endif
+
+-- | Coerce the payload of a Df stream.
+coerce :: (Coerce.Coercible a b) => Circuit (Df dom a) (Df dom b)
+coerce = fromSignals $ \(fwdA, bwdB) -> (Coerce.coerce bwdB, Coerce.coerce fwdA)
 
 -- | Like 'P.map', but over payload (/a/) of a Df stream.
 map :: (a -> b) -> Circuit (Df dom a) (Df dom b)
@@ -679,7 +684,7 @@ registerBwd
  where
    go (iDat, iAck) = (Ack <$> oAck, oDat)
      where
-       oAck = C.regEn True valid (coerce <$> iAck)
+       oAck = C.regEn True valid (Coerce.coerce <$> iAck)
        valid = (hasData <$> iDat) C..||. (fmap not oAck)
        iDatX0 = fromData <$> iDat
        iDatX1 = C.regEn (C.errorX "registerBwd") oAck iDatX0
