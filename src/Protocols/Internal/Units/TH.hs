@@ -1,6 +1,6 @@
 {-# OPTIONS_HADDOCK hide #-}
 
-module Protocols.Internal.Units.TH where
+module Protocols.Internal.Units.TH (unitsTupleInstances) where
 
 import Language.Haskell.TH
 
