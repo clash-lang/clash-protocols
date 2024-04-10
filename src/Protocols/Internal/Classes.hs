@@ -132,3 +132,9 @@ class Protocol a where
 --
 newtype Circuit a b =
   Circuit ( (Fwd a, Bwd b) -> (Bwd a, Fwd b) )
+
+-- | Idle state of a Circuit. Aims to provide no data for both the forward and
+-- backward direction. Transactions are not acknowledged.
+class (Protocol p) => IdleCircuit p where
+  idleSource :: Circuit () p
+  idleSink :: Circuit p ()
