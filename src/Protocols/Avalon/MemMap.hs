@@ -102,6 +102,7 @@ import           Clash.Prelude hiding (take, concat, length)
 import qualified Clash.Prelude as C
 
 -- me
+import           Protocols.Idle
 import           Protocols.Internal
 import qualified Protocols.DfConv as DfConv
 
@@ -1261,3 +1262,13 @@ instance
 --
 -- Tests can still be made for Avalon MM circuits, using 'DfConv.dfConvTestBench'.
 -- See 'Tests.Protocols.AvalonMemMap' for examples.
+
+instance (KnownManagerConfig config) =>
+  IdleCircuit (AvalonMmManager dom config) where
+    idleFwd _ = pure mmManagerOutNoData
+    idleBwd _ = pure $ boolToMmManagerAck False
+
+instance (KnownSubordinateConfig config) =>
+  IdleCircuit (AvalonMmSubordinate dom fixedWaitTime config) where
+    idleFwd _ = pure mmSubordinateInNoData
+    idleBwd _ = pure $ boolToMmSubordinateAck False

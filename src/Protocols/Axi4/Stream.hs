@@ -28,6 +28,7 @@ import           Protocols.Internal
 import qualified Protocols.Df as Df
 import qualified Protocols.DfConv as DfConv
 import           Protocols.Hedgehog.Internal
+import Protocols.Idle (IdleCircuit (..))
 
 
 instance (KnownNat n) => Hashable (Unsigned n)
@@ -173,3 +174,7 @@ instance
   expectN Proxy options nExpected sampled
     = expectN (Proxy @(Df.Df dom _)) options nExpected
     $ Df.maybeToData <$> sampled
+
+instance IdleCircuit (Axi4Stream dom conf userType) where
+  idleFwd Proxy = C.pure Nothing
+  idleBwd Proxy = C.pure $ Axi4StreamS2M False

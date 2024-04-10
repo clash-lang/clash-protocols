@@ -34,6 +34,7 @@ import qualified Clash.Prelude as C
 
 -- me
 import Protocols.Axi4.Common
+import Protocols.Idle
 import Protocols.Internal
 
 -- | Configuration options for 'Axi4ReadData'.
@@ -121,3 +122,7 @@ deriving instance
   , C.NFDataX dataType
   ) =>
   C.NFDataX (S2M_ReadData conf userType dataType)
+
+instance IdleCircuit (Axi4ReadData dom conf userType dataType) where
+  idleFwd _ = C.pure S2M_NoReadData
+  idleBwd _ = C.pure $ M2S_ReadData False

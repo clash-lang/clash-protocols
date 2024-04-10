@@ -9,6 +9,7 @@ exported elsewhere.
 module Protocols.Internal.Classes where
 
 import Data.Kind (Type)
+import Data.Proxy
 
 -- | A protocol describes the in- and outputs of one side of a 'Circuit'.
 class Protocol a where
@@ -132,3 +133,10 @@ class Protocol a where
 --
 newtype Circuit a b =
   Circuit ( (Fwd a, Bwd b) -> (Bwd a, Fwd b) )
+
+-- | Idle state of a Circuit. Aims to provide no data for both the forward and
+-- backward direction. Transactions are not acknowledged.
+class (Protocol p) => IdleCircuit p where
+  idleFwd :: Proxy p -> Fwd (p :: Type)
+  idleBwd :: Proxy p -> Bwd (p :: Type)
+

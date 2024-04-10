@@ -14,6 +14,7 @@ carries data, no metadata. For documentation see:
 {-# LANGUAGE NamedFieldPuns #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 -- TODO: Fix warnings introduced by GHC 9.2 w.r.t. incomplete lazy pattern matches
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
@@ -97,6 +98,9 @@ import qualified Clash.Explicit.Prelude as CE
 
 -- me
 import           Protocols.Internal
+import           Protocols.Internal.Classes
+
+{-# ANN module "HLint: ignore Use const" #-}
 
 -- $setup
 -- >>> import Protocols
@@ -147,6 +151,10 @@ instance Monad Data where
   (>>=) :: Data a -> (a -> Data b) -> Data b
   NoData >>= _f = NoData
   Data a >>=  f = f a
+
+instance IdleCircuit (Df dom a) where
+  idleFwd _ = C.pure NoData
+  idleBwd _ = C.pure (Ack False)
 
 -- | Convert 'Data' to 'Maybe'. Produces 'Just' on 'Data', 'Nothing' on 'NoData'.
 dataToMaybe :: Data a -> Maybe a

@@ -9,11 +9,14 @@
 module Protocols.Wishbone where
 
 import Clash.Prelude (DivRU, Nat, Type, (:::))
-import qualified Clash.Prelude as C
+import Prelude hiding (head, not, (&&))
+
 import Clash.Signal.Internal (Signal (..))
 import Control.DeepSeq (NFData)
 import Protocols
-import Prelude hiding (head, not, (&&))
+import Protocols.Internal.Classes
+
+import qualified Clash.Prelude as C
 
 -- | Data communicated from a Wishbone Master to a Wishbone Slave
 data WishboneM2S addressWidth selWidth dat = WishboneM2S
@@ -205,6 +208,11 @@ instance Protocol (Wishbone dom mode addressWidth dat) where
       Signal dom (WishboneM2S addressWidth (C.BitSize dat `DivRU` 8) dat)
 
   type Bwd (Wishbone dom mode addressWidth dat) = Signal dom (WishboneS2M dat)
+
+instance (C.KnownNat aw, C.KnownNat (C.BitSize dat), C.NFDataX dat) =>
+  IdleCircuit (Wishbone dom mode aw dat) where
+    idleFwd _ = C.pure emptyWishboneM2S
+    idleBwd _ = C.pure emptyWishboneS2M
 
 -- | Construct "default" Wishbone M2S signals
 emptyWishboneM2S ::

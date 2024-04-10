@@ -47,6 +47,7 @@ import qualified Clash.Prelude as C
 
 -- me
 import Protocols.Axi4.Common
+import Protocols.Idle (IdleCircuit (..))
 import Protocols.Internal
 
 -- | Configuration options for 'Axi4ReadAddress'.
@@ -364,3 +365,7 @@ axi4ReadAddrMsgFromReadAddrInfo Axi4ReadAddressInfo{..}
   , _arqos    = _ariqos
   , _aruser   = _ariuser
   }
+
+instance IdleCircuit (Axi4ReadAddress dom conf userType) where
+  idleFwd _ = pure M2S_NoReadAddress
+  idleBwd _ = pure S2M_ReadAddress { _arready = False }

@@ -78,7 +78,7 @@ instance Protocol (a, b) where
 
 
 -- Generate n-tuple instances, where n > 2
-protocolTupleInstances maxTupleSize
+protocolTupleInstances 3 maxTupleSize
 
 instance C.KnownNat n => Protocol (C.Vec n a) where
   type Fwd (C.Vec n a) = C.Vec n (Fwd a)

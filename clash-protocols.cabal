@@ -169,6 +169,7 @@ library
     Protocols.DfConv
     Protocols.Hedgehog
     Protocols.Hedgehog.Internal
+    Protocols.Idle
     Protocols.Internal
     Protocols.Internal.TaggedBundle
     Protocols.Internal.TaggedBundle.TH
