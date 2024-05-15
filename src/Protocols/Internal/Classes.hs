@@ -10,6 +10,7 @@ module Protocols.Internal.Classes where
 
 import Data.Kind (Type)
 import Data.Proxy
+import Clash.Signal
 
 -- | A protocol describes the in- and outputs of one side of a 'Circuit'.
 class Protocol a where
@@ -140,3 +141,25 @@ class (Protocol p) => IdleCircuit p where
   idleFwd :: Proxy p -> Fwd (p :: Type)
   idleBwd :: Proxy p -> Bwd (p :: Type)
 
+-- | Force a /nack/ on the backward channel and /no data/ on the forward
+-- channel if reset is asserted.
+forceResetSanityGeneric ::
+  forall dom a fwd bwd.
+  ( KnownDomain dom
+  , HiddenReset dom
+  , IdleCircuit a
+  , Fwd a ~ Signal dom fwd
+  , Bwd a ~ Signal dom bwd
+  ) => Circuit a a
+forceResetSanityGeneric = Circuit go
+ where
+  go (fwd, bwd) =  unbundle $
+    mux rstAsserted
+      (bundle (idleBwd $ Proxy @a, idleFwd $ Proxy @a))
+      (bundle (bwd, fwd))
+
+#if MIN_VERSION_clash_prelude(1,8,0)
+  rstAsserted = unsafeToActiveHigh hasReset
+#else
+  rstAsserted = unsafeToHighPolarity hasReset
+#endif
