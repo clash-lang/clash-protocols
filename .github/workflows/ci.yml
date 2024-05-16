@@ -111,10 +111,6 @@ jobs:
         run: |
           .ci/test_cabal.sh
 
-      - name: Documentation
-        run: |
-          .ci/build_docs.sh
-
   linting:
     name: Source code linting
     runs-on: ubuntu-latest
@@ -125,3 +121,22 @@ jobs:
       - name: Whitespace
         run: |
           .ci/test_whitespace.sh
+
+  documentation:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Haskell
+        uses: haskell-actions/setup@v2
+        id: setup-haskell-cabal
+        with:
+          ghc-version: 9.6.4
+          cabal-version: 3.10
+
+      - name: Build
+          # Make sure we use supported versions for Clash and GHC
+        run: |
+          .ci/build_docs.sh --clash 1.8.1 --ghc 9.6.4
