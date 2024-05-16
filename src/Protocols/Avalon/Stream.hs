@@ -237,3 +237,10 @@ instance IdleCircuit (AvalonStream dom conf dataType) where
   idleFwd _ = pure Nothing
   idleBwd _ = pure AvalonStreamS2M { _ready = False }
 
+-- | Force a /nack/ on the backward channel and /no data/ on the forward
+-- channel if reset is asserted.
+forceResetSanity ::
+  forall dom conf dataType.
+  ( C.HiddenClockResetEnable dom) =>
+  Circuit (AvalonStream dom conf dataType) (AvalonStream dom conf dataType)
+forceResetSanity = forceResetSanityGeneric

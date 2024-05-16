@@ -177,3 +177,10 @@ instance
 instance IdleCircuit (Axi4Stream dom conf userType) where
   idleFwd Proxy = C.pure Nothing
   idleBwd Proxy = C.pure $ Axi4StreamS2M False
+
+-- | Force a /nack/ on the backward channel and /no data/ on the forward
+-- channel if reset is asserted.
+forceResetSanity ::
+  (KnownDomain dom, HiddenReset dom) =>
+  Circuit (Axi4Stream dom conf userType) (Axi4Stream dom conf userType)
+forceResetSanity = forceResetSanityGeneric

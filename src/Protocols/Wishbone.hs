@@ -245,3 +245,14 @@ emptyWishboneS2M =
 -- | Helper function to determine whether a Slave signals the termination of a cycle.
 hasTerminateFlag :: WishboneS2M dat -> Bool
 hasTerminateFlag s2m = acknowledge s2m || err s2m || retry s2m
+
+-- | Force a /nack/ on the backward channel and /no data/ on the forward
+-- channel if reset is asserted.
+forceResetSanity ::
+  forall dom mode aw a .
+  ( C.HiddenClockResetEnable dom
+  , C.KnownNat aw
+  , C.KnownNat (C.BitSize a)
+  , C.NFDataX a) =>
+  Circuit (Wishbone dom mode aw a) (Wishbone dom mode aw a)
+forceResetSanity = forceResetSanityGeneric

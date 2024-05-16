@@ -83,6 +83,7 @@ module Protocols.Avalon.MemMap
   , subordinateOutRemoveNonDf
   , subordinateInAddNonDf
   , subordinateInRemoveNonDf
+  , forceResetSanity
 
     -- * Protocols
   , AvalonMmManager(..)
@@ -1272,3 +1273,10 @@ instance (KnownSubordinateConfig config) =>
   IdleCircuit (AvalonMmSubordinate dom fixedWaitTime config) where
     idleFwd _ = pure mmSubordinateInNoData
     idleBwd _ = pure $ boolToMmSubordinateAck False
+
+-- | Force a /nack/ on the backward channel and /no data/ on the forward
+-- channel if reset is asserted.
+forceResetSanity ::
+  (KnownDomain dom, HiddenReset dom, KnownManagerConfig config) =>
+  Circuit (AvalonMmManager dom config) (AvalonMmManager dom config)
+forceResetSanity = forceResetSanityGeneric

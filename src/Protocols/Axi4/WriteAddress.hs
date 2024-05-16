@@ -34,6 +34,7 @@ module Protocols.Axi4.WriteAddress
   , Axi4WriteAddressInfo(..)
   , axi4WriteAddrMsgToWriteAddrInfo
   , axi4WriteAddrMsgFromWriteAddrInfo
+  , forceResetSanity
   ) where
 
 -- base
@@ -361,3 +362,10 @@ axi4WriteAddrMsgFromWriteAddrInfo _awlen _awburst Axi4WriteAddressInfo{..}
 instance IdleCircuit (Axi4WriteAddress dom conf userType) where
   idleFwd _ = C.pure M2S_NoWriteAddress
   idleBwd _ = C.pure $ S2M_WriteAddress False
+
+-- | Force a /nack/ on the backward channel and /no data/ on the forward
+-- channel if reset is asserted.
+forceResetSanity ::
+  (C.KnownDomain dom, C.HiddenReset dom) =>
+  Circuit (Axi4WriteAddress dom conf userType) (Axi4WriteAddress dom conf userType)
+forceResetSanity = forceResetSanityGeneric
