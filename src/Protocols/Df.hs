@@ -98,7 +98,6 @@ import qualified Clash.Explicit.Prelude as CE
 
 -- me
 import           Protocols.Internal
-import           Protocols.Internal.Classes
 
 {-# ANN module "HLint: ignore Use const" #-}
 

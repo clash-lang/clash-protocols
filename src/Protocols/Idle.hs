@@ -12,7 +12,6 @@ module Protocols.Idle
 import Data.Proxy
 import Protocols.Cpp (maxTupleSize)
 import Protocols.Internal
-import Protocols.Internal.Classes
 import Protocols.Internal.TH (idleCircuitTupleInstances)
 
 instance (IdleCircuit a, IdleCircuit b) => IdleCircuit (a, b) where

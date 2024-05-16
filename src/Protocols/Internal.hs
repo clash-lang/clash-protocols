@@ -16,8 +16,7 @@ Internal module to prevent hs-boot files (breaks Haddock)
 
 module Protocols.Internal
   ( module Protocols.Internal
-  , Protocol(..)
-  , Circuit(..)
+  , module Protocols.Internal.Classes
   ) where
 
 import           Control.DeepSeq (NFData)
@@ -31,7 +30,7 @@ import           Clash.Prelude (Signal, type (+), type (*))
 import qualified Clash.Prelude as C
 import qualified Clash.Explicit.Prelude as CE
 
-import           Protocols.Internal.Classes (Circuit(..), Protocol(..))
+import           Protocols.Internal.Classes
 import           Protocols.Internal.TH (protocolTupleInstances)
 import           Protocols.Cpp (maxTupleSize)
 

@@ -24,11 +24,10 @@ import           Clash.Prelude hiding (take, concat, length)
 import qualified Clash.Prelude as C
 
 -- me
+import           Protocols.Hedgehog.Internal
 import           Protocols.Internal
 import qualified Protocols.Df as Df
 import qualified Protocols.DfConv as DfConv
-import           Protocols.Hedgehog.Internal
-import Protocols.Idle (IdleCircuit (..))
 
 
 instance (KnownNat n) => Hashable (Unsigned n)
