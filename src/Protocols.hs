@@ -16,6 +16,7 @@ module Protocols
   , Protocol(Fwd, Bwd)
   , Backpressure(boolsToBwd)
   , Ack(..)
+  , Reverse
 
     -- * Combinators & functions
   , (|>), (<|)
