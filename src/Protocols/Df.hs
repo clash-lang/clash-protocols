@@ -24,11 +24,12 @@ module Protocols.Df
 
     -- * Operations on Df protocol
   , const, void, pure
-  , map, bimap
+  , map, mapS, bimap
   , fst, snd
   , mapMaybe, catMaybes
   , coerce
   , filter
+  , filterS
   , either
   , first, {-firstT,-} mapLeft
   , second, {-secondT,-} mapRight
@@ -219,11 +220,13 @@ coerce = fromSignals $ \(fwdA, bwdB) -> (Coerce.coerce bwdB, Coerce.coerce fwdA)
 
 -- | Like 'P.map', but over payload (/a/) of a Df stream.
 map :: (a -> b) -> Circuit (Df dom a) (Df dom b)
-map f = Circuit (uncurry go)
+map f = mapS (C.pure f)
+
+-- | Like 'map', but can reason over signals.
+mapS :: Signal dom (a -> b) -> Circuit (Df dom a) (Df dom b)
+mapS fS = Circuit (C.unbundle . liftA2 go fS . C.bundle)
  where
-  go fwd bwd =
-    ( bwd
-    , fmap f <$> fwd )
+  go f (fwd, bwd) = (bwd, f <$> fwd)
 
 -- | Like 'P.map', but over payload (/a/) of a Df stream.
 bimap :: B.Bifunctor p => (a -> b) -> (c -> d) -> Circuit (Df dom (p a c)) (Df dom (p b d))
@@ -299,10 +302,14 @@ mapMaybe f = map f |> catMaybes
 -- [7,10,11]
 --
 filter :: forall dom a. (a -> Bool) -> Circuit (Df dom a) (Df dom a)
-filter f = Circuit (C.unbundle . fmap go . C.bundle)
+filter f = filterS (C.pure f)
+
+-- | Like `filter`, but can reason of signals.
+filterS :: forall dom a. Signal dom (a -> Bool) -> Circuit (Df dom a) (Df dom a)
+filterS fS = Circuit (C.unbundle . liftA2 go fS . C.bundle)
  where
-  go (NoData, _) = (Ack False, NoData)
-  go (Data d, ack)
+  go _ (NoData, _) = (Ack False, NoData)
+  go f (Data d, ack)
     | f d = (ack, Data d)
     | otherwise = (Ack True, NoData)
 
