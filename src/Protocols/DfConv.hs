@@ -37,10 +37,11 @@ module Protocols.DfConv
     -- * Df functions generalized to Dflike
   , convert
   , const, void, pure
-  , map, bimap
+  , map, mapS, bimap
   , fst, snd
   , mapMaybe, catMaybes
   , filter
+  , filterS
   , either
   , first, {-firstT,-} mapLeft
   , second, {-secondT,-} mapRight
@@ -625,6 +626,22 @@ map dfA dfB f
   |> tupCircuits (Df.map f) idC
   |> toDfCircuit dfB
 
+-- | Like 'Df.mapS'
+mapS ::
+  ( DfConv dfA
+  , DfConv dfB
+  , BwdPayload dfA ~ BwdPayload dfB
+  , Dom dfA ~ Dom dfB
+  , HiddenClockResetEnable (Dom dfA) ) =>
+  Proxy dfA ->
+  Proxy dfB ->
+  Signal (Dom dfA) (FwdPayload dfA -> FwdPayload dfB) ->
+  Circuit dfA dfB
+mapS dfA dfB fS
+  =  fromDfCircuit dfA
+  |> tupCircuits (Df.mapS fS) idC
+  |> toDfCircuit dfB
+
 -- | Like 'P.fst'
 fst ::
   ( DfConv dfA
@@ -801,6 +818,23 @@ filter ::
 filter dfA dfB f
   =  fromDfCircuit dfA
   |> tupCircuits (Df.filter f) idC
+  |> toDfCircuit dfB
+
+-- | Like 'Df.filterS'
+filterS ::
+  ( DfConv dfA
+  , DfConv dfB
+  , BwdPayload dfA ~ BwdPayload dfB
+  , Dom dfA ~ Dom dfB
+  , HiddenClockResetEnable (Dom dfA)
+  , FwdPayload dfA ~ FwdPayload dfB ) =>
+  Proxy dfA ->
+  Proxy dfB ->
+  Signal (Dom dfA) (FwdPayload dfA -> Bool) ->
+  Circuit dfA dfB
+filterS dfA dfB fS
+  =  fromDfCircuit dfA
+  |> tupCircuits (Df.filterS fS) idC
   |> toDfCircuit dfB
 
 -- | Like 'Data.Either.Combinators.mapLeft'
