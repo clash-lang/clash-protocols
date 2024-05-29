@@ -209,17 +209,9 @@ instance (C.KnownDomain dom, C.NFDataX a, C.ShowX a, Show a) => Drivable (Df dom
 
 -- | Force a /nack/ on the backward channel and /no data/ on the forward
 -- channel if reset is asserted.
-forceResetSanity :: forall dom a. C.HiddenClockResetEnable dom => Circuit (Df dom a) (Df dom a)
-forceResetSanity
-  = Circuit (\(fwd, bwd) -> C.unbundle . fmap f . C.bundle $ (rstLow, fwd, bwd))
- where
-  f (True,  _,   _  ) = (Ack False, NoData)
-  f (False, fwd, bwd) = (bwd, fwd)
-#if MIN_VERSION_clash_prelude(1,8,0)
-  rstLow = C.unsafeToActiveHigh C.hasReset
-#else
-  rstLow = C.unsafeToHighPolarity C.hasReset
-#endif
+forceResetSanity :: forall dom a. C.HiddenClockResetEnable dom =>
+  Circuit (Df dom a) (Df dom a)
+forceResetSanity = forceResetSanityGeneric
 
 -- | Coerce the payload of a Df stream.
 coerce :: (Coerce.Coercible a b) => Circuit (Df dom a) (Df dom b)

@@ -20,6 +20,9 @@ module Protocols.Axi4.ReadData
   , KnownAxi4ReadDataConfig
   , RKeepResponse
   , RIdWidth
+
+    -- * helpers
+  , forceResetSanity
   ) where
 
 -- base
@@ -126,3 +129,11 @@ deriving instance
 instance IdleCircuit (Axi4ReadData dom conf userType dataType) where
   idleFwd _ = C.pure S2M_NoReadData
   idleBwd _ = C.pure $ M2S_ReadData False
+
+-- | Force a /nack/ on the backward channel and /no data/ on the forward
+-- channel if reset is asserted.
+forceResetSanity ::
+  forall dom conf userType dataType.
+  ( C.HiddenClockResetEnable dom) =>
+  Circuit (Axi4ReadData dom conf userType dataType) (Axi4ReadData dom conf userType dataType)
+forceResetSanity = forceResetSanityGeneric

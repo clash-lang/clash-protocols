@@ -34,6 +34,9 @@ module Protocols.Axi4.ReadAddress
   , Axi4ReadAddressInfo(..)
   , axi4ReadAddrMsgToReadAddrInfo
   , axi4ReadAddrMsgFromReadAddrInfo
+
+    -- * helpers
+  , forceResetSanity
   ) where
 
 -- base
@@ -368,3 +371,11 @@ axi4ReadAddrMsgFromReadAddrInfo Axi4ReadAddressInfo{..}
 instance IdleCircuit (Axi4ReadAddress dom conf userType) where
   idleFwd _ = pure M2S_NoReadAddress
   idleBwd _ = pure S2M_ReadAddress { _arready = False }
+
+-- | Force a /nack/ on the backward channel and /no data/ on the forward
+-- channel if reset is asserted.
+forceResetSanity ::
+  forall dom conf userType.
+  ( C.HiddenClockResetEnable dom) =>
+  Circuit (Axi4ReadAddress dom conf userType) (Axi4ReadAddress dom conf userType)
+forceResetSanity = forceResetSanityGeneric
