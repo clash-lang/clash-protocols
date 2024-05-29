@@ -26,10 +26,11 @@ import           Clash.Prelude hiding (take, concat, length)
 import qualified Clash.Prelude as C
 
 -- me
+import           Protocols.Hedgehog.Internal
+import           Protocols.Idle
 import           Protocols.Internal
 import qualified Protocols.Df as Df
 import qualified Protocols.DfConv as DfConv
-import           Protocols.Hedgehog.Internal
 
 
 instance Hashable (C.Unsigned n)
@@ -231,3 +232,8 @@ instance
   expectN Proxy options nExpected sampled
     = expectN (Proxy @(Df.Df dom _)) options nExpected
     $ Df.maybeToData <$> sampled
+
+instance IdleCircuit (AvalonStream dom conf dataType) where
+  idleFwd _ = pure Nothing
+  idleBwd _ = pure AvalonStreamS2M { _ready = False }
+

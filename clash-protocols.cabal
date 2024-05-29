@@ -155,38 +155,32 @@ library
 
   exposed-modules:
     Protocols
-
+    Protocols.Avalon.MemMap
+    Protocols.Avalon.Stream
     Protocols.Axi4.Common
-
     Protocols.Axi4.ReadAddress
     Protocols.Axi4.ReadData
+    Protocols.Axi4.Stream
     Protocols.Axi4.WriteAddress
     Protocols.Axi4.WriteData
     Protocols.Axi4.WriteResponse
-    Protocols.Axi4.Stream
-
-    Protocols.Avalon.Stream
-
-    Protocols.Avalon.MemMap
-
-    Protocols.Wishbone
-    Protocols.Wishbone.Standard
-    Protocols.Wishbone.Standard.Hedgehog
-
     Protocols.Cpp
     Protocols.Df
     Protocols.DfConv
     Protocols.Hedgehog
     Protocols.Hedgehog.Internal
+    Protocols.Idle
     Protocols.Internal
     Protocols.Internal.TaggedBundle
     Protocols.Internal.TaggedBundle.TH
     Protocols.Internal.TH
     Protocols.Internal.Units
     Protocols.Internal.Units.TH
-
     Protocols.Plugin
     Protocols.Plugin.Internal
+    Protocols.Wishbone
+    Protocols.Wishbone.Standard
+    Protocols.Wishbone.Standard.Hedgehog
 
     -- 'testProperty' is broken upstream, it reports wrong test names
     -- TODO: test / upstream ^
@@ -197,6 +191,7 @@ library
   other-modules:
     Data.Bifunctor.Extra
     Paths_clash_protocols
+    Protocols.Internal.Classes
 
   default-language: Haskell2010
 

@@ -32,6 +32,7 @@ import qualified Clash.Prelude as C
 
 -- me
 import Protocols.Axi4.Common
+import Protocols.Idle
 import Protocols.Internal
 
 -- | Configuration options for 'Axi4WriteResponse'.
@@ -109,3 +110,7 @@ deriving instance
   , C.NFDataX userType
   ) =>
   C.NFDataX (S2M_WriteResponse conf userType)
+
+instance IdleCircuit (Axi4WriteResponse dom conf userType) where
+  idleFwd _ = pure S2M_NoWriteResponse
+  idleBwd _ = pure $ M2S_WriteResponse False

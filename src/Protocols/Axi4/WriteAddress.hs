@@ -357,3 +357,7 @@ axi4WriteAddrMsgFromWriteAddrInfo _awlen _awburst Axi4WriteAddressInfo{..}
   , _awuser   = _awiuser
   , _awlen, _awburst
   }
+
+instance IdleCircuit (Axi4WriteAddress dom conf userType) where
+  idleFwd _ = C.pure M2S_NoWriteAddress
+  idleBwd _ = C.pure $ S2M_WriteAddress False
