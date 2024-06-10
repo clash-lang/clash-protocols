@@ -2,7 +2,6 @@
 A GHC source plugin providing a DSL for writing Circuit components. Credits to
 @circuit-notation@ at <https://github.com/cchalmers/circuit-notation>.
 -}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 
@@ -26,11 +25,7 @@ import qualified CircuitNotation as CN
 import Data.Tagged
 
 -- ghc
-#if __GLASGOW_HASKELL__ >= 900
 import qualified GHC.Plugins as GHC
-#else
-import qualified GhcPlugins as GHC
-#endif
 
 -- | @circuit-notation@ plugin repurposed for "Protocols".
 plugin :: GHC.Plugin

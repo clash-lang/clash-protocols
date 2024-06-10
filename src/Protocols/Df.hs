@@ -250,11 +250,7 @@ second f = map (B.second f)
 -- | Acknowledge but ignore data from LHS protocol. Send a static value /b/.
 const :: C.HiddenReset dom => b -> Circuit (Df dom a) (Df dom b)
 const b = Circuit (P.const (Ack <$>
-#if MIN_VERSION_clash_prelude(1,8,0)
                               C.unsafeToActiveLow C.hasReset
-#else
-                              C.unsafeToLowPolarity C.hasReset
-#endif
                            , P.pure (Data b)
                            )
                   )
@@ -266,11 +262,7 @@ pure a = Circuit (P.const ((), P.pure (Data a)))
 -- | Drive a constant value composed of /a/.
 void :: C.HiddenReset dom => Circuit (Df dom a) ()
 void = Circuit (P.const (Ack <$>
-#if MIN_VERSION_clash_prelude(1,8,0)
                            C.unsafeToActiveLow C.hasReset
-#else
-                           C.unsafeToLowPolarity C.hasReset
-#endif
                         , ()
                         )
                )
@@ -369,17 +361,10 @@ partition f
 --
 -- Example:
 --
-#if MIN_VERSION_clash_prelude(1,6,0)
 -- >>> let input = [(0, 3), (0, 5), (1, 7), (2, 13), (1, 11), (2, 1)]
 -- >>> let output = simulateCS (route @3 @C.System @Int) input
 -- >>> fmap (take 2) output
 -- [3,5] :> [7,11] :> [13,1] :> Nil
-#else
--- >>> let input = [(0, 3), (0, 5), (1, 7), (2, 13), (1, 11), (2, 1)]
--- >>> let output = simulateCS (route @3 @C.System @Int) input
--- >>> fmap (take 2) output
--- <[3,5],[7,11],[13,1]>
-#endif
 --
 route ::
   forall n dom a. C.KnownNat n =>
@@ -721,11 +706,7 @@ fifo fifoDepth = Circuit $ C.hideReset circuitFunction where
       = C.unbundle
       $ C.mealy machineAsFunction s0
       $ C.bundle ( brRead
-#if MIN_VERSION_clash_prelude(1,8,0)
                  , C.unsafeToActiveHigh reset
-#else
-                 , C.unsafeToHighPolarity reset
-#endif
                  , inpA
                  , inpB
                  )
@@ -905,9 +886,5 @@ simulate conf@SimulationConfig{..} circ inputs =
 -- synthesizable.
 resetGen :: C.KnownDomain dom => Int -> C.Reset dom
 resetGen n =
-#if MIN_VERSION_clash_prelude(1,8,0)
   C.unsafeFromActiveHigh
-#else
-  C.unsafeFromHighPolarity
-#endif
     (C.fromList (replicate n True <> repeat False))

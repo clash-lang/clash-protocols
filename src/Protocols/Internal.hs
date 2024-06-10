@@ -578,11 +578,7 @@ simulateCSE c = simulateCS (c clk rst ena)
   ena = C.enableGen
 
   resetGen n =
-#if MIN_VERSION_clash_prelude(1,8,0)
     C.unsafeFromActiveHigh
-#else
-    C.unsafeFromHighPolarity
-#endif
       $ C.fromList (replicate n True <> repeat False)
 
 -- | Applies conversion functions defined in the 'Simulate' instance of @a@ and @b@ to
@@ -618,11 +614,6 @@ type family KeepType (keep :: Bool) (optionalType :: Type) = t | t -> keep optio
   KeepType 'True optionalType = Identity optionalType
   KeepType 'False optionalType = Proxy optionalType
 
-#if !MIN_VERSION_clash_prelude(1, 6, 4)
--- This is part of clash-prelude 1.6.4 and upwards, older versions need this workaround
-deriving instance (C.ShowX t) => (C.ShowX (Identity t))
-deriving instance (C.NFDataX t) => (C.NFDataX (Identity t))
-#endif
 #if !MIN_VERSION_clash_prelude(1, 8, 2)
 deriving instance (C.ShowX t) => (C.ShowX (Proxy t))
 deriving instance (C.NFDataX t) => (C.NFDataX (Proxy t))
