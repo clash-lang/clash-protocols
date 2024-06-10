@@ -58,16 +58,10 @@ jobs:
         cabal:
           - "3.10"
         ghc:
-          - "8.10.7"
           - "9.0.2"
           - "9.2.8"
           - "9.4.8"
           - "9.6.4"
-        exclude:
-          # Clash 1.6 doesn't support latest GHCs
-          - {clash: "1.8.1", ghc: "9.2.8"}
-          - {clash: "1.8.1", ghc: "9.4.8"}
-          - {clash: "1.8.1", ghc: "9.6.4"}
 
     env:
       clash_version: ${{ matrix.clash }}

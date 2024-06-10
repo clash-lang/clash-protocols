@@ -91,8 +91,8 @@ common common-options
 
   default-language: Haskell2010
   build-depends:
-    -- GHC >= 8.10
-    base >= 4.14.0.0,
+    -- GHC >= 9.0
+    base >= 4.15.0.0,
     Cabal,
 
     clash-prelude >= 1.8.1 && < 1.10,
