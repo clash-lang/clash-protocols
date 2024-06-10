@@ -1,12 +1,11 @@
-
 module Main where
 
-import Prelude
-import Test.Tasty
 import Control.Concurrent (setNumCapabilities)
-import System.Environment (setEnv, lookupEnv)
-import Text.Read (readMaybe)
 import Control.Monad (join)
+import System.Environment (lookupEnv, setEnv)
+import Test.Tasty
+import Text.Read (readMaybe)
+import Prelude
 
 import qualified Tests.Protocols
 
@@ -25,6 +24,8 @@ main = do
   defaultMain tests
 
 tests :: TestTree
-tests = testGroup "Tests"
-  [ Tests.Protocols.tests
-  ]
+tests =
+  testGroup
+    "Tests"
+    [ Tests.Protocols.tests
+    ]

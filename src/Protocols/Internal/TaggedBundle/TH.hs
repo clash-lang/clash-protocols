@@ -12,25 +12,23 @@ tupT :: [Q Type] -> Q Type
 tupT tyArgs = tupleT (length tyArgs) `appTs` tyArgs
 
 taggedBundleTupleInstances :: Int -> Q [Dec]
-taggedBundleTupleInstances n = mapM taggedBundleTupleInstance [3..n]
+taggedBundleTupleInstances n = mapM taggedBundleTupleInstance [3 .. n]
 
 taggedBundleTupleInstance :: Int -> Q Dec
 taggedBundleTupleInstance n =
   instanceD
     -- No superclasses
     (pure [])
-
     -- Head
-    (        taggedBundleCon
-      `appT` (tupleT n `appTs` tagTyVars)
-      `appT` (tupleT n `appTs` tyVars) )
-
+    ( taggedBundleCon
+        `appT` (tupleT n `appTs` tagTyVars)
+        `appT` (tupleT n `appTs` tyVars)
+    )
     -- Implementation
     [ tySynInstD (tySynEqn Nothing aTypeLhs aTypeRhs)
     , funD taggedBundleFunName [clause [bundlePat] (normalB bundleImpl) []]
     , funD taggedUnbundleFunName [clause [unbundlePat] (normalB unbundleImpl) []]
     ]
-
  where
   -- associated type
   taggedUnbundledCon = conT (mkName "TaggedUnbundled")
@@ -50,7 +48,7 @@ taggedBundleTupleInstance n =
   unbundleImpl = tupE [conE 'Tagged `appE` v | v <- vars]
 
   -- shared
-  tagTyVars = map (varT . mkName . ('t':) . show) [1..n]
+  tagTyVars = map (varT . mkName . ('t' :) . show) [1 .. n]
   tyVars = map varT varNames
   vars = map varE varNames
-  varNames = map (mkName . ('a':) . show) [1..n]
+  varNames = map (mkName . ('a' :) . show) [1 .. n]

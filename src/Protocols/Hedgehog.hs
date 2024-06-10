@@ -1,37 +1,38 @@
-{-|
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE UndecidableInstances #-}
+
+{- |
 A collection of Hedgehog helpers to test Circuit components. To test a
 protocol component against a combinatorial model, see 'idWithModel'. To write
 your own tester, see 'Test'.
 -}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE FlexibleContexts #-}
+module Protocols.Hedgehog (
+  -- * Types
+  ExpectOptions (..),
+  defExpectOptions,
+  StallMode (..),
+  Test (..),
+  TestType,
 
-module Protocols.Hedgehog
- ( -- * Types
-   ExpectOptions(..)
- , defExpectOptions
- , StallMode(..)
- , Test(..)
- , TestType
+  -- * Test functions
+  idWithModel,
+  idWithModelSingleDomain,
+  propWithModel,
+  propWithModelSingleDomain,
 
-   -- * Test functions
- , idWithModel
- , idWithModelSingleDomain
- , propWithModel
- , propWithModelSingleDomain
-
-   -- * Internals
- , genStallAck
- , genStallMode
- , genStalls
- ) where
+  -- * Internals
+  genStallAck,
+  genStallMode,
+  genStalls,
+) where
 
 -- base
-import Prelude
+
+import Data.Proxy (Proxy (Proxy))
 import GHC.Stack (HasCallStack)
-import Data.Proxy (Proxy(Proxy))
+import Prelude
 
 -- clash-protocols
 import Protocols
@@ -41,36 +42,38 @@ import Protocols.Hedgehog.Internal
 import qualified Clash.Prelude as C
 
 -- hedgehog
+
+import Hedgehog ((===))
 import qualified Hedgehog as H
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
-import Hedgehog ((===))
 
 -- | Whether to stall or not. Used in 'idWithModel'.
 data StallMode = NoStall | Stall
   deriving (Show, Enum, Bounded)
 
--- | Like 'C.resetGenN', but works on 'Int' instead of 'C.SNat'. Not
--- synthesizable.
-resetGen :: C.KnownDomain dom => Int -> C.Reset dom
+{- | Like 'C.resetGenN', but works on 'Int' instead of 'C.SNat'. Not
+synthesizable.
+-}
+resetGen :: (C.KnownDomain dom) => Int -> C.Reset dom
 resetGen n =
   C.unsafeFromActiveHigh
-  (C.fromList (replicate n True <> repeat False))
+    (C.fromList (replicate n True <> repeat False))
 
--- | Test a protocol against a pure model implementation. Circuit under test will
--- be arbitrarily stalled on the left hand and right hand side and tested for
--- a number of properties:
---
---   * Whether it does not produce too little data.
---   * Whether it does not produce /more/ data than expected.
---   * Whether it responds to backpressure correctly
---   * Whether it (eventually) drives a /nack/ while in reset.
---
--- Finally, the data will be tested against the property supplied in the last
--- argument.
---
+{- | Test a protocol against a pure model implementation. Circuit under test will
+be arbitrarily stalled on the left hand and right hand side and tested for
+a number of properties:
+
+  * Whether it does not produce too little data.
+  * Whether it does not produce /more/ data than expected.
+  * Whether it responds to backpressure correctly
+  * Whether it (eventually) drives a /nack/ while in reset.
+
+Finally, the data will be tested against the property supplied in the last
+argument.
+-}
 propWithModel ::
-  forall a b .
+  forall a b.
   (Test a, Test b, HasCallStack) =>
   -- | Options, see 'ExpectOptions'
   ExpectOptions ->
@@ -104,19 +107,19 @@ propWithModel eOpts genData model prot prop = H.property $ do
   rhsStalls <- H.forAll (traverse (genStalls genStall n) rhsStallModes)
 
   let
-    simConfig = def {resetCycles = eoResetCycles eOpts}
+    simConfig = def{resetCycles = eoResetCycles eOpts}
     simDriveConfig =
       if eoDriveEarly eOpts
-      then def {resetCycles = max 1 (eoResetCycles eOpts - 5)}
-      else def {resetCycles = eoResetCycles eOpts}
+        then def{resetCycles = max 1 (eoResetCycles eOpts - 5)}
+        else def{resetCycles = eoResetCycles eOpts}
     expected = model dat
     lhsStallC = stallC simConfig lhsStalls
     rhsStallC = stallC simConfig rhsStalls
     stalledProtocol =
-         driveC simDriveConfig (toSimulateType (Proxy @a) dat)
-      |> lhsStallC
-      |> prot
-      |> rhsStallC
+      driveC simDriveConfig (toSimulateType (Proxy @a) dat)
+        |> lhsStallC
+        |> prot
+        |> rhsStallC
     sampled = sampleC simConfig stalledProtocol
     lengths = expectToLengths (Proxy @b) expected
 
@@ -128,19 +131,20 @@ propWithModel eOpts genData model prot prop = H.property $ do
 
   prop expected trimmed
 
--- | Test a protocol against a pure model implementation. Circuit under test will
--- be arbitrarily stalled on the left hand and right hand side and tested for
--- a number of properties:
---
---   * Whether it does not produce too little data
---   * Whether it does not produce /more/ data than expected
---   * Whether the expected data corresponds to the sampled data
---   * Whether it responds to backpressure correctly
---   * Whether it (eventually) drives a /nack/ while in reset
---
--- For testing custom properties, see 'propWithModel'.
+{- | Test a protocol against a pure model implementation. Circuit under test will
+be arbitrarily stalled on the left hand and right hand side and tested for
+a number of properties:
+
+  * Whether it does not produce too little data
+  * Whether it does not produce /more/ data than expected
+  * Whether the expected data corresponds to the sampled data
+  * Whether it responds to backpressure correctly
+  * Whether it (eventually) drives a /nack/ while in reset
+
+For testing custom properties, see 'propWithModel'.
+-}
 idWithModel ::
-  forall a b .
+  forall a b.
   (Test a, Test b, HasCallStack) =>
   -- | Options, see 'ExpectOptions'
   ExpectOptions ->
@@ -156,7 +160,7 @@ idWithModel eOpts genData model prot =
 
 -- | Same as 'propWithModel', but with single clock, reset, and enable.
 propWithModelSingleDomain ::
-  forall dom a b .
+  forall dom a b.
   (Test a, Test b, C.KnownDomain dom, HasCallStack) =>
   -- | Options, see 'ExpectOptions'
   ExpectOptions ->
@@ -182,7 +186,7 @@ propWithModelSingleDomain eOpts genData model0 circuit0 prop =
 
 -- | Same as 'propWithModel', but with single clock, reset, and enable.
 idWithModelSingleDomain ::
-  forall dom a b .
+  forall dom a b.
   (Test a, Test b, C.KnownDomain dom, HasCallStack) =>
   -- | Options, see 'ExpectOptions'
   ExpectOptions ->
@@ -204,10 +208,11 @@ genStallMode = Gen.enumBounded
 genStallAck :: H.Gen StallAck
 genStallAck = Gen.enumBounded
 
--- | Generator for stall information for 'stallC'. Generates stalls according
--- to distribution given in first argument. The second argument indicates how
--- many cycles the component is expecting / is producing data for. If the last
--- argument is 'NoStall', no stalls will be generated at all.
+{- | Generator for stall information for 'stallC'. Generates stalls according
+to distribution given in first argument. The second argument indicates how
+many cycles the component is expecting / is producing data for. If the last
+argument is 'NoStall', no stalls will be generated at all.
+-}
 genStalls :: H.Gen Int -> Int -> StallMode -> H.Gen (StallAck, [Int])
 genStalls genInt n = \case
   NoStall -> (,[]) <$> genStallAck

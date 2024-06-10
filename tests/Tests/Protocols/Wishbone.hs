@@ -9,10 +9,13 @@ module Tests.Protocols.Wishbone where
 import Clash.Hedgehog.Sized.BitVector
 import Clash.Prelude hiding (not, (&&))
 import Control.DeepSeq (NFData, force)
+import Control.Exception (SomeException, evaluate, try)
+import Control.Monad.IO.Class (MonadIO (liftIO))
+import Data.Either (isLeft)
+import qualified Data.List as L
 import Hedgehog
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
-import qualified Data.List as L
 import Protocols
 import Protocols.Hedgehog (defExpectOptions)
 import Protocols.Wishbone
@@ -23,9 +26,6 @@ import Test.Tasty.Hedgehog (HedgehogTestLimit (HedgehogTestLimit))
 import Test.Tasty.Hedgehog.Extra (testProperty)
 import Test.Tasty.TH (testGroupGenerator)
 import Prelude hiding (undefined)
-import Control.Exception (evaluate, try, SomeException)
-import Control.Monad.IO.Class (MonadIO(liftIO))
-import Data.Either (isLeft)
 
 smallInt :: Range Int
 smallInt = Range.linear 0 10
@@ -42,8 +42,8 @@ genWishboneTransfer ::
   Gen (WishboneMasterRequest addressWidth a)
 genWishboneTransfer genA =
   Gen.choice
-    [ Read <$> genDefinedBitVector <*> genDefinedBitVector ,
-      Write <$> genDefinedBitVector <*> genDefinedBitVector <*> genA
+    [ Read <$> genDefinedBitVector <*> genDefinedBitVector
+    , Write <$> genDefinedBitVector <*> genDefinedBitVector <*> genA
     ]
 
 genWbTransferPair ::
@@ -61,18 +61,18 @@ addrReadIdWb ::
   (KnownNat addressWidth) =>
   Circuit (Wishbone dom 'Standard addressWidth (BitVector addressWidth)) ()
 addrReadIdWb = Circuit go
-  where
-    go (m2s, ()) = (reply <$> m2s, ())
+ where
+  go (m2s, ()) = (reply <$> m2s, ())
 
-    reply WishboneM2S {..}
-      | busCycle && strobe && writeEnable =
-        emptyWishboneS2M { acknowledge = True }
-      | busCycle && strobe =
+  reply WishboneM2S{..}
+    | busCycle && strobe && writeEnable =
+        emptyWishboneS2M{acknowledge = True}
+    | busCycle && strobe =
         (emptyWishboneS2M @(BitVector addressWidth))
-          { acknowledge = True,
-            readData = addr
+          { acknowledge = True
+          , readData = addr
           }
-      | otherwise = emptyWishboneS2M
+    | otherwise = emptyWishboneS2M
 
 addrReadIdWbModel ::
   (KnownNat addressWidth) =>
@@ -81,37 +81,38 @@ addrReadIdWbModel ::
   -- | pure state
   () ->
   Either String ()
-addrReadIdWbModel (Read addr _) s@WishboneS2M {..} ()
+addrReadIdWbModel (Read addr _) s@WishboneS2M{..} ()
   | acknowledge && hasX readData == Right addr = Right ()
   | otherwise =
-    Left $ "Read should have been acknowledged with address as DAT " <> show s
-addrReadIdWbModel Write {} s@WishboneS2M {..} ()
+      Left $ "Read should have been acknowledged with address as DAT " <> show s
+addrReadIdWbModel Write{} s@WishboneS2M{..} ()
   | acknowledge && hasUndefined readData = Right ()
   | otherwise =
-    Left $ "Write should have been acknowledged with no DAT " <> show s
+      Left $ "Write should have been acknowledged with no DAT " <> show s
 
 prop_addrReadIdWb_model :: Property
-prop_addrReadIdWb_model = property $
-  withClockResetEnable clockGen resetGen enableGen $
-    wishbonePropWithModel @System
-      defExpectOptions
-      addrReadIdWbModel
-      addrReadIdWb
-      (genData $ genWishboneTransfer @10 genDefinedBitVector)
-      ()
+prop_addrReadIdWb_model =
+  property $
+    withClockResetEnable clockGen resetGen enableGen $
+      wishbonePropWithModel @System
+        defExpectOptions
+        addrReadIdWbModel
+        addrReadIdWb
+        (genData $ genWishboneTransfer @10 genDefinedBitVector)
+        ()
 
 --
 -- memory element circuit
 --
 
 memoryWbModel ::
-  ( KnownNat addressWidth,
-    Eq a,
-    ShowX a,
-    NFDataX a,
-    NFData a,
-    Default a,
-    KnownNat (BitSize a)
+  ( KnownNat addressWidth
+  , Eq a
+  , ShowX a
+  , NFDataX a
+  , NFData a
+  , Default a
+  , KnownNat (BitSize a)
   ) =>
   WishboneMasterRequest addressWidth a ->
   WishboneS2M a ->
@@ -120,37 +121,39 @@ memoryWbModel ::
 memoryWbModel (Read addr sel) s st
   | sel /= maxBound && err s = Right st
   | sel /= maxBound && not (err s) =
-    Left "Read with non maxBound SEL should cause ERR response"
+      Left "Read with non maxBound SEL should cause ERR response"
   | otherwise = case lookup addr st of
-    Just x | readData s == x && acknowledge s -> Right st
-    Just x | otherwise ->
-      Left $
-        "Read from a known address did not yield the same value "
-          <> showX x
-          <> " : "
-          <> show s
-    Nothing | acknowledge s && hasX (readData s) == Right def -> Right st
-    Nothing | otherwise ->
-      Left $
-        "Read from unknown address did no ACK with undefined result : "
-          <> show s
+      Just x | readData s == x && acknowledge s -> Right st
+      Just x
+        | otherwise ->
+            Left $
+              "Read from a known address did not yield the same value "
+                <> showX x
+                <> " : "
+                <> show s
+      Nothing | acknowledge s && hasX (readData s) == Right def -> Right st
+      Nothing
+        | otherwise ->
+            Left $
+              "Read from unknown address did no ACK with undefined result : "
+                <> show s
 memoryWbModel (Write addr sel a) s st
   | sel /= maxBound && err s = Right st
   | sel /= maxBound && not (err s) =
-    Left "Write with non maxBound SEL should cause ERR response"
+      Left "Write with non maxBound SEL should cause ERR response"
   | acknowledge s = Right ((addr, a) : st)
   | otherwise = Left $ "Write should be acked : " <> show s
 
 prop_memoryWb_model :: Property
-prop_memoryWb_model = property $
-  withClockResetEnable clockGen resetGen enableGen $
-    wishbonePropWithModel @System
-      defExpectOptions
-      memoryWbModel
-      (memoryWb (blockRamU ClearOnReset (SNat @256) (const def)))
-      (genData (genWishboneTransfer @8 genSmallInt))
-      [] -- initial state
-
+prop_memoryWb_model =
+  property $
+    withClockResetEnable clockGen resetGen enableGen $
+      wishbonePropWithModel @System
+        defExpectOptions
+        memoryWbModel
+        (memoryWb (blockRamU ClearOnReset (SNat @256) (const def)))
+        (genData (genWishboneTransfer @8 genSmallInt))
+        [] -- initial state
 
 --
 -- Helpers
@@ -158,9 +161,9 @@ prop_memoryWb_model = property $
 
 (|>>) :: Circuit () b -> Circuit b () -> (Fwd b, Bwd b)
 Circuit aFn |>> Circuit bFn = (s2rAb, r2sBc)
-  where
-    ~((), s2rAb) = aFn ((), r2sBc)
-    ~(r2sBc, ()) = bFn (s2rAb, ())
+ where
+  ~((), s2rAb) = aFn ((), r2sBc)
+  ~(r2sBc, ()) = bFn (s2rAb, ())
 
 evaluateUnitCircuit ::
   (KnownDomain dom, KnownNat (BitSize a), KnownNat addressWidth, NFDataX a) =>
@@ -170,7 +173,7 @@ evaluateUnitCircuit ::
   Int
 evaluateUnitCircuit n a b =
   let (bundle -> signals) = a |>> b
-  in L.length $ sampleN n signals
+   in L.length $ sampleN n signals
 
 --
 -- validatorCircuit
@@ -181,11 +184,16 @@ prop_addrReadId_validator = property $ do
   reqs <- forAll $ genData (genWbTransferPair @8 genDefinedBitVector)
 
   let
-    circuitSignalsN = withClockResetEnable @System clockGen resetGen enableGen $
-      let
-        driver = driveStandard @System @(BitVector 8) @8 defExpectOptions reqs
-        addrRead = addrReadIdWb @System @8
-      in evaluateUnitCircuit sampleNumber driver (validatorCircuit @System @8 @(BitVector 8) |> addrRead)
+    circuitSignalsN =
+      withClockResetEnable @System clockGen resetGen enableGen $
+        let
+          driver = driveStandard @System @(BitVector 8) @8 defExpectOptions reqs
+          addrRead = addrReadIdWb @System @8
+         in
+          evaluateUnitCircuit
+            sampleNumber
+            driver
+            (validatorCircuit @System @8 @(BitVector 8) |> addrRead)
 
   -- force evalution of sampling somehow
   assert (circuitSignalsN == sampleNumber)
@@ -195,16 +203,19 @@ prop_memoryWb_validator = property $ do
   reqs <- forAll $ genData (genWbTransferPair @8 genDefinedBitVector)
 
   let
-    circuitSignalsN = withClockResetEnable @System clockGen resetGen enableGen $
-      let
-        driver = driveStandard @System @(BitVector 8) @8 defExpectOptions reqs
-        memory = memoryWb @System @(BitVector 8) @8 (blockRamU ClearOnReset (SNat @256) (const def))
-
-      in evaluateUnitCircuit sampleNumber driver (validatorCircuit @System @8 @(BitVector 8) |> memory)
+    circuitSignalsN =
+      withClockResetEnable @System clockGen resetGen enableGen $
+        let
+          driver = driveStandard @System @(BitVector 8) @8 defExpectOptions reqs
+          memory = memoryWb @System @(BitVector 8) @8 (blockRamU ClearOnReset (SNat @256) (const def))
+         in
+          evaluateUnitCircuit
+            sampleNumber
+            driver
+            (validatorCircuit @System @8 @(BitVector 8) |> memory)
 
   -- force evalution of sampling somehow
   assert (circuitSignalsN == sampleNumber)
-
 
 --
 -- validatorCircuitLenient
@@ -215,12 +226,16 @@ prop_addrReadId_validator_lenient = property $ do
   reqs <- forAll $ genData (genWbTransferPair @8 genDefinedBitVector)
 
   let
-    circuitSignalsN = withClockResetEnable @System clockGen resetGen enableGen $
-      let
-        driver = driveStandard @System @(BitVector 8) @8 defExpectOptions reqs
-        addrRead = addrReadIdWb @System @8
-
-      in evaluateUnitCircuit sampleNumber driver (validatorCircuitLenient @System @8 @(BitVector 8) |> addrRead)
+    circuitSignalsN =
+      withClockResetEnable @System clockGen resetGen enableGen $
+        let
+          driver = driveStandard @System @(BitVector 8) @8 defExpectOptions reqs
+          addrRead = addrReadIdWb @System @8
+         in
+          evaluateUnitCircuit
+            sampleNumber
+            driver
+            (validatorCircuitLenient @System @8 @(BitVector 8) |> addrRead)
 
   -- force evalution of sampling somehow
   assert (circuitSignalsN == sampleNumber)
@@ -230,12 +245,16 @@ prop_memoryWb_validator_lenient = property $ do
   reqs <- forAll $ genData (genWbTransferPair @8 genDefinedBitVector)
 
   let
-    circuitSignalsN = withClockResetEnable @System clockGen resetGen enableGen $
-      let
-        driver = driveStandard @System @(BitVector 8) @8 defExpectOptions reqs
-        memory = memoryWb @System @(BitVector 8) @8 (blockRamU ClearOnReset (SNat @256) (const def))
-
-      in evaluateUnitCircuit sampleNumber driver (validatorCircuitLenient @System @8 @(BitVector 8) |> memory)
+    circuitSignalsN =
+      withClockResetEnable @System clockGen resetGen enableGen $
+        let
+          driver = driveStandard @System @(BitVector 8) @8 defExpectOptions reqs
+          memory = memoryWb @System @(BitVector 8) @8 (blockRamU ClearOnReset (SNat @256) (const def))
+         in
+          evaluateUnitCircuit
+            sampleNumber
+            driver
+            (validatorCircuitLenient @System @8 @(BitVector 8) |> memory)
 
   -- force evalution of sampling somehow
   assert (circuitSignalsN == sampleNumber)
@@ -246,35 +265,39 @@ prop_specViolation_lenient = property $ do
   reqs <- forAll $ Gen.list (Range.linear 1 500) (genWbTransferPair @8 genDefinedBitVector)
 
   let
-    circuitSignalsN = withClockResetEnable @System clockGen resetGen enableGen $
-      let
-        driver = driveStandard @System @(BitVector 8) @8 defExpectOptions reqs
-        invalid = invalidCircuit
-
-      in evaluateUnitCircuit sampleNumber driver (validatorCircuitLenient @System @8 @(BitVector 8) |> invalid)
+    circuitSignalsN =
+      withClockResetEnable @System clockGen resetGen enableGen $
+        let
+          driver = driveStandard @System @(BitVector 8) @8 defExpectOptions reqs
+          invalid = invalidCircuit
+         in
+          evaluateUnitCircuit
+            sampleNumber
+            driver
+            (validatorCircuitLenient @System @8 @(BitVector 8) |> invalid)
 
   -- an ErrorCall is expected, but really *any* exception is expected
   -- from the validator circuit
   res <- liftIO $ try @SomeException (evaluate (force circuitSignalsN))
 
   assert $ isLeft res
-  where
-    -- a circuit that terminates a cycle with more than one termination signal
-    invalidCircuit :: Circuit (Wishbone dom 'Standard 8 (BitVector 8)) ()
-    invalidCircuit = Circuit go
-      where
-        go (m2s, ()) = (reply <$> m2s, ())
+ where
+  -- a circuit that terminates a cycle with more than one termination signal
+  invalidCircuit :: Circuit (Wishbone dom 'Standard 8 (BitVector 8)) ()
+  invalidCircuit = Circuit go
+   where
+    go (m2s, ()) = (reply <$> m2s, ())
 
-        reply WishboneM2S {..}
-          | busCycle && strobe && writeEnable =
-            emptyWishboneS2M { acknowledge = True, err = True }
-          | busCycle && strobe =
-            (emptyWishboneS2M @(BitVector 8))
-              { acknowledge = True,
-                err = True,
-                readData = addr
-              }
-          | otherwise = emptyWishboneS2M
+    reply WishboneM2S{..}
+      | busCycle && strobe && writeEnable =
+          emptyWishboneS2M{acknowledge = True, err = True}
+      | busCycle && strobe =
+          (emptyWishboneS2M @(BitVector 8))
+            { acknowledge = True
+            , err = True
+            , readData = addr
+            }
+      | otherwise = emptyWishboneS2M
 
 sampleNumber :: Int
 sampleNumber = 1000
