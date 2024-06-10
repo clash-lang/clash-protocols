@@ -115,6 +115,19 @@ jobs:
         run: |
           .ci/build_docs.sh
 
+  fourmolu:
+    runs-on: ubuntu-latest
+    steps:
+      # Note that you must checkout your code before running haskell-actions/run-fourmolu
+      - uses: actions/checkout@v3
+      - uses: haskell-actions/run-fourmolu@v9
+        with:
+          version: "0.14.0.0"
+          pattern: |
+            src/**/*.hs
+            tests/**/*.hs
+            !src/Protocols/Cpp.hs
+
   linting:
     name: Source code linting
     runs-on: ubuntu-latest
