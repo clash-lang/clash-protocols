@@ -22,7 +22,7 @@ jobs:
       - name: Setup Stack / GHC
         uses: haskell-actions/setup@v2
         with:
-          ghc-version: '8.10.7'
+          ghc-version: '9.4.8'
           cabal-version: '3.10.2.1'
           enable-stack: true
           stack-version: 'latest'
@@ -54,21 +54,14 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         clash:
-          - "1.6.1"
           - "1.8.1"
         cabal:
           - "3.10"
         ghc:
-          - "8.10.7"
           - "9.0.2"
           - "9.2.8"
           - "9.4.8"
           - "9.6.4"
-        exclude:
-          # Clash 1.6 doesn't support latest GHCs
-          - {clash: "1.6.1", ghc: "9.2.8"}
-          - {clash: "1.6.1", ghc: "9.4.8"}
-          - {clash: "1.6.1", ghc: "9.6.4"}
 
     env:
       clash_version: ${{ matrix.clash }}
@@ -114,6 +107,19 @@ jobs:
       - name: Documentation
         run: |
           .ci/build_docs.sh
+
+  fourmolu:
+    runs-on: ubuntu-latest
+    steps:
+      # Note that you must checkout your code before running haskell-actions/run-fourmolu
+      - uses: actions/checkout@v3
+      - uses: haskell-actions/run-fourmolu@v9
+        with:
+          version: "0.14.0.0"
+          pattern: |
+            src/**/*.hs
+            tests/**/*.hs
+            !src/Protocols/Cpp.hs
 
   linting:
     name: Source code linting

@@ -1,82 +1,86 @@
-{-|
-Internals for "Protocols.Hedgehog".
--}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
-
 {-# OPTIONS_HADDOCK hide #-}
 
+{- |
+Internals for "Protocols.Hedgehog".
+-}
 module Protocols.Hedgehog.Internal where
 
 -- base
-import Prelude
-import GHC.Stack (withFrozenCallStack, HasCallStack)
+
 import Control.Monad (forM)
 import Data.Maybe (fromMaybe)
-import Data.Proxy (Proxy(Proxy))
+import Data.Proxy (Proxy (Proxy))
+import GHC.Stack (HasCallStack, withFrozenCallStack)
+import Prelude
 
 -- clash-protocols
 import Protocols
 import qualified Protocols.Df as Df
 
 -- clash-prelude
+
+import Clash.Prelude (type (*), type (+), type (<=))
 import qualified Clash.Prelude as C
-import Clash.Prelude (type (<=), type (*), type (+))
 
 -- deepseq
 import Control.DeepSeq
 
 -- hedgehog
 import qualified Hedgehog as H
-import qualified Hedgehog.Internal.Show as H
 import qualified Hedgehog.Internal.Property as H
+import qualified Hedgehog.Internal.Show as H
 
 -- pretty-show
 import Text.Show.Pretty (ppShow)
 
 -- | Options for 'expectN' function. See individual fields for more information.
 data ExpectOptions = ExpectOptions
-  { -- | Sample /n/ cycles after last expected value and check for emptiness
-    eoEmptyTail :: Int
-
-    -- | Timeout after seeing /n/ empty cycles
+  { eoEmptyTail :: Int
+  -- ^ Sample /n/ cycles after last expected value and check for emptiness
   , eoTimeout :: Maybe Int
-
-    -- | Ignore first /n/ cycles
+  -- ^ Timeout after seeing /n/ empty cycles
   , eoResetCycles :: Int
-
-    -- | Start driving the circuit with its reset asserted. Circuits should
-    -- never acknowledge data while this is happening.
+  -- ^ Ignore first /n/ cycles
   , eoDriveEarly :: Bool
+  -- ^ Start driving the circuit with its reset asserted. Circuits should
+  -- never acknowledge data while this is happening.
   }
 
--- | Resets for 30 cycles, checks for superfluous data for 50 cycles after
--- seeing last valid data cycle, and times out after seeing 1000 consecutive
--- empty cycles.
+{- | Resets for 30 cycles, checks for superfluous data for 50 cycles after
+seeing last valid data cycle, and times out after seeing 1000 consecutive
+empty cycles.
+-}
 defExpectOptions :: ExpectOptions
-defExpectOptions = ExpectOptions
-  { eoEmptyTail = 50
-  , eoTimeout = Just 1000
-  , eoResetCycles = 30
-  , eoDriveEarly = True
-  }
+defExpectOptions =
+  ExpectOptions
+    { eoEmptyTail = 50
+    , eoTimeout = Just 1000
+    , eoResetCycles = 30
+    , eoDriveEarly = True
+    }
 
 -- | Superclass class to reduce syntactical noise.
 class (NFData a, C.NFDataX a, C.ShowX a, C.Show a, Eq a) => TestType a
+
 instance (NFData a, C.NFDataX a, C.ShowX a, C.Show a, Eq a) => TestType a
 
--- | Provides a way of comparing expected data with data produced by a
--- protocol component.
-class ( Drivable a
-      , TestType (SimulateFwdType a)
-      , TestType (ExpectType a)
-
-      -- Foldable requirement on Vec :(
-      , 1 <= SimulateChannels a
-      ) => Test a where
+{- | Provides a way of comparing expected data with data produced by a
+protocol component.
+-}
+class
+  ( Drivable a
+  , TestType (SimulateFwdType a)
+  , TestType (ExpectType a)
+  , -- Foldable requirement on Vec :(
+    1 <= SimulateChannels a
+  ) =>
+  Test a
+  where
   -- | Get the number of expected valid data cycles for each data channel,
   -- given a list of expected data.
   expectToLengths ::
@@ -123,11 +127,11 @@ instance (TestType a, C.KnownDomain dom) => Test (Df dom a) where
     go (fromMaybe maxBound eoTimeout) nExpected sampled
    where
     catDatas [] = []
-    catDatas (Df.NoData:xs) = catDatas xs
-    catDatas (Df.Data x:xs) = x:catDatas xs
+    catDatas (Df.NoData : xs) = catDatas xs
+    catDatas (Df.Data x : xs) = x : catDatas xs
 
     go ::
-      HasCallStack =>
+      (HasCallStack) =>
       -- Timeout counter. If it reaches zero we time out.
       Int ->
       -- Expected number of values
@@ -144,18 +148,21 @@ instance (TestType a, C.KnownDomain dom) => Test (Df dom a) where
       case catDatas (take eoEmptyTail rest) of
         [] -> pure (take nExpected (catDatas sampled))
         superfluous ->
-          let err = "Circuit produced more output than expected:" in
-          H.failWith Nothing (err <> "\n\n" <> ppShow superfluous)
-    go timeout n _ | timeout <= 0 =
-      H.failWith Nothing $ concat
-        [ "Circuit did not produce enough output. Expected "
-        , show n, " more values. Sampled only " <> show (nExpected - n) <> ":\n\n"
-        , ppShow (take (nExpected - n) (catDatas sampled)) ]
-
-    go timeout n (Df.NoData:as) = do
+          let err = "Circuit produced more output than expected:"
+           in H.failWith Nothing (err <> "\n\n" <> ppShow superfluous)
+    go timeout n _
+      | timeout <= 0 =
+          H.failWith Nothing $
+            concat
+              [ "Circuit did not produce enough output. Expected "
+              , show n
+              , " more values. Sampled only " <> show (nExpected - n) <> ":\n\n"
+              , ppShow (take (nExpected - n) (catDatas sampled))
+              ]
+    go timeout n (Df.NoData : as) = do
       -- Circuit did not output valid cycle, just continue
       go (pred timeout) n as
-    go _ n (Df.Data _:as) =
+    go _ n (Df.Data _ : as) =
       -- Circuit produced a valid cycle, reset timeout
       go (fromMaybe maxBound eoTimeout) (pred n) as
 
@@ -163,7 +170,10 @@ instance
   ( Test a
   , C.KnownNat n
   , 1 <= (n * SimulateChannels a)
-  , 1 <= n ) => Test (C.Vec n a) where
+  , 1 <= n
+  ) =>
+  Test (C.Vec n a)
+  where
   expectToLengths ::
     Proxy (C.Vec n a) ->
     ExpectType (C.Vec n a) ->
@@ -187,8 +197,12 @@ instance
       (uncurry (expectN (Proxy @a) opts))
 
 instance
-  ( Test a, Test b
-  , 1 <= (SimulateChannels a + SimulateChannels b) ) => Test (a, b) where
+  ( Test a
+  , Test b
+  , 1 <= (SimulateChannels a + SimulateChannels b)
+  ) =>
+  Test (a, b)
+  where
   expectToLengths ::
     Proxy (a, b) ->
     (ExpectType a, ExpectType b) ->
@@ -228,20 +242,18 @@ failDiffWith msg x y =
     Nothing ->
       withFrozenCallStack $
         H.failWith Nothing $
-        unlines $ [
-            msg
-          , "━━ expected ━━"
-          , H.showPretty x
-          , "━━ actual ━━"
-          , H.showPretty y
-          ]
-
+          unlines $
+            [ msg
+            , "━━ expected ━━"
+            , H.showPretty x
+            , "━━ actual ━━"
+            , H.showPretty y
+            ]
     Just vdiff@(H.ValueSame _) ->
       withFrozenCallStack $
         H.failWith
-          (Just $ H.Diff "━━━ Failed ("  "" "no differences" "" ") ━━━" vdiff)
+          (Just $ H.Diff "━━━ Failed (" "" "no differences" "" ") ━━━" vdiff)
           msg
-
     Just vdiff ->
       withFrozenCallStack $
         H.failWith

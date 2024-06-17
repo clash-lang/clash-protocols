@@ -5,15 +5,17 @@ import Data.List.Extra (transpose)
 import Unsafe.Coerce (unsafeCoerce)
 
 -- unordered-containers
-import qualified Data.HashMap.Strict as HashMap
+
 import Data.HashMap.Strict (HashMap)
+import qualified Data.HashMap.Strict as HashMap
 
 -- hashable
 import Data.Hashable (Hashable)
 
 -- clash-prelude
-import qualified Clash.Prelude as C
+
 import Clash.Prelude (type (<=))
+import qualified Clash.Prelude as C
 
 -- extra
 import qualified Data.List.Extra as Extra
@@ -21,7 +23,7 @@ import qualified Data.List.Extra as Extra
 -- hedgehog
 import qualified Hedgehog as H
 
-chunksOf :: forall n. C.KnownNat n => [Int] -> C.Vec n [Int]
+chunksOf :: forall n. (C.KnownNat n) => [Int] -> C.Vec n [Int]
 chunksOf xs = vecFromList (transpose (Extra.chunksOf (C.natToNum @n) xs))
 
 vecFromList :: forall n a. (C.KnownNat n, Monoid a) => [a] -> C.Vec n a

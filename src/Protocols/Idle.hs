@@ -1,13 +1,13 @@
 {-# OPTIONS_GHC "-Wno-orphans" #-}
 
-{-|
+{- |
 Functionalities to easily create idle circuits for protocols.
 -}
-module Protocols.Idle
-  ( IdleCircuit(..)
-  , idleSource
-  , idleSink
-  ) where
+module Protocols.Idle (
+  IdleCircuit (..),
+  idleSource,
+  idleSink,
+) where
 
 import Data.Proxy
 import Protocols.Cpp (maxTupleSize)

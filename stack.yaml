@@ -1,4 +1,4 @@
-resolver: lts-18.26 # ghc-8.10.7
+resolver: lts-21.25 # ghc-9.4.8
 
 packages:
   - .
@@ -6,6 +6,5 @@ packages:
 extra-deps:
 - git: https://github.com/cchalmers/circuit-notation.git
   commit: 19b386c4aa3ff690758ae089c7754303f3500cc9
-- tasty-hedgehog-1.2.0.0
-- clash-prelude-1.6.3
-- clash-prelude-hedgehog-1.6.3
+- clash-prelude-1.8.1
+- clash-prelude-hedgehog-1.8.1

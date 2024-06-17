@@ -1,29 +1,30 @@
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE MonomorphismRestriction #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-} -- Hashable (Index n)
-
+{-# LANGUAGE NumericUnderscores #-}
 -- TODO: Fix warnings introduced by GHC 9.2 w.r.t. incomplete lazy pattern matches
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
+-- Hashable (Index n)
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Tests.Protocols.Df where
 
 -- base
 import Data.Coerce (coerce)
 import Data.Foldable (fold)
-import Data.Maybe (catMaybes, fromMaybe)
 import Data.List (mapAccumL)
+import Data.Maybe (catMaybes, fromMaybe)
 import GHC.Stack (HasCallStack)
 import Prelude
 
 -- clash-prelude
-import qualified Clash.Prelude as C
+
 import Clash.Prelude (type (<=))
+import qualified Clash.Prelude as C
 
 -- containers
 import qualified Data.HashMap.Strict as HashMap
 
 -- extra
-import Data.List (transpose, partition)
+import Data.List (partition, transpose)
 
 -- deepseq
 import Control.DeepSeq (NFData)
@@ -38,7 +39,7 @@ import qualified Hedgehog.Range as Range
 
 -- tasty
 import Test.Tasty
-import Test.Tasty.Hedgehog (HedgehogTestLimit(HedgehogTestLimit))
+import Test.Tasty.Hedgehog (HedgehogTestLimit (HedgehogTestLimit))
 import Test.Tasty.Hedgehog.Extra (testProperty)
 import Test.Tasty.TH (testGroupGenerator)
 
@@ -87,7 +88,7 @@ genVecData genA = do
 
 -- Same as 'idWithModel', but specialized on 'Df'
 idWithModelDf ::
-  forall a b .
+  forall a b.
   (HasCallStack, TestType a, TestType b) =>
   -- | Options, see 'ExpectOptions'
   ExpectOptions ->
@@ -122,7 +123,7 @@ prop_map :: Property
 prop_map = idWithModelDf' (map succ) (Df.map succ)
 
 prop_filter :: Property
-prop_filter = idWithModelDf' (filter (>5)) (Df.filter (>5))
+prop_filter = idWithModelDf' (filter (> 5)) (Df.filter (> 5))
 
 prop_catMaybes :: Property
 prop_catMaybes =
@@ -262,7 +263,8 @@ prop_zipWith =
         as <- genData genSmallInt
         bs <- genData genSmallInt
         let n = min (length as) (length bs)
-        pure (take n as, take n bs) )
+        pure (take n as, take n bs)
+    )
     (uncurry (zipWith (+)))
     (Df.zipWith @C.System @Int @Int (+))
 
@@ -274,7 +276,8 @@ prop_zip =
         as <- genData genSmallInt
         bs <- genData genSmallInt
         let n = min (length as) (length bs)
-        pure (take n as, take n bs) )
+        pure (take n as, take n bs)
+    )
     (uncurry zip)
     (Df.zip @Int @Int @C.System)
 
@@ -283,15 +286,15 @@ prop_partition =
   idWithModel
     defExpectOptions
     (genData genSmallInt)
-    (partition (>5))
-    (Df.partition @C.System @Int (>5))
+    (partition (> 5))
+    (Df.partition @C.System @Int (> 5))
 
 prop_route :: Property
 prop_route =
   idWithModel
     defExpectOptions
     (zip <$> genData Gen.enumBounded <*> genData genSmallInt)
-    (\inp -> C.map (\i -> map snd (filter ((==i) . fst) inp)) C.indicesI)
+    (\inp -> C.map (\i -> map snd (filter ((== i) . fst) inp)) C.indicesI)
     (Df.route @3 @C.System @Int)
 
 prop_select :: Property
@@ -303,7 +306,7 @@ prop_select =
     (Df.select @3 @C.System @Int)
  where
   goModel :: C.Vec 3 [Int] -> C.Index 3 -> (C.Vec 3 [Int], Int)
-  goModel vec ix = let (i:is) = vec C.!! ix in (C.replace ix is vec, i)
+  goModel vec ix = let (i : is) = vec C.!! ix in (C.replace ix is vec, i)
 
   goGen :: Gen (C.Vec 3 [Int], [C.Index 3])
   goGen = do
@@ -324,8 +327,8 @@ prop_selectN =
  where
   goModel :: C.Vec 3 [Int] -> (C.Index 3, C.Index 10) -> (C.Vec 3 [Int], [Int])
   goModel vec (ix, len) =
-    let (as, bs) = splitAt (fromIntegral len) (vec C.!! ix) in
-    (C.replace ix bs vec, as)
+    let (as, bs) = splitAt (fromIntegral len) (vec C.!! ix)
+     in (C.replace ix bs vec, as)
 
   goGen :: Gen (C.Vec 3 [Int], [(C.Index 3, C.Index 10)])
   goGen = do
@@ -348,8 +351,8 @@ prop_selectUntil =
  where
   goModel :: C.Vec 3 [(Int, Bool)] -> C.Index 3 -> (C.Vec 3 [(Int, Bool)], [(Int, Bool)])
   goModel vec ix =
-    let (as, (b:bs)) = break snd (vec C.!! ix) in
-    (C.replace ix bs vec, as <> [b])
+    let (as, (b : bs)) = break snd (vec C.!! ix)
+     in (C.replace ix bs vec, as <> [b])
 
   goGen :: Gen (C.Vec 3 [(Int, Bool)], [C.Index 3])
   goGen = do
@@ -366,15 +369,19 @@ prop_selectUntil =
     pure (concatMap tagEnd inputs0)
 
 prop_fifo :: Property
-prop_fifo = idWithModelDf' id (C.withClockResetEnable C.clockGen C.resetGen C.enableGen Df.fifo (C.SNat @10))
+prop_fifo =
+  idWithModelDf'
+    id
+    (C.withClockResetEnable C.clockGen C.resetGen C.enableGen Df.fifo (C.SNat @10))
 
 tests :: TestTree
 tests =
-    -- TODO: Move timeout option to hedgehog for better error messages.
-    -- TODO: Does not seem to work for combinatorial loops like @let x = x in x@??
-    localOption (mkTimeout 12_000_000 {- 12 seconds -})
-  $ localOption (HedgehogTestLimit (Just 1000))
-  $(testGroupGenerator)
+  -- TODO: Move timeout option to hedgehog for better error messages.
+  -- TODO: Does not seem to work for combinatorial loops like @let x = x in x@??
+  localOption (mkTimeout 12_000_000 {- 12 seconds -}) $
+    localOption
+      (HedgehogTestLimit (Just 1000))
+      $(testGroupGenerator)
 
 main :: IO ()
 main = defaultMain tests
