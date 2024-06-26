@@ -33,6 +33,9 @@ module Protocols.Df (
   mapMaybe,
   catMaybes,
   coerce,
+  compressor,
+  expander,
+  compander,
   filter,
   filterS,
   either,
@@ -237,6 +240,84 @@ forceResetSanity = forceResetSanityGeneric
 -- | Coerce the payload of a Df stream.
 coerce :: (Coerce.Coercible a b) => Circuit (Df dom a) (Df dom b)
 coerce = fromSignals $ \(fwdA, bwdB) -> (Coerce.coerce bwdB, Coerce.coerce fwdA)
+
+{- | Takes one or more values from the left and "compresses" it into a single
+value that is occasionally sent to the right. Useful for taking small high-speed
+inputs (like bits from a serial line) and turning them into slower wide outputs
+(like 32-bit integers).
+
+Example:
+
+>>> accumulate xs x = let xs' = x:xs in if length xs' == 3 then ([], Just xs') else (xs', Nothing)
+>>> circuit = C.exposeClockResetEnable (compressor @C.System [] accumulate)
+>>> take 2 (simulateCSE circuit [(1::Int),2,3,4,5,6,7])
+[[3,2,1],[6,5,4]]
+-}
+compressor ::
+  forall dom s i o.
+  (C.HiddenClockResetEnable dom, C.NFDataX s) =>
+  s ->
+  -- | Return `Just` when the compressed value is complete.
+  (s -> i -> (s, Maybe o)) ->
+  Circuit (Df dom i) (Df dom o)
+compressor s0 f = compander s0 $
+  \s i ->
+    let (s', o) = f s i
+     in (s', o, True)
+
+{- | Takes a value from the left and "expands" it into one or more values that
+are sent off to the right. Useful for taking wide, slow inputs (like a stream of
+32-bit integers) and turning them into a fast, narrow output (like a stream of bits).
+
+Example:
+
+>>> step index = if index == maxBound then (0, True) else (index + 1, False)
+>>> expandVector index vec = let (index', done) = step index in (index', vec C.!! index, done)
+>>> circuit = C.exposeClockResetEnable (expander @C.System (0 :: C.Index 3) expandVector)
+>>> take 6 (simulateCSE circuit [1 :> 2 :> 3 :> Nil, 4 :> 5 :> 6 :> Nil])
+[1,2,3,4,5,6]
+-}
+expander ::
+  forall dom i o s.
+  (C.HiddenClockResetEnable dom, C.NFDataX s) =>
+  s ->
+  -- | Return `True` when you're finished with the current input value
+  -- and are ready for the next one.
+  (s -> i -> (s, o, Bool)) ->
+  Circuit (Df dom i) (Df dom o)
+expander s0 f = compander s0 $
+  \s i ->
+    let (s', o, done) = f s i
+     in (s', Just o, done)
+
+{- | Takes values from the left,
+possibly holding them there for a while while working on them,
+and occasionally sends values off to the right.
+Used to implement both `expander` and `compressor`, so you can use it
+when there's not a straightforward one-to-many or many-to-one relationship
+between the input and output streams.
+-}
+compander ::
+  forall dom i o s.
+  (C.HiddenClockResetEnable dom, C.NFDataX s) =>
+  s ->
+  -- | Return `True` when you're finished with the current input value
+  -- and are ready for the next one.
+  -- Return `Just` to send the produced value off to the right.
+  (s -> i -> (s, Maybe o, Bool)) ->
+  Circuit (Df dom i) (Df dom o)
+compander s0 f = forceResetSanity |> Circuit (C.unbundle . go . C.bundle)
+ where
+  go :: Signal dom (Data i, Ack) -> Signal dom (Ack, Data o)
+  go = C.mealy f' s0
+  f' :: s -> (Data i, Ack) -> (s, (Ack, Data o))
+  f' s (NoData, _) = (s, (Ack False, NoData))
+  f' s (Data i, Ack ack) = (s'', (Ack ackBack, maybe NoData Data o))
+   where
+    (s', o, doneWithInput) = f s i
+    -- We only care about the downstream ack if we're sending them something
+    mustWaitForAck = Maybe.isJust o
+    (s'', ackBack) = if mustWaitForAck && not ack then (s, False) else (s', doneWithInput)
 
 -- | Like 'P.map', but over payload (/a/) of a Df stream.
 map :: (a -> b) -> Circuit (Df dom a) (Df dom b)
