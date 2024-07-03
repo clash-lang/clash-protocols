@@ -5,6 +5,7 @@ import qualified Tests.Protocols.Avalon
 import qualified Tests.Protocols.Axi4
 import qualified Tests.Protocols.Df
 import qualified Tests.Protocols.DfConv
+import qualified Tests.Protocols.PacketStream
 import qualified Tests.Protocols.Wishbone
 
 tests :: TestTree
@@ -16,6 +17,7 @@ tests =
     , Tests.Protocols.Avalon.tests
     , Tests.Protocols.Axi4.tests
     , Tests.Protocols.Wishbone.tests
+    , Tests.Protocols.PacketStream.tests
     ]
 
 main :: IO ()
