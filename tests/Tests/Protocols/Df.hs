@@ -133,6 +133,100 @@ prop_catMaybes =
     catMaybes
     Df.catMaybes
 
+-- A parameterized test definition validating that an expander which
+-- simply releases a value downstream once every N cycles
+-- does not otherwise change the contents of the stream.
+testExpanderPassThrough :: forall n. (C.KnownNat n) => C.SNat n -> Property
+testExpanderPassThrough _periodicity =
+  idWithModelSingleDomain @C.System
+    defExpectOptions
+    (genData genSmallInt)
+    (C.exposeClockResetEnable id)
+    ( C.exposeClockResetEnable $
+        passThroughExpander |> Df.catMaybes
+    )
+ where
+  -- Just stares at a value for a few cycles and then forwards it
+  passThroughExpander ::
+    forall dom a.
+    (C.HiddenClockResetEnable dom) =>
+    Circuit (Df dom a) (Df dom (Maybe a))
+  passThroughExpander = Df.expander (0 :: C.Index n) $ \count input ->
+    let done = count == maxBound
+     in ( if done then 0 else count + 1
+        , if done then Just input else Nothing
+        , done
+        )
+
+prop_expander_passthrough_linerate :: Property
+prop_expander_passthrough_linerate = testExpanderPassThrough C.d1
+
+prop_expander_passthrough_slow :: Property
+prop_expander_passthrough_slow = testExpanderPassThrough C.d4
+
+-- A parameterized test definition validating that an expander duplicates
+-- input values N times and sends them downstream.
+testExpanderDuplicate :: forall n. (C.KnownNat n) => C.SNat n -> Property
+testExpanderDuplicate duplication =
+  idWithModelSingleDomain @C.System
+    defExpectOptions
+    (genData genSmallInt)
+    (C.exposeClockResetEnable (concatMap (replicate (C.snatToNum duplication))))
+    ( C.exposeClockResetEnable
+        duplicator
+    )
+ where
+  -- Creates n copies of a value
+  duplicator ::
+    forall dom a.
+    (C.HiddenClockResetEnable dom) =>
+    Circuit (Df dom a) (Df dom a)
+  duplicator = Df.expander (0 :: C.Index n) $ \count input ->
+    let done = count == maxBound
+     in ( if done then 0 else count + 1
+        , input
+        , done
+        )
+
+prop_expander_duplicate_linerate :: Property
+prop_expander_duplicate_linerate = testExpanderDuplicate C.d1
+
+prop_expander_duplicate_slow :: Property
+prop_expander_duplicate_slow = testExpanderDuplicate C.d4
+
+-- A paremterized test definition validating that a compressor correctly
+-- sums up batches of N values.
+testCompressorSum :: forall n. (C.KnownNat n) => C.SNat n -> Property
+testCompressorSum batchSize =
+  idWithModelSingleDomain @C.System
+    defExpectOptions
+    (genData genSmallInt)
+    (C.exposeClockResetEnable referenceImpl)
+    ( C.exposeClockResetEnable
+        passThroughExpander
+    )
+ where
+  chunk = C.snatToNum batchSize
+  -- Given [a,b,c,d,e] and chunk = 2, yield [a+b,c+d]
+  referenceImpl = map sum . takeWhile ((== chunk) . length) . map (take chunk) . iterate (drop chunk)
+  -- Sum groups of `n` samples together
+  passThroughExpander ::
+    forall dom.
+    (C.HiddenClockResetEnable dom) =>
+    Circuit (Df dom Int) (Df dom Int)
+  passThroughExpander = Df.compressor (0 :: C.Index n, 0 :: Int) $ \(count, total) input ->
+    let done = count == maxBound
+        total' = total + input
+     in ( if done then (0, 0) else (count + 1, total')
+        , if done then Just total' else Nothing
+        )
+
+prop_compressor_sum_linerate :: Property
+prop_compressor_sum_linerate = testCompressorSum C.d1
+
+prop_compressor_sum_slow :: Property
+prop_compressor_sum_slow = testCompressorSum C.d4
+
 prop_registerFwd :: Property
 prop_registerFwd =
   idWithModelSingleDomain
@@ -335,9 +429,8 @@ prop_selectN =
     n <- genSmallInt
     ixs <- Gen.list (Range.singleton n) Gen.enumBounded
     lenghts <- Gen.list (Range.singleton n) Gen.enumBounded
-    let
-      tallied = tallyOn fst (fromIntegral . snd) (zip ixs lenghts)
-      tall i = fromMaybe 0 (HashMap.lookup i tallied)
+    let tallied = tallyOn fst (fromIntegral . snd) (zip ixs lenghts)
+        tall i = fromMaybe 0 (HashMap.lookup i tallied)
     dats <- mapM (\i -> Gen.list (Range.singleton (tall i)) genSmallInt) C.indicesI
     pure (dats, zip ixs lenghts)
 
