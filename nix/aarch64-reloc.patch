@@ -1,0 +1,139 @@
+From bd887b9f8a669f2269c4c420a23b64569be351b5 Mon Sep 17 00:00:00 2001
+From: Sylvain Henry <sylvain@haskus.fr>
+Date: Wed, 19 Jun 2024 16:55:18 +0200
+Subject: [PATCH 1/3] Linker: use m32 allocator for sections when NEED_PLT
+ (#24432)
+
+Use M32 allocator to avoid fragmentation when allocating ELF sections.
+We already did this when NEED_PLT was undefined. Failing to do this led
+to relocations impossible to fulfil (#24432).
+---
+ rts/linker/Elf.c | 26 ++++++++++++--------------
+ 1 file changed, 12 insertions(+), 14 deletions(-)
+
+diff --git a/rts/linker/Elf.c b/rts/linker/Elf.c
+index 9132d9d3973..8168103e4e5 100644
+--- a/rts/linker/Elf.c
++++ b/rts/linker/Elf.c
+@@ -863,25 +863,23 @@ ocGetNames_ELF ( ObjectCode* oc )
+
+           unsigned nstubs = numberOfStubsForSection(oc, i);
+           unsigned stub_space = STUB_SIZE * nstubs;
++          unsigned full_size = size+stub_space;
+
+-          void * mem = mmapAnonForLinker(size+stub_space);
++          // use M32 allocator to avoid fragmentation and relocations impossible
++          // to fulfil (cf #24432)
++          bool executable = kind == SECTIONKIND_CODE_OR_RODATA;
++          m32_allocator *allocator = executable ? oc->rx_m32 : oc->rw_m32;
+
+-          if( mem == MAP_FAILED ) {
+-            barf("failed to mmap allocated memory to load section %d. "
+-                 "errno = %d", i, errno);
+-          }
++          // Correctly align the section. This is particularly important for
++          // the alignment of .rodata.cstNN sections.
++          start = m32_alloc(allocator, full_size, align);
++          if (start == NULL) goto fail;
++          alloc = SECTION_M32;
+
+           /* copy only the image part over; we don't want to copy data
+            * into the stub part.
+            */
+-          memcpy( mem, oc->image + offset, size );
+-
+-          alloc = SECTION_MMAP;
+-
+-          mapped_offset = 0;
+-          mapped_size = roundUpToPage(size+stub_space);
+-          start = mem;
+-          mapped_start = mem;
++          memcpy(start, oc->image + offset, size);
+ #else
+           if (USE_CONTIGUOUS_MMAP || RtsFlags.MiscFlags.linkerAlwaysPic) {
+               // already mapped.
+@@ -918,7 +916,7 @@ ocGetNames_ELF ( ObjectCode* oc )
+
+ #if defined(NEED_PLT)
+           oc->sections[i].info->nstubs = 0;
+-          oc->sections[i].info->stub_offset = (uint8_t*)mem + size;
++          oc->sections[i].info->stub_offset = (uint8_t*)start + size;
+           oc->sections[i].info->stub_size = stub_space;
+           oc->sections[i].info->stubs = NULL;
+ #else
+--
+GitLab
+
+
+From 976ec5d51ab1f185b7d9ba2c15f326f2a4c8828c Mon Sep 17 00:00:00 2001
+From: Sylvain Henry <sylvain@haskus.fr>
+Date: Thu, 27 Jun 2024 16:40:50 +0200
+Subject: [PATCH 2/3] RTS: allow M32 allocation outside of 4GB range when
+ assuming -fPIC
+
+---
+ rts/linker/M32Alloc.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/rts/linker/M32Alloc.c b/rts/linker/M32Alloc.c
+index 17d3d12459c..adff1b22957 100644
+--- a/rts/linker/M32Alloc.c
++++ b/rts/linker/M32Alloc.c
+@@ -156,7 +156,10 @@ static bool
+ is_okay_address(void *p) {
+   int8_t *here = LINKER_LOAD_BASE;
+   ssize_t displacement = (int8_t *) p - here;
+-  return (displacement > -0x7fffffff) && (displacement < 0x7fffffff);
++  // if we assume -fPIC, we don't care where we load code.
++  // But we still want to use the m32 allocator to avoid fragmentation (#24432)
++  return RtsFlags.MiscFlags.linkerAlwaysPic
++         || ((displacement > -0x7fffffff) && (displacement < 0x7fffffff));
+ }
+
+ enum m32_page_type {
+--
+GitLab
+
+
+From 54de3a80ebac9a782cf0cc91f3a3afcc94615817 Mon Sep 17 00:00:00 2001
+From: Sylvain Henry <sylvain@haskus.fr>
+Date: Tue, 9 Jul 2024 13:00:08 +0200
+Subject: [PATCH 3/3] Linker: fix stub offset
+
+Remove unjustified +8 offset that leads to memory corruption (cf
+discussion in #24432).
+---
+ rts/linker/elf_plt.c   | 3 +--
+ rts/linker/macho/plt.c | 3 +--
+ 2 files changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/rts/linker/elf_plt.c b/rts/linker/elf_plt.c
+index 9cd42efff23..5c6ef8ed442 100644
+--- a/rts/linker/elf_plt.c
++++ b/rts/linker/elf_plt.c
+@@ -56,8 +56,7 @@ makeStub(Section * section,
+     s->target = *addr;
+     s->flags  = flags;
+     s->next = NULL;
+-    s->addr = (uint8_t *)section->info->stub_offset + 8
+-            + STUB_SIZE * section->info->nstubs;
++    s->addr = (uint8_t *)section->info->stub_offset + STUB_SIZE * section->info->nstubs;
+
+     if((*_makeStub)(s))
+         return EXIT_FAILURE;
+diff --git a/rts/linker/macho/plt.c b/rts/linker/macho/plt.c
+index ed005ba447a..6eb94c29cb0 100644
+--- a/rts/linker/macho/plt.c
++++ b/rts/linker/macho/plt.c
+@@ -56,8 +56,7 @@ makeStub(Section * section,
+     s->target = *addr;
+     s->flags  = flags;
+     s->next = NULL;
+-    s->addr = (uint8_t *)section->info->stub_offset + 8
+-            + STUB_SIZE * section->info->nstubs;
++    s->addr = (uint8_t *)section->info->stub_offset + STUB_SIZE * section->info->nstubs;
+
+     if((*_makeStub)(s))
+         return EXIT_FAILURE;
+--
+GitLab
