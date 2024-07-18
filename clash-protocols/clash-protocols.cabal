@@ -145,6 +145,7 @@ library
     Protocols.Axi4.WriteAddress
     Protocols.Axi4.WriteData
     Protocols.Axi4.WriteResponse
+    Protocols.PacketStream
     Protocols.PacketStream.Base
     Protocols.PacketStream.AsyncFifo
     Protocols.PacketStream.Converters
