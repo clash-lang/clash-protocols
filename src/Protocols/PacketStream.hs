@@ -1,11 +1,15 @@
-module Protocols.PacketStream
-  (module Protocols.PacketStream.AsyncFifo
-  ,module Protocols.PacketStream.Base
-  ,module Protocols.PacketStream.Converters
-  ,module Protocols.PacketStream.PacketFifo
-  ,module Protocols.PacketStream.Packetizers
-  ,module Protocols.PacketStream.Routing)
-  where
+{- |
+Top level PacketStream module which exports all components.
+-}
+module Protocols.PacketStream (
+  module Protocols.PacketStream.AsyncFifo,
+  module Protocols.PacketStream.Base,
+  module Protocols.PacketStream.Converters,
+  module Protocols.PacketStream.PacketFifo,
+  module Protocols.PacketStream.Packetizers,
+  module Protocols.PacketStream.Routing,
+)
+where
 
 import Protocols.PacketStream.AsyncFifo
 import Protocols.PacketStream.Base
