@@ -10,7 +10,7 @@ import Data.Maybe.Extra (toMaybe)
 import Clash.Explicit.Prelude (asyncFIFOSynchronizer)
 import Clash.Prelude
 
-import Protocols.Internal (Circuit, fromSignals)
+import Protocols (Circuit, fromSignals)
 import Protocols.PacketStream.Base
 
 {- | Asynchronous FIFO circuit that can be used to safely cross clock domains.
@@ -18,19 +18,18 @@ Uses `Clash.Explicit.Prelude.asyncFIFOSynchronizer` internally.
 -}
 asyncFifoC ::
   forall
-    (depth :: Nat)
-    (dataWidth :: Nat)
     (wDom :: Domain)
     (rDom :: Domain)
+    (depth :: Nat)
+    (dataWidth :: Nat)
     (metaType :: Type).
-  ( KnownDomain wDom
-  , KnownDomain rDom
-  , KnownNat depth
-  , 2 <= depth
-  , KnownNat dataWidth
-  , 1 <= dataWidth
-  , NFDataX metaType
-  ) =>
+  (KnownDomain wDom) =>
+  (KnownDomain rDom) =>
+  (KnownNat depth) =>
+  (KnownNat dataWidth) =>
+  (2 <= depth) =>
+  (1 <= dataWidth) =>
+  (NFDataX metaType) =>
   -- | 2^depth is the number of elements this component can store
   SNat depth ->
   -- | Clock signal in the write domain
