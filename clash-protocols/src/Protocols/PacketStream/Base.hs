@@ -71,6 +71,10 @@ instance Protocol (PacketStream dom dataWidth metaType) where
       Signal dom (Maybe (PacketStreamM2S dataWidth metaType))
   type Bwd (PacketStream dom dataWidth metaType) = Signal dom PacketStreamS2M
 
+instance IdleCircuit (PacketStream dom dataWidth metaType) where
+  idleBwd _ = pure (PacketStreamS2M False)
+  idleFwd _ = pure Nothing
+
 instance Backpressure (PacketStream dom dataWidth metaType) where
   boolsToBwd _ = fromList_lazy . fmap PacketStreamS2M
 
@@ -157,17 +161,14 @@ fromPacketStream ::
   Circuit (PacketStream dom n meta) (CSignal dom (Maybe (PacketStreamM2S n meta)))
 fromPacketStream = forceResetSanity |> Circuit (\(inFwd, _) -> (pure (PacketStreamS2M True), inFwd))
 
--- | Ensures a circuit does not send out ready on reset
+{- | Force a /nack/ on the backward channel and /Nothing/ on the forward
+channel if reset is asserted.
+-}
 forceResetSanity ::
   forall dom n meta.
   (HiddenClockResetEnable dom) =>
   Circuit (PacketStream dom n meta) (PacketStream dom n meta)
-forceResetSanity =
-  Circuit (\(fwd, bwd) -> unbundle . fmap f . bundle $ (rstLow, fwd, bwd))
- where
-  f (True, _, _) = (PacketStreamS2M False, Nothing)
-  f (False, fwd, bwd) = (bwd, fwd)
-  rstLow = unsafeToActiveHigh hasReset
+forceResetSanity = forceResetSanityGeneric
 
 {- | Filter a packet stream based on its metadata,
   with the predicate wrapped in a @Signal@.
