@@ -36,7 +36,7 @@ takeLe ::
   Vec n a
 takeLe SNat vs = leToPlus @n @m $ takeI vs
 
--- | Take the first 'valid' elements of 'xs', append 'ys', then pad with 0s
+-- | Take the first @valid@ elements of @xs@, append @ys@, then pad with 0s
 appendVec ::
   forall n m a.
   (KnownNat n) =>

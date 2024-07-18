@@ -187,14 +187,13 @@ packetizerC ::
     (metaOut :: Type)
     (header :: Type)
     (headerBytes :: Nat).
-  ( HiddenClockResetEnable dom
-  , NFDataX metaOut
-  , BitPack header
-  , BitSize header ~ headerBytes * 8
-  , KnownNat headerBytes
-  , 1 <= dataWidth
-  , KnownNat dataWidth
-  ) =>
+  (HiddenClockResetEnable dom) =>
+  (NFDataX metaOut) =>
+  (BitPack header) =>
+  (BitSize header ~ headerBytes * 8) =>
+  (KnownNat headerBytes) =>
+  (1 <= dataWidth) =>
+  (KnownNat dataWidth) =>
   -- | Metadata transformer function
   (metaIn -> metaOut) ->
   -- | metaData to header that will be packetized transformer function
@@ -367,15 +366,14 @@ depacketizerC ::
     (metaOut :: Type)
     (header :: Type)
     (headerBytes :: Nat).
-  ( HiddenClockResetEnable dom
-  , NFDataX metaOut
-  , NFDataX metaIn
-  , BitPack header
-  , BitSize header ~ headerBytes * 8
-  , KnownNat headerBytes
-  , 1 <= dataWidth
-  , KnownNat dataWidth
-  ) =>
+  (HiddenClockResetEnable dom) =>
+  (NFDataX metaOut) =>
+  (NFDataX metaIn) =>
+  (BitPack header) =>
+  (BitSize header ~ headerBytes * 8) =>
+  (KnownNat headerBytes) =>
+  (1 <= dataWidth) =>
+  (KnownNat dataWidth) =>
   -- | Used to compute final metadata of outgoing packets from header and incoming metadata
   (header -> metaIn -> metaOut) ->
   Circuit (PacketStream dom dataWidth metaIn) (PacketStream dom dataWidth metaOut)
