@@ -484,13 +484,13 @@ Circuit did not produce enough output. Expected 1 more values. Sampled only 0:
 
 In this case, Hedgehog pretty much constrained us to pretty much one case in our implementation: the one where it matches on `Df.Data (Just d)`. Weirdly, no backpressure was needed to trigger this error, but we still see dropped values. This usually means we generated an _ack_ while the reset was asserted. And sure enough, we don't check for this. (Note that the "right" implementation moved the responsibility of this problem to the component on the RHS, hence not failing.)
 
-At this point it might be tempting to use `Df.forceAckLow` to force proper reset behavior. To do so, apply the patch:
+At this point it might be tempting to use `Df.forceResetSanity` to force proper reset behavior. To do so, apply the patch:
 
 ```diff
 - catMaybes :: Circuit (Df dom (Maybe a)) (Df dom a)
 - catMaybes = Circuit (C.unbundle . fmap go . C.bundle
 + catMaybes :: C.HiddenClockResetEnable dom => Circuit (Df dom (Maybe a)) (Df dom a)
-+ catMaybes = Df.forceAckLow |> Circuit (C.unbundle . fmap go . C.bundle
++ catMaybes = Df.forceResetSanity |> Circuit (C.unbundle . fmap go . C.bundle
 ```
 
 Because our function is now stateful, we also need to change the test to:
@@ -554,7 +554,7 @@ The first part of the tuple, `StallWithNack`, indicates what the stall circuit d
 
 instead, this would have mean that the circuit would be stalled for _4_ cycles on its first valid data cycle, _5_ on the next, and _6_ on the next valid data cycle after that. Hedgehog only generated one member in our case, as it expects to sample just a single value too.
 
-At this point we're forced to conclude that `forceAckWithLow` did not fix our woes and we should persue a proper fix.
+At this point we're forced to conclude that `forceResetSanity` did not fix our woes and we should persue a proper fix.
 
 ## Connecting multiple circuits
 Check out [tests/Tests/Protocols/Plugin.hs](https://github.com/clash-lang/clash-protocols/blob/main/tests/Tests/Protocols/Plugin.hs) for examples on how to use `Protocols.Plugin` to wire up circuits using a convenient syntax.
