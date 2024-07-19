@@ -27,7 +27,6 @@ import Test.Tasty.TH (testGroupGenerator)
 import Protocols
 import Protocols.Avalon.MemMap
 import Protocols.Avalon.Stream
-import qualified Protocols.Df as Df
 import qualified Protocols.DfConv as DfConv
 import Protocols.Hedgehog
 import Protocols.Internal
@@ -107,7 +106,7 @@ prop_avalon_convert_manager_subordinate =
           Proxy
           Proxy
           (repeat True)
-          (repeat (Df.Data readImpt))
+          (repeat (Just readImpt))
           ckt
     )
  where
@@ -130,7 +129,7 @@ prop_avalon_convert_manager_subordinate_rev =
         DfConv.dfConvTestBenchRev
           Proxy
           Proxy
-          (repeat (Df.Data $ Left readReqImpt))
+          (repeat (Just $ Left readReqImpt))
           (repeat True)
           ckt
     )
@@ -155,7 +154,7 @@ prop_avalon_convert_subordinate_manager =
           Proxy
           Proxy
           (repeat True)
-          (repeat (Df.Data readImpt))
+          (repeat (Just readImpt))
           ckt
     )
  where
@@ -178,7 +177,7 @@ prop_avalon_convert_subordinate_manager_rev =
         DfConv.dfConvTestBenchRev
           Proxy
           Proxy
-          (repeat (Df.Data $ Left readReqImpt))
+          (repeat (Just $ Left readReqImpt))
           (repeat True)
           ckt
     )
