@@ -151,8 +151,8 @@ instance
 
   simToSigFwd _ = fromList_lazy
   simToSigBwd _ = fromList_lazy
-  sigToSimFwd _ s = sample_lazy s
-  sigToSimBwd _ s = sample_lazy s
+  sigToSimFwd _ = sample_lazy
+  sigToSimBwd _ = sample_lazy
 
   stallC conf (C.head -> (stallAck, stalls)) =
     withClockResetEnable clockGen resetGen enableGen $
@@ -173,9 +173,8 @@ instance
     withClockResetEnable clockGen resetGen enableGen $
       DfConv.drive Proxy conf vals
   sampleC conf ckt =
-    withClockResetEnable clockGen resetGen enableGen $
-      DfConv.sample Proxy conf $
-        ckt
+    withClockResetEnable clockGen resetGen enableGen
+      $ DfConv.sample Proxy conf ckt
 
 instance
   ( KnownAxi4StreamConfig conf
@@ -188,10 +187,8 @@ instance
   ) =>
   Test (Axi4Stream dom conf userType)
   where
-  expectN Proxy options sampled =
-    expectN (Proxy @(Df.Df dom _)) options $
-      Df.maybeToData
-        <$> sampled
+  expectToLengths Proxy = pure . P.length
+  expectN Proxy = expectN (Proxy @(Df.Df dom _))
 
 instance IdleCircuit (Axi4Stream dom conf userType) where
   idleFwd Proxy = C.pure Nothing
