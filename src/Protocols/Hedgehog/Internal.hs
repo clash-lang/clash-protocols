@@ -20,7 +20,6 @@ import Prelude
 
 -- clash-protocols
 import Protocols
-import qualified Protocols.Df as Df
 
 -- clash-prelude
 
@@ -121,14 +120,14 @@ instance (TestType a, C.KnownDomain dom) => Test (Df dom a) where
     Proxy (Df dom a) ->
     ExpectOptions ->
     C.Vec 1 Int ->
-    [Df.Data a] ->
+    [Maybe a] ->
     m [a]
   expectN Proxy (ExpectOptions{eoEmptyTail, eoTimeout}) (C.head -> nExpected) sampled = do
     go (fromMaybe maxBound eoTimeout) nExpected sampled
    where
     catDatas [] = []
-    catDatas (Df.NoData : xs) = catDatas xs
-    catDatas (Df.Data x : xs) = x : catDatas xs
+    catDatas (Nothing : xs) = catDatas xs
+    catDatas (Just x : xs) = x : catDatas xs
 
     go ::
       (HasCallStack) =>
@@ -137,7 +136,7 @@ instance (TestType a, C.KnownDomain dom) => Test (Df dom a) where
       -- Expected number of values
       Int ->
       -- Sampled data
-      [Df.Data a] ->
+      [Maybe a] ->
       -- Results
       m [a]
     go _timeout _n [] =
@@ -159,10 +158,10 @@ instance (TestType a, C.KnownDomain dom) => Test (Df dom a) where
               , " more values. Sampled only " <> show (nExpected - n) <> ":\n\n"
               , ppShow (take (nExpected - n) (catDatas sampled))
               ]
-    go timeout n (Df.NoData : as) = do
+    go timeout n (Nothing : as) = do
       -- Circuit did not output valid cycle, just continue
       go (pred timeout) n as
-    go _ n (Df.Data _ : as) =
+    go _ n (Just _ : as) =
       -- Circuit produced a valid cycle, reset timeout
       go (fromMaybe maxBound eoTimeout) (pred n) as
 

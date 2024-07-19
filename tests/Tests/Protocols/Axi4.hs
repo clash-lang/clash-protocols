@@ -36,7 +36,6 @@ import Protocols.Axi4.Stream
 import Protocols.Axi4.WriteAddress
 import Protocols.Axi4.WriteData
 import Protocols.Axi4.WriteResponse
-import qualified Protocols.Df as Df
 import qualified Protocols.DfConv as DfConv
 import Protocols.Hedgehog
 import Protocols.Internal
@@ -69,7 +68,7 @@ prop_axi4_convert_write_id =
           Proxy
           Proxy
           (repeat True)
-          (repeat $ Df.Data (toKeepType ROkay, 0))
+          (repeat $ Just (toKeepType ROkay, 0))
           ckt
     )
  where
@@ -128,7 +127,7 @@ prop_axi4_convert_write_id =
       <*> (toKeepType <$> Gen.enumBounded)
       <*> DfTest.genSmallInt
 
-  genBurstLen = toKeepType <$> pure 0
+  genBurstLen = pure (toKeepType 0)
   genBurst = toKeepType <$> (pure BmFixed C.<|> pure BmIncr C.<|> pure BmWrap)
   genStrobe = genVec $ pure Nothing C.<|> (Just <$> Gen.enumBounded)
 
@@ -142,7 +141,7 @@ prop_axi4_convert_write_id_rev =
         DfConv.dfConvTestBenchRev
           Proxy
           Proxy
-          (repeat $ Df.Data fwdInfo)
+          (repeat $ Just fwdInfo)
           (repeat True)
           ckt
     )
@@ -211,7 +210,7 @@ prop_axi4_convert_read_id =
           Proxy
           Proxy
           (repeat True)
-          (repeat $ Df.Data (0, 0, toKeepType ROkay))
+          (repeat $ Just (0, 0, toKeepType ROkay))
           ckt
     )
  where
@@ -231,7 +230,7 @@ prop_axi4_convert_read_id =
       <$> Gen.enumBounded
       <*> Gen.enumBounded
       <*> (toKeepType <$> Gen.enumBounded)
-      <*> (Gen.integral (Range.linear 0 10))
+      <*> Gen.integral (Range.linear 0 10)
       <*> ( toKeepType
               <$> ( pure Bs1
                       C.<|> pure Bs2
@@ -273,7 +272,7 @@ prop_axi4_convert_read_id_rev =
         DfConv.dfConvTestBenchRev
           Proxy
           Proxy
-          (repeat $ Df.Data fwdInfo)
+          (repeat $ Just fwdInfo)
           (repeat True)
           ckt
     )
@@ -350,9 +349,9 @@ prop_axi4_stream_fifo_id =
 
   genInfo =
     Axi4StreamM2S
-      <$> (genVec Gen.enumBounded)
-      <*> (genVec Gen.enumBounded)
-      <*> (genVec Gen.enumBounded)
+      <$> genVec Gen.enumBounded
+      <*> genVec Gen.enumBounded
+      <*> genVec Gen.enumBounded
       <*> Gen.enumBounded
       <*> Gen.enumBounded
       <*> Gen.enumBounded

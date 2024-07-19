@@ -79,9 +79,9 @@ The protocols `Df` imposes a contract each component should follow. These are, w
 
   This invariant allows developers to insert arbitrary reset delays without worrying their design breaks. Caution should still be taken though, see [Note [Deasserting resets]](#note-deasserting-resets).
 
-* When _Fwd a_ does not contain data (i.e., is `NoData`), its corresponding _Bwd a_ may contain any value, including an error/bottom. When driving a bottom, a component should use `errorX` to make sure it can be evaluated using `seqX`. Test harnesses in `Protocols.Hedgehog` occasionally drive `errorX "No defined Ack"` when seeing `NoData` to test this.
+* When _Fwd a_ does not contain data (i.e., is `Nothing`), its corresponding _Bwd a_ may contain any value, including an error/bottom. When driving a bottom, a component should use `errorX` to make sure it can be evaluated using `seqX`. Test harnesses in `Protocols.Hedgehog` occasionally drive `errorX "No defined Ack"` when seeing `Nothing` to test this.
 
-* A circuit driving `Data x` must keep driving the same value until it receives an acknowledgment. This is not yet checked by test harnesses.
+* A circuit driving `Just x` must keep driving the same value until it receives an acknowledgment. This is not yet checked by test harnesses.
 
 ### Note [Deasserting resets]
 Care should be taken when deasserting resets. Given the following circuit:
@@ -111,7 +111,7 @@ should be deasserted as follows: `a`, `b,` `c`, `d`/`e`, `f`. Resets might also 
 This order is imposed by the fact that there is an invariant stating a component in reset must not acknowledge data while in reset, but there is - for performance reasons - no invariant stating a component must not send data while in reset.
 
 ## Tutorial: `catMaybes`
-At this point you should have familiarized with the basic structures of the `Df`: its dataconstructors (`Data`, `NoData`, and `Ack`) and its invariants, as well as the structure of a `Circuit` itself. To quickly try things it's useful to keep a repl around. With `stack`:
+At this point you should have familiarized with the basic structures of the `Df`: its dataconstructors (`Just`, `Nothing`, and `Ack`) and its invariants, as well as the structure of a `Circuit` itself. To quickly try things it's useful to keep a repl around. With `stack`:
 
 ```
 stack exec --package clash-protocols ghci
@@ -155,15 +155,7 @@ Then, we define the type and name of the component we'd like to write:
 catMaybes :: Circuit (Df dom (Maybe a)) (Df dom a)
 ```
 
-I.e., a circuit that takes a `Df` stream of `Maybe a` on the left hand side (LHS) and produces a stream of `a` on the right hand side (RHS). Note that the data carried on `Df`s _forward_ path very much looks like a `Maybe` in the first place:
-
-```
->>> :kind! Fwd (Df C.System Int)
-..
-= Signal "System" (Df.Data Int)
-```
-
-..because `Data Int` itself has two constructors: `Data Int` and `NoData`. In effect, we'd like squash `Data (Just a)` into `Data a`, and `Data Nothing` into `NoData`. Not unlike the way [join](https://hackage.haskell.org/package/base-4.14.0.0/docs/Control-Monad.html#v:join) would work on two `Maybe`s.
+I.e., a circuit that takes a `Df` stream of `Maybe a` on the left hand side (LHS) and produces a stream of `a` on the right hand side (RHS). In effect, we'd like squash `Just (Just a)` into `Just a`, and `Just Nothing` into `Nothing`. Exactly like the way [join](https://hackage.haskell.org/package/base-4.14.0.0/docs/Control-Monad.html#v:join) would work on two `Maybe`s.
 
 As the types of `Circuit`s become quite verbose and complex quickly, I like to let GHC do the heavy lifting. For example, I would write:
 
@@ -177,8 +169,8 @@ At this point, GHC will tell us:
 CatMaybes.hs:8:21: error:
     Variable not in scope:
       go
-        :: (C.Signal dom (Df.Data (Maybe a)), C.Signal dom (Df.Ack a))
-           -> (C.Signal dom (Df.Ack (Maybe a)), C.Signal dom (Df.Data a))
+        :: (C.Signal dom (Maybe (Maybe a)), C.Signal dom (Df.Ack a))
+           -> (C.Signal dom (Df.Ack (Maybe a)), C.Signal dom (Maybe a))
   |
 8 | catMaybes = Circuit go
   |                     ^^
@@ -206,8 +198,8 @@ Now GHC will tell us:
 CatMaybes.hs:8:35: error:
     Variable not in scope:
       go
-        :: C.Signal dom (Df.Data (Maybe a), Df.Ack a)
-           -> C.Signal dom (Df.Ack (Maybe a), Df.Data a)
+        :: C.Signal dom (Maybe (Maybe a), Df.Ack a)
+           -> C.Signal dom (Df.Ack (Maybe a), Maybe a)
   |
 8 | catMaybes = Circuit (C.unbundle . go . C.bundle)
   |                                   ^^
@@ -225,30 +217,30 @@ after which GHC will tell us:
 CatMaybes.hs:8:40: error:
     Variable not in scope:
       go
-        :: (Df.Data (Maybe a), Df.Ack a)
-           -> (Df.Ack (Maybe a), Df.Data a)
+        :: (Maybe (Maybe a), Df.Ack a)
+           -> (Df.Ack (Maybe a), Maybe a)
   |
 8 | catMaybes = Circuit (C.unbundle . fmap go . C.bundle)
   |                                        ^^
 ```
 
 
-This is something we can write, surely! If the LHS does not send data, there's not much we can do. We send `NoData` to the RHS and send a /nack/:
+This is something we can write, surely! If the LHS does not send data, there's not much we can do. We send `Nothing` to the RHS and send a /nack/:
 
 ```haskell
-  go (Df.NoData, _) = (Df.Ack False, Df.NoData)
+  go (Nothing, _) = (Df.Ack False, Nothing)
 ```
 
-If we _do_ receive data from the LHS but it turns out to be _Nothing_, we'd like to acknowledge that we received the data and send `NoData` to the RHS:
+If we _do_ receive data from the LHS but it turns out to be _Nothing_, we'd like to acknowledge that we received the data and send `Nothing` to the RHS:
 
 ```haskell
-go (Df.Data Nothing, _) = (Df.Ack True, Df.NoData)
+go (Just Nothing, _) = (Df.Ack True, Nothing)
 ```
 
 Finally, if the LHS sends data and it turns out to be a _Just_, we'd like to acknowledge that we received it and pass it onto the RHS. But we should be careful, we should only acknowledge it if our RHS received our data! In effect, we can just passthrough the ack:
 
 ```haskell
-go (Df.Data (Just d), Df.Ack ack) = (Df.Ack ack, Df.Data d)
+go (Just (Just d), Df.Ack ack) = (Df.Ack ack, Just d)
 ```
 
 ### Testing
@@ -356,8 +348,8 @@ Writing a `Df` component can be tricky business. Even for relatively simple circ
 Let's introduce one:
 
 ```diff
-- go (Df.Data Nothing, _) = (Df.Ack True, Df.NoData)
-+ go (Df.Data Nothing, _) = (Df.Ack False, Df.NoData)
+- go (Just Nothing, _) = (Df.Ack True, Nothing)
++ go (Just Nothing, _) = (Df.Ack False, Nothing)
 ```
 
 Rerunning the tests will give us a big error, which starts out as:
@@ -454,8 +446,8 @@ The test tells us that no output was sampled, even though it expected to sample 
 Let's revert the "mistake" we made and make another:
 
 ```diff
--  go (Df.Data (Just d), Df.Ack ack) = (Df.Ack ack, Df.Data d)
-+  go (Df.Data (Just d), Df.Ack ack) = (Df.Ack True, Df.Data d)
+-  go (Just (Just d), Df.Ack ack) = (Df.Ack ack, Just d)
++  go (Just (Just d), Df.Ack ack) = (Df.Ack True, Just d)
 ```
 
 Again, we get a pretty big error report. Let's skip right to the interesting bits:
@@ -482,7 +474,7 @@ Circuit did not produce enough output. Expected 1 more values. Sampled only 0:
 []
 ```
 
-In this case, Hedgehog pretty much constrained us to pretty much one case in our implementation: the one where it matches on `Df.Data (Just d)`. Weirdly, no backpressure was needed to trigger this error, but we still see dropped values. This usually means we generated an _ack_ while the reset was asserted. And sure enough, we don't check for this. (Note that the "right" implementation moved the responsibility of this problem to the component on the RHS, hence not failing.)
+In this case, Hedgehog pretty much constrained us to pretty much one case in our implementation: the one where it matches on `Just (Just d)`. Weirdly, no backpressure was needed to trigger this error, but we still see dropped values. This usually means we generated an _ack_ while the reset was asserted. And sure enough, we don't check for this. (Note that the "right" implementation moved the responsibility of this problem to the component on the RHS, hence not failing.)
 
 At this point it might be tempting to use `Df.forceResetSanity` to force proper reset behavior. To do so, apply the patch:
 
