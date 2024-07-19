@@ -170,13 +170,13 @@ instance
 
   toDfCircuit proxy = DfConv.toDfCircuitHelper proxy s0 blankOtp stateFn
    where
-    s0 = C.repeat @((ReadyLatency conf) + 1) False
+    s0 = C.repeat @(ReadyLatency conf + 1) False
     blankOtp = Nothing
     stateFn (AvalonStreamS2M thisAck) _ otpItem = do
       modify (thisAck +>>)
       ackQueue <- get
       pure
-        ( if (Maybe.isJust otpItem && C.last ackQueue) then otpItem else Nothing
+        ( if Maybe.isJust otpItem && C.last ackQueue then otpItem else Nothing
         , Nothing
         , C.last ackQueue
         )
@@ -209,8 +209,8 @@ instance
 
   simToSigFwd _ = fromList_lazy
   simToSigBwd _ = fromList_lazy
-  sigToSimFwd _ s = sample_lazy s
-  sigToSimBwd _ s = sample_lazy s
+  sigToSimFwd _ = sample_lazy
+  sigToSimBwd _ = sample_lazy
 
   stallC conf (head -> (stallAck, stalls)) =
     withClockResetEnable clockGen resetGen enableGen
@@ -236,8 +236,7 @@ instance
       $ DfConv.drive Proxy conf vals
   sampleC conf ckt =
     withClockResetEnable clockGen resetGen enableGen
-      $ DfConv.sample Proxy conf
-      $ ckt
+      $ DfConv.sample Proxy conf ckt
 
 instance
   ( ReadyLatency conf ~ 0
@@ -252,10 +251,7 @@ instance
   Test (AvalonStream dom conf dataType)
   where
   expectToLengths Proxy = pure . P.length
-  expectN Proxy options nExpected sampled =
-    expectN (Proxy @(Df.Df dom _)) options nExpected
-      $ Df.maybeToData
-      <$> sampled
+  expectN Proxy = expectN (Proxy @(Df.Df dom _))
 
 instance IdleCircuit (AvalonStream dom conf dataType) where
   idleFwd _ = pure Nothing
