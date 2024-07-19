@@ -132,16 +132,11 @@ import Protocols.Internal
 >>> import qualified Data.Bifunctor as B
 -}
 
-{- | Like 'Protocols.Df', but without metadata.
-
-__N.B.__: For performance reasons 'Protocols.Data' is strict on
-its data field. That is, if 'Protocols.Data' is evaluated to WHNF,
-its fields will be evaluated to WHNF too.
--}
+-- | Simple unidirectional valid-ready protocol.
 data Df (dom :: C.Domain) (a :: Type)
 
 instance Protocol (Df dom a) where
-  -- \| Forward part of simple dataflow: @Signal dom (Data meta a)@
+  -- \| Forward part of simple dataflow: @Signal dom (Maybe a)@
   type Fwd (Df dom a) = Signal dom (Maybe a)
 
   -- \| Backward part of simple dataflow: @Signal dom Bool@
