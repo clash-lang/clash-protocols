@@ -11,6 +11,7 @@ pkgs.stdenv.mkDerivation {
   buildInputs = project.env.nativeBuildInputs ++ [
     haskellPackages.cabal-install
     haskellPackages.fourmolu
+    haskellPackages.haskell-language-server
   ];
   LC_ALL = "C.UTF-8";
 }
