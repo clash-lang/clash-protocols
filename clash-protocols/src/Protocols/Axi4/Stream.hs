@@ -151,8 +151,8 @@ instance
 
   simToSigFwd _ = fromList_lazy
   simToSigBwd _ = fromList_lazy
-  sigToSimFwd _ = sample_lazy
-  sigToSimBwd _ = sample_lazy
+  sigToSimFwd _ s = sample_lazy s
+  sigToSimBwd _ s = sample_lazy s
 
   stallC conf (C.head -> (stallAck, stalls)) =
     withClockResetEnable clockGen resetGen enableGen $
