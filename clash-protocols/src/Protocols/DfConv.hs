@@ -151,8 +151,8 @@ class (Protocol df) => DfConv df where
   -- pipelining, etc. so that a circuit connected to the 'Df' end doesn't have
   -- to worry about all that. There are two Df channels, one for fwd data and
   -- one for bwd data, so data can be sent both ways at once. This circuit is
-  -- expected to follow all of the conventions of 'Df'; for example, 'Df.Data'
-  -- should stay the same between clock cycles unless acknowledged.
+  -- expected to follow all of the conventions of 'Df'; for example, data on the
+  -- fwd channel should stay the same between clock cycles unless acknowledged.
   toDfCircuit ::
     (HiddenClockResetEnable (Dom df)) =>
     Proxy df ->
@@ -174,10 +174,9 @@ class (Protocol df) => DfConv df where
   type FwdPayload df = ()
 
 {- | Helper function to make it easier to implement 'toDfCircuit' in 'DfConv'.
-'Ack's are automatically converted to/from 'Bool's, and 'Df.Data's to/from
-'Maybe'. A default @otpMsg@ value is given for if reset is currently on. The
-'State' machine is run every clock cycle. Parameters: initial state, default
-@otpMsg@, and 'State' machine function
+'Ack's are automatically converted to/from 'Bool's. A default @otpMsg@ value is
+given for if reset is currently on. The 'State' machine is run every clock cycle.
+Parameters: initial state, default @otpMsg@, and 'State' machine function
 -}
 toDfCircuitHelper ::
   ( HiddenClockResetEnable dom
@@ -224,10 +223,9 @@ toDfCircuitHelper _ s0 blankOtp stateFn =
       (s', ((Ack otpAck, inputted), otp))
 
 {- | Helper function to make it easier to implement 'fromDfCircuit' in 'DfConv'.
-'Ack's are automatically converted to/from 'Bool's, and 'Df.Data's to/from
-'Maybe'. A default @otpMsg@ value is given for if reset is currently on. The
-'State' machine is run every clock cycle. Parameters: initial state, default
-@otpMsg@, and 'State' machine function
+'Ack's are automatically converted to/from 'Bool's. A default @otpMsg@ value is
+given for if reset is currently on. The 'State' machine is run every clock cycle.
+Parameters: initial state, default @otpMsg@, and 'State' machine function
 -}
 fromDfCircuitHelper ::
   ( HiddenClockResetEnable dom
@@ -1533,7 +1531,7 @@ simulate dfA dfB conf circ = Df.simulate conf circ'
 {- | Given behavior along the backward channel, turn an arbitrary 'DfConv'
 circuit into an easily-testable 'Df' circuit representing the forward
 channel. Behavior along the backward channel is specified by a @[Bool]@
-(a list of acknowledges to provide), and a @[Data (BwdPayload dfB)]@ (a list
+(a list of acknowledges to provide), and a @[Maybe (BwdPayload dfB)]@ (a list
 of data values to feed in).
 -}
 dfConvTestBench ::
@@ -1576,7 +1574,7 @@ dfConvTestBench dfA dfB bwdAcks bwdPayload circ =
 {- | Given behavior along the forward channel, turn an arbitrary 'DfConv'
 circuit into an easily-testable 'Df' circuit representing the backward
 channel. Behavior along the forward channel is specified by a
-@[Data (FwdPayload dfA)]@ (a list of data values to feed in), and a @[Bool]@
+@[Maybe (FwdPayload dfA)]@ (a list of data values to feed in), and a @[Bool]@
 (a list of acknowledges to provide).
 -}
 dfConvTestBenchRev ::
