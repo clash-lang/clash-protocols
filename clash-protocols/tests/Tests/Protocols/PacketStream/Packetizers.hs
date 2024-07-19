@@ -4,8 +4,6 @@
 module Tests.Protocols.PacketStream.Packetizers (
   packetizerModel,
   packetizeFromDfModel,
-  depacketizerModel,
-  depacketizeToDfModel,
   tests,
 ) where
 
@@ -15,25 +13,42 @@ import Prelude
 
 -- clash
 import Clash.Prelude
-import Clash.Sized.Vector (unsafeFromList)
+import qualified Clash.Prelude as C
 
 -- hedgehog
--- import Hedgehog
--- import qualified Hedgehog.Gen as Gen
--- import qualified Hedgehog.Range as Range
+import Hedgehog
+import qualified Hedgehog.Gen as Gen
+import qualified Hedgehog.Range as Range
 
 -- tasty
 import Test.Tasty
 import Test.Tasty.Hedgehog (HedgehogTestLimit (HedgehogTestLimit))
 
--- import Test.Tasty.Hedgehog.Extra (testProperty)
+import Test.Tasty.Hedgehog.Extra (testProperty)
 import Test.Tasty.TH (testGroupGenerator)
 
 -- clash-protocols
+import Protocols
+import qualified Protocols.Df as Df
+import Protocols.Hedgehog
 import Protocols.PacketStream.Base
 
 -- tests
+
+import Protocols.PacketStream (packetizeFromDfC, packetizerC)
 import Tests.Protocols.PacketStream.Base
+
+genVec :: (KnownNat n, 1 <= n) => Gen a -> Gen (Vec n a)
+genVec gen = sequence (C.repeat gen)
+
+genMeta ::
+  forall (meta :: Type) (metaBytes :: Nat).
+  (KnownNat metaBytes) =>
+  (1 <= metaBytes) =>
+  (BitPack meta) =>
+  (BitSize meta ~ metaBytes * 8) =>
+  Gen meta
+genMeta = fmap bitCoerce (genVec Gen.enumBounded :: Gen (Vec metaBytes (BitVector 8)))
 
 -- | Model of the generic `packetizerC`.
 packetizerModel ::
@@ -93,79 +108,108 @@ packetizeFromDfModel toMetaOut toHeader = L.concatMap (upConvert . packetize)
         (\byte -> PacketStreamM2S (byte :> Nil) Nothing (toMetaOut d) False)
         (toList $ bitCoerce (toHeader d))
 
--- | Model of the generic `depacketizerC`.
-depacketizerModel ::
+{- | Test the packetizer with varying datawidth and number of bytes in the header,
+  with metaOut = ().
+-}
+packetizerPropertyGenerator ::
   forall
     (dataWidth :: Nat)
-    (headerBytes :: Nat)
-    (metaIn :: Type)
-    (metaOut :: Type)
-    (header :: Type).
-  ( KnownNat dataWidth
-  , KnownNat headerBytes
-  , 1 <= dataWidth
-  , 1 <= headerBytes
-  , BitPack header
-  , BitSize header ~ headerBytes * 8
-  ) =>
-  (header -> metaIn -> metaOut) ->
-  [PacketStreamM2S dataWidth metaIn] ->
-  [PacketStreamM2S dataWidth metaOut]
-depacketizerModel toMetaOut ps = L.concat dataWidthPackets
+    (headerBytes :: Nat).
+  (1 <= dataWidth) =>
+  (1 <= headerBytes) =>
+  SNat dataWidth ->
+  SNat headerBytes ->
+  Property
+packetizerPropertyGenerator SNat SNat =
+  idWithModelSingleDomain
+    @System
+    defExpectOptions
+    (fmap (cleanPackets . fullPackets) (Gen.list (Range.linear 1 100) genPackets))
+    (exposeClockResetEnable model)
+    (exposeClockResetEnable ckt)
  where
-  hdrbytes = natToNum @headerBytes
+  model ::
+    [PacketStreamM2S dataWidth (Vec headerBytes (BitVector 8))] ->
+    [PacketStreamM2S dataWidth ()]
+  model = packetizerModel (const ()) id
 
-  parseHdr ::
-    ([PacketStreamM2S 1 metaIn], [PacketStreamM2S 1 metaIn]) -> [PacketStreamM2S 1 metaOut]
-  parseHdr (hdrF, fwdF) = fmap (\f -> f{_meta = metaOut}) fwdF
-   where
-    hdr = bitCoerce $ unsafeFromList @headerBytes $ _data <$> hdrF
-    metaOut = toMetaOut hdr (_meta $ L.head fwdF)
+  ckt ::
+    (HiddenClockResetEnable System) =>
+    Circuit
+      (PacketStream System dataWidth (Vec headerBytes (BitVector 8)))
+      (PacketStream System dataWidth ())
+  ckt = packetizerC (const ()) id
 
-  bytePackets :: [[PacketStreamM2S 1 metaIn]]
-  bytePackets =
-    L.filter (\fs -> L.length fs > hdrbytes) $
-      L.concatMap chopPacket . smearAbort <$> chunkByPacket ps
+  genPackets =
+    PacketStreamM2S
+      <$> genVec Gen.enumBounded
+      <*> Gen.maybe Gen.enumBounded
+      <*> genMeta
+      <*> Gen.enumBounded
 
-  parsedPackets :: [[PacketStreamM2S 1 metaOut]]
-  parsedPackets = parseHdr . L.splitAt hdrbytes <$> bytePackets
+-- | headerBytes % dataWidth ~ 0
+prop_const_packetizer_d1_d14 :: Property
+prop_const_packetizer_d1_d14 = packetizerPropertyGenerator d1 d14
 
-  dataWidthPackets :: [[PacketStreamM2S dataWidth metaOut]]
-  dataWidthPackets = fmap chunkToPacket . chopBy (natToNum @dataWidth) <$> parsedPackets
+-- | dataWidth < headerBytes
+prop_const_packetizer_d3_d11 :: Property
+prop_const_packetizer_d3_d11 = packetizerPropertyGenerator d3 d11
 
--- | Model of the generic `depacketizeToDfC`.
-depacketizeToDfModel ::
+-- | dataWidth ~ header byte size
+prop_const_packetizer_d7_d7 :: Property
+prop_const_packetizer_d7_d7 = packetizerPropertyGenerator d7 d7
+
+-- | dataWidth > header byte size
+prop_const_packetizer_d5_d4 :: Property
+prop_const_packetizer_d5_d4 = packetizerPropertyGenerator d5 d4
+
+{- | Test packetizeFromDf with varying datawidth and number of bytes in the header
+  , with metaOut = ().
+-}
+packetizeFromDfPropertyGenerator ::
   forall
     (dataWidth :: Nat)
-    (headerBytes :: Nat)
-    (meta :: Type)
-    (a :: Type)
-    (header :: Type).
-  ( KnownNat dataWidth
-  , KnownNat headerBytes
-  , 1 <= dataWidth
-  , 1 <= headerBytes
-  , BitPack header
-  , BitSize header ~ headerBytes * 8
-  ) =>
-  (header -> meta -> a) ->
-  [PacketStreamM2S dataWidth meta] ->
-  [a]
-depacketizeToDfModel toOut ps = parseHdr <$> bytePackets
+    (headerBytes :: Nat).
+  (1 <= dataWidth) =>
+  (1 <= headerBytes) =>
+  SNat dataWidth ->
+  SNat headerBytes ->
+  Property
+packetizeFromDfPropertyGenerator SNat SNat =
+  idWithModelSingleDomain
+    @System
+    defExpectOptions
+    (Gen.list (Range.linear 1 100) (genVec Gen.enumBounded))
+    (exposeClockResetEnable model)
+    (exposeClockResetEnable ckt)
  where
-  hdrbytes = natToNum @headerBytes
+  model :: [Vec headerBytes (BitVector 8)] -> [PacketStreamM2S dataWidth ()]
+  model = packetizeFromDfModel (const ()) id
 
-  parseHdr :: [PacketStreamM2S 1 meta] -> a
-  parseHdr hdrF = toOut (bitCoerce $ unsafeFromList @headerBytes $ _data <$> hdrF) (_meta $ L.head hdrF)
+  ckt ::
+    (HiddenClockResetEnable System) =>
+    Circuit (Df.Df System (Vec headerBytes (BitVector 8))) (PacketStream System dataWidth ())
+  ckt = packetizeFromDfC (const ()) id
 
-  bytePackets :: [[PacketStreamM2S 1 meta]]
-  bytePackets =
-    L.filter (\fs -> L.length fs >= hdrbytes) $
-      L.concatMap chopPacket <$> chunkByPacket (dropAbortedPackets ps)
+-- | headerBytes % dataWidth ~ 0
+prop_const_packetizeFromDf_d1_d14 :: Property
+prop_const_packetizeFromDf_d1_d14 = packetizeFromDfPropertyGenerator d1 d14
+
+-- | dataWidth < headerBytes
+prop_const_packetizeFromDf_d3_d11 :: Property
+prop_const_packetizeFromDf_d3_d11 = packetizeFromDfPropertyGenerator d3 d11
+
+-- | dataWidth ~ header byte size
+prop_const_packetizeFromDf_d7_d7 :: Property
+prop_const_packetizeFromDf_d7_d7 = packetizeFromDfPropertyGenerator d7 d7
+
+-- | dataWidth > header byte size
+prop_const_packetizeFromDf_d5_d4 :: Property
+prop_const_packetizeFromDf_d5_d4 = packetizeFromDfPropertyGenerator d5 d4
 
 tests :: TestTree
 tests =
   localOption (mkTimeout 12_000_000 {- 12 seconds -}) $
     localOption
-      (HedgehogTestLimit (Just 1_000_000))
+      (HedgehogTestLimit (Just 1_000))
       $(testGroupGenerator)
