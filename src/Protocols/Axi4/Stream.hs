@@ -17,7 +17,6 @@ import Control.DeepSeq (NFData)
 import Data.Hashable (Hashable, hashWithSalt)
 import qualified Data.Maybe as Maybe
 import Data.Proxy
-import qualified Prelude as P
 
 -- clash-prelude
 import Clash.Prelude hiding (concat, length, take)
@@ -129,7 +128,7 @@ instance
     s0 = ()
     blankOtp = Nothing
     stateFn ack _ otpItem =
-      pure (otpItem, Nothing, Maybe.isJust otpItem && _tready ack)
+      pure (otpItem, Nothing, Maybe.isJust otpItem C.&& _tready ack)
 
   fromDfCircuit proxy = DfConv.fromDfCircuitHelper proxy s0 blankOtp stateFn
    where
@@ -153,9 +152,9 @@ instance
   sigToSimFwd _ s = sample_lazy s
   sigToSimBwd _ s = sample_lazy s
 
-  stallC conf (head -> (stallAck, stalls)) =
-    withClockResetEnable clockGen resetGen enableGen
-      $ DfConv.stall Proxy Proxy conf stallAck stalls
+  stallC conf (C.head -> (stallAck, stalls)) =
+    withClockResetEnable clockGen resetGen enableGen $
+      DfConv.stall Proxy Proxy conf stallAck stalls
 
 instance
   (KnownAxi4StreamConfig conf, NFDataX userType, KnownDomain dom) =>
@@ -169,12 +168,12 @@ instance
   fromSimulateType Proxy = Maybe.catMaybes
 
   driveC conf vals =
-    withClockResetEnable clockGen resetGen enableGen
-      $ DfConv.drive Proxy conf vals
+    withClockResetEnable clockGen resetGen enableGen $
+      DfConv.drive Proxy conf vals
   sampleC conf ckt =
-    withClockResetEnable clockGen resetGen enableGen
-      $ DfConv.sample Proxy conf
-      $ ckt
+    withClockResetEnable clockGen resetGen enableGen $
+      DfConv.sample Proxy conf $
+        ckt
 
 instance
   ( KnownAxi4StreamConfig conf
@@ -187,11 +186,10 @@ instance
   ) =>
   Test (Axi4Stream dom conf userType)
   where
-  expectToLengths Proxy = pure . P.length
-  expectN Proxy options nExpected sampled =
-    expectN (Proxy @(Df.Df dom _)) options nExpected
-      $ Df.maybeToData
-      <$> sampled
+  expectN Proxy options sampled =
+    expectN (Proxy @(Df.Df dom _)) options $
+      Df.maybeToData
+        <$> sampled
 
 instance IdleCircuit (Axi4Stream dom conf userType) where
   idleFwd Proxy = C.pure Nothing

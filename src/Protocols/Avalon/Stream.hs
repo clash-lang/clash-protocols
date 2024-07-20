@@ -251,9 +251,8 @@ instance
   ) =>
   Test (AvalonStream dom conf dataType)
   where
-  expectToLengths Proxy = pure . P.length
-  expectN Proxy options nExpected sampled =
-    expectN (Proxy @(Df.Df dom _)) options nExpected
+  expectN Proxy options sampled =
+    expectN (Proxy @(Df.Df dom _)) options
       $ Df.maybeToData
       <$> sampled
 

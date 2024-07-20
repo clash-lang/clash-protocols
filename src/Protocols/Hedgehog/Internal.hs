@@ -11,11 +11,8 @@ Internals for "Protocols.Hedgehog".
 module Protocols.Hedgehog.Internal where
 
 -- base
-
-import Control.Monad (forM)
-import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy (Proxy))
-import GHC.Stack (HasCallStack, withFrozenCallStack)
+import GHC.Stack (HasCallStack)
 import Prelude
 
 -- clash-protocols
@@ -33,17 +30,17 @@ import Control.DeepSeq
 -- hedgehog
 import qualified Hedgehog as H
 import qualified Hedgehog.Internal.Property as H
-import qualified Hedgehog.Internal.Show as H
-
--- pretty-show
-import Text.Show.Pretty (ppShow)
 
 -- | Options for 'expectN' function. See individual fields for more information.
 data ExpectOptions = ExpectOptions
-  { eoEmptyTail :: Int
-  -- ^ Sample /n/ cycles after last expected value and check for emptiness
-  , eoTimeout :: Maybe Int
-  -- ^ Timeout after seeing /n/ empty cycles
+  { eoStopAfterEmpty :: Int
+  -- ^ Stop sampling after seeing /n/ consecutive empty samples
+  , eoSampleMax :: Int
+  -- ^ Produce an error if the circuit produces more than /n/ valid samples. This
+  -- is used to terminate (potentially) infinitely running circuits.
+  --
+  -- This number is used to generate stall information, so setting it to
+  -- unreasonable values will result in long runtimes.
   , eoResetCycles :: Int
   -- ^ Ignore first /n/ cycles
   , eoDriveEarly :: Bool
@@ -58,8 +55,13 @@ empty cycles.
 defExpectOptions :: ExpectOptions
 defExpectOptions =
   ExpectOptions
-    { eoEmptyTail = 50
-    , eoTimeout = Just 1000
+    { -- XXX: These numbers are arbitrary, and should be adjusted to fit the
+      --      protocol being tested. Annoyingly, upping these values will
+      --      increase the time it takes to run the tests. This is because
+      --      the test will run for at least the number of cycles specified
+      --      in 'eoStopAfterEmpty'.
+      eoStopAfterEmpty = 256
+    , eoSampleMax = 256
     , eoResetCycles = 30
     , eoDriveEarly = True
     }
@@ -81,13 +83,6 @@ class
   ) =>
   Test a
   where
-  -- | Get the number of expected valid data cycles for each data channel,
-  -- given a list of expected data.
-  expectToLengths ::
-    Proxy a ->
-    ExpectType a ->
-    C.Vec (SimulateChannels a) Int
-
   -- | Trim each channel to the lengths given as the third argument. See
   -- result documentation for failure modes.
   expectN ::
@@ -95,8 +90,6 @@ class
     Proxy a ->
     -- | Options, see 'ExpectOptions'
     ExpectOptions ->
-    -- | Number of valid data cycles expected on each channel
-    C.Vec (SimulateChannels a) Int ->
     -- | Raw sampled data
     SimulateFwdType a ->
     -- | Depending on "ExpectOptions", fails the test if:
@@ -113,58 +106,38 @@ class
     m (ExpectType a)
 
 instance (TestType a, C.KnownDomain dom) => Test (Df dom a) where
-  expectToLengths Proxy = pure . length
-
   expectN ::
     forall m.
     (HasCallStack, H.MonadTest m) =>
     Proxy (Df dom a) ->
     ExpectOptions ->
-    C.Vec 1 Int ->
     [Df.Data a] ->
     m [a]
-  expectN Proxy (ExpectOptions{eoEmptyTail, eoTimeout}) (C.head -> nExpected) sampled = do
-    go (fromMaybe maxBound eoTimeout) nExpected sampled
+  expectN Proxy (ExpectOptions{eoSampleMax, eoStopAfterEmpty}) sampled = do
+    go eoSampleMax eoStopAfterEmpty sampled
    where
-    catDatas [] = []
-    catDatas (Df.NoData : xs) = catDatas xs
-    catDatas (Df.Data x : xs) = x : catDatas xs
-
-    go ::
-      (HasCallStack) =>
-      -- Timeout counter. If it reaches zero we time out.
-      Int ->
-      -- Expected number of values
-      Int ->
-      -- Sampled data
-      [Df.Data a] ->
-      -- Results
-      m [a]
+    go :: (HasCallStack) => Int -> Int -> [Df.Data a] -> m [a]
     go _timeout _n [] =
       -- This really should not happen, protocols should produce data indefinitely
       error "unexpected end of signal"
-    go _timeout 0 rest = do
-      -- Check for superfluous output from protocol
-      case catDatas (take eoEmptyTail rest) of
-        [] -> pure (take nExpected (catDatas sampled))
-        superfluous ->
-          let err = "Circuit produced more output than expected:"
-           in H.failWith Nothing (err <> "\n\n" <> ppShow superfluous)
-    go timeout n _
-      | timeout <= 0 =
-          H.failWith Nothing $
-            concat
-              [ "Circuit did not produce enough output. Expected "
-              , show n
-              , " more values. Sampled only " <> show (nExpected - n) <> ":\n\n"
-              , ppShow (take (nExpected - n) (catDatas sampled))
-              ]
-    go timeout n (Df.NoData : as) = do
-      -- Circuit did not output valid cycle, just continue
-      go (pred timeout) n as
-    go _ n (Df.Data _ : as) =
-      -- Circuit produced a valid cycle, reset timeout
-      go (fromMaybe maxBound eoTimeout) (pred n) as
+    go 0 _ _ =
+      -- Sample limit reached
+      H.failWith
+        Nothing
+        ( "Sample limit reached after sampling "
+            <> show eoSampleMax
+            <> " samples. "
+            <> "Consider increasing 'eoSampleMax' in 'ExpectOptions'."
+        )
+    go _ 0 _ =
+      -- Saw enough valid samples, return to user
+      pure []
+    go sampleTimeout _emptyTimeout (Df.Data a : as) =
+      -- Valid sample
+      (a :) <$> go (sampleTimeout - 1) eoStopAfterEmpty as
+    go sampleTimeout emptyTimeout (Df.NoData : as) =
+      -- Empty sample
+      go sampleTimeout (emptyTimeout - 1) as
 
 instance
   ( Test a
@@ -174,27 +147,16 @@ instance
   ) =>
   Test (C.Vec n a)
   where
-  expectToLengths ::
-    Proxy (C.Vec n a) ->
-    ExpectType (C.Vec n a) ->
-    C.Vec (n * SimulateChannels a) Int
-  expectToLengths Proxy =
-    C.concatMap (expectToLengths (Proxy @a))
-
   expectN ::
     forall m.
     (HasCallStack, H.MonadTest m) =>
     Proxy (C.Vec n a) ->
     ExpectOptions ->
-    C.Vec (n * SimulateChannels a) Int ->
     C.Vec n (SimulateFwdType a) ->
     m (C.Vec n (ExpectType a))
-  expectN Proxy opts nExpecteds sampled = do
-    -- TODO: This creates some pretty terrible error messages, as one
-    -- TODO: simulate channel is checked at a time.
-    forM
-      (C.zip (C.unconcatI nExpecteds) sampled)
-      (uncurry (expectN (Proxy @a) opts))
+  -- TODO: This creates some pretty terrible error messages, as one
+  -- TODO: simulate channel is checked at a time.
+  expectN Proxy opts = mapM (expectN (Proxy @a) opts)
 
 instance
   ( Test a
@@ -203,59 +165,16 @@ instance
   ) =>
   Test (a, b)
   where
-  expectToLengths ::
-    Proxy (a, b) ->
-    (ExpectType a, ExpectType b) ->
-    C.Vec (SimulateChannels a + SimulateChannels b) Int
-  expectToLengths Proxy (t1, t2) =
-    expectToLengths (Proxy @a) t1 C.++ expectToLengths (Proxy @b) t2
-
   expectN ::
     forall m.
     (HasCallStack, H.MonadTest m) =>
     Proxy (a, b) ->
     ExpectOptions ->
-    C.Vec (SimulateChannels a + SimulateChannels b) Int ->
     (SimulateFwdType a, SimulateFwdType b) ->
     m (ExpectType a, ExpectType b)
-  expectN Proxy opts nExpecteds (sampledA, sampledB) = do
+  expectN Proxy opts (sampledA, sampledB) = do
     -- TODO: This creates some pretty terrible error messages, as one
     -- TODO: simulate channel is checked at a time.
-    trimmedA <- expectN (Proxy @a) opts nExpectedsA sampledA
-    trimmedB <- expectN (Proxy @b) opts nExpectedsB sampledB
+    trimmedA <- expectN (Proxy @a) opts sampledA
+    trimmedB <- expectN (Proxy @b) opts sampledB
     pure (trimmedA, trimmedB)
-   where
-    (nExpectedsA, nExpectedsB) = C.splitAtI nExpecteds
-
--- | Fails with an error that shows the difference between two values.
-failDiffWith ::
-  (H.MonadTest m, Show a, Show b, HasCallStack) =>
-  -- | Additional info for error message
-  String ->
-  -- | Expected
-  a ->
-  -- | Actual
-  b ->
-  m ()
-failDiffWith msg x y =
-  case H.valueDiff <$> H.mkValue x <*> H.mkValue y of
-    Nothing ->
-      withFrozenCallStack $
-        H.failWith Nothing $
-          unlines $
-            [ msg
-            , "━━ expected ━━"
-            , H.showPretty x
-            , "━━ actual ━━"
-            , H.showPretty y
-            ]
-    Just vdiff@(H.ValueSame _) ->
-      withFrozenCallStack $
-        H.failWith
-          (Just $ H.Diff "━━━ Failed (" "" "no differences" "" ") ━━━" vdiff)
-          msg
-    Just vdiff ->
-      withFrozenCallStack $
-        H.failWith
-          (Just $ H.Diff "━━━ Failed (" "- expected" ") (" "+ actual" ") ━━━" vdiff)
-          msg

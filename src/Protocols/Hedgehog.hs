@@ -41,8 +41,10 @@ import Protocols.Hedgehog.Internal
 -- clash-prelude
 import qualified Clash.Prelude as C
 
--- hedgehog
+-- clash-prelude-hedgehog
+import Clash.Hedgehog.Sized.Vector (genVec)
 
+-- hedgehog
 import Hedgehog ((===))
 import qualified Hedgehog as H
 import qualified Hedgehog.Gen as Gen
@@ -59,6 +61,16 @@ resetGen :: (C.KnownDomain dom) => Int -> C.Reset dom
 resetGen n =
   C.unsafeFromActiveHigh
     (C.fromList (replicate n True <> repeat False))
+
+smallInt :: H.Range Int
+smallInt = Range.linear 0 10
+
+genSmallInt :: H.Gen Int
+genSmallInt =
+  Gen.frequency
+    [ (90, Gen.integral smallInt)
+    , (10, Gen.constant (Range.lowerBound 99 smallInt))
+    ]
 
 {- | Test a protocol against a pure model implementation. Circuit under test will
 be arbitrarily stalled on the left hand and right hand side and tested for
@@ -89,21 +101,23 @@ propWithModel ::
   H.Property
 propWithModel eOpts genData model prot prop = H.property $ do
   dat <- H.forAll genData
-  let n = maximum (expectToLengths (Proxy @a) dat)
+
+  -- TODO: Different 'n's for each output
+  n <- H.forAll (Gen.integral (Range.linear 0 (eoSampleMax eOpts)))
 
   -- TODO: Different distributions?
-  let genStall = Gen.integral (Range.linear 0 10)
+  let genStall = genSmallInt
 
   -- Generate stalls for LHS part of the protocol. The first line determines
   -- whether to stall or not. The second determines how many cycles to stall
   -- on each _valid_ cycle.
-  lhsStallModes <- H.forAll (sequenceA (C.repeat @(SimulateChannels a) genStallMode))
+  lhsStallModes <- H.forAll (genVec genStallMode)
   lhsStalls <- H.forAll (traverse (genStalls genStall n) lhsStallModes)
 
   -- Generate stalls for RHS part of the protocol. The first line determines
   -- whether to stall or not. The second determines how many cycles to stall
   -- on each _valid_ cycle.
-  rhsStallModes <- H.forAll (sequenceA (C.repeat @(SimulateChannels b) genStallMode))
+  rhsStallModes <- H.forAll (genVec genStallMode)
   rhsStalls <- H.forAll (traverse (genStalls genStall n) rhsStallModes)
 
   let
@@ -121,10 +135,9 @@ propWithModel eOpts genData model prot prop = H.property $ do
         |> prot
         |> rhsStallC
     sampled = sampleC simConfig stalledProtocol
-    lengths = expectToLengths (Proxy @b) expected
 
   -- expectN errors if circuit does not produce enough data
-  trimmed <- expectN (Proxy @b) eOpts lengths sampled
+  trimmed <- expectN (Proxy @b) eOpts sampled
 
   _ <- H.evalNF trimmed
   _ <- H.evalNF expected
