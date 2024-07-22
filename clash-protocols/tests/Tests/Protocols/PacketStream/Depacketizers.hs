@@ -35,7 +35,6 @@ import Protocols
 import Protocols.PacketStream (depacketizeToDfC, depacketizerC)
 import Tests.Protocols.PacketStream.Base
 
-
 -- | Model of the generic `depacketizerC`.
 depacketizerModel ::
   forall

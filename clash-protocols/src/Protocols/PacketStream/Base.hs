@@ -224,7 +224,7 @@ mapMetaS ::
   Circuit (PacketStream dom dataWidth a) (PacketStream dom dataWidth b)
 mapMetaS fS = Circuit $ \(fwdIn, bwdIn) -> (bwdIn, go <$> bundle (fwdIn, fS))
  where
-  go (inp, f) = (\inPkt -> inPkt {_meta = f (_meta inPkt)} ) <$> inp
+  go (inp, f) = (\inPkt -> inPkt{_meta = f (_meta inPkt)}) <$> inp
 
 -- | Map a function on the metadata of a packet stream.
 mapMeta ::
