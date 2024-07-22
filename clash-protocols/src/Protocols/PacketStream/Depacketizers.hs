@@ -3,6 +3,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# OPTIONS_HADDOCK hide #-}
 
 {- |
 Utility circuits for stripping headers from the beginning of packets.
@@ -42,30 +43,38 @@ type DepacketizerCt (headerBytes :: Nat) (dataWidth :: Nat) =
   )
 
 data DepacketizerState (headerBytes :: Nat) (dataWidth :: Nat)
-  = DeParse
-      { _deAborted :: Bool
-      , _deParseBuf :: Vec (dataWidth * headerBytes `DivRU` dataWidth) (BitVector 8)
-      , _deFwdBuf :: Vec (DeForwardBufSize headerBytes dataWidth) (BitVector 8)
-      , _deCounter :: Index (headerBytes `DivRU` dataWidth)
+  = Parse
+      { _aborted :: Bool
+      , _parseBuf :: Vec (dataWidth * headerBytes `DivRU` dataWidth) (BitVector 8)
+      , _fwdBuf :: Vec (DeForwardBufSize headerBytes dataWidth) (BitVector 8)
+      , _counter :: Index (headerBytes `DivRU` dataWidth)
       }
-  | DeForward
-      { _deAborted :: Bool
-      , _deParseBuf :: Vec (dataWidth * headerBytes `DivRU` dataWidth) (BitVector 8)
-      , _deFwdBuf :: Vec (DeForwardBufSize headerBytes dataWidth) (BitVector 8)
-      , _deCounter :: Index (headerBytes `DivRU` dataWidth)
+  | Forward
+      { _aborted :: Bool
+      , _parseBuf :: Vec (dataWidth * headerBytes `DivRU` dataWidth) (BitVector 8)
+      , _fwdBuf :: Vec (DeForwardBufSize headerBytes dataWidth) (BitVector 8)
+      , _counter :: Index (headerBytes `DivRU` dataWidth)
       }
-  | DeLastForward
-      { _deAborted :: Bool
-      , _deParseBuf :: Vec (dataWidth * headerBytes `DivRU` dataWidth) (BitVector 8)
-      , _deFwdBuf :: Vec (DeForwardBufSize headerBytes dataWidth) (BitVector 8)
-      , _deCounter :: Index (headerBytes `DivRU` dataWidth)
-      , _deLastIdx :: Index dataWidth
+  | LastForward
+      { _aborted :: Bool
+      , _parseBuf :: Vec (dataWidth * headerBytes `DivRU` dataWidth) (BitVector 8)
+      , _fwdBuf :: Vec (DeForwardBufSize headerBytes dataWidth) (BitVector 8)
+      , _counter :: Index (headerBytes `DivRU` dataWidth)
+      , _lastIdx :: Index dataWidth
       }
   deriving (Show, ShowX, Generic)
 
 deriving instance
   (DepacketizerCt headerBytes dataWidth) =>
   NFDataX (DepacketizerState headerBytes dataWidth)
+
+-- | Initial state of @depacketizerT@
+instance
+  (DepacketizerCt headerBytes dataWidth) =>
+  Default (DepacketizerState headerBytes dataWidth)
+  where
+  def :: DepacketizerState headerBytes dataWidth
+  def = Parse False (repeat undefined) (repeat undefined) maxBound
 
 depacketizerT ::
   forall
@@ -86,10 +95,10 @@ depacketizerT ::
   ( DepacketizerState headerBytes dataWidth
   , (PacketStreamS2M, Maybe (PacketStreamM2S dataWidth metaOut))
   )
-depacketizerT _ DeParse{..} (Just PacketStreamM2S{..}, _) = (nextSt, (PacketStreamS2M outReady, Nothing))
+depacketizerT _ Parse{..} (Just PacketStreamM2S{..}, _) = (nextSt, (PacketStreamS2M outReady, Nothing))
  where
-  nextAborted = _deAborted || _abort
-  nextParseBuf = fst $ shiftInAtN _deParseBuf _data
+  nextAborted = _aborted || _abort
+  nextParseBuf = fst $ shiftInAtN _parseBuf _data
   fwdBuf :: Vec (DeForwardBufSize headerBytes dataWidth) (BitVector 8)
   fwdBuf = dropLe (SNat @(dataWidth - DeForwardBufSize headerBytes dataWidth)) _data
 
@@ -98,41 +107,41 @@ depacketizerT _ DeParse{..} (Just PacketStreamM2S{..}, _) = (nextSt, (PacketStre
       SNatGT -> idx < (natToNum @(headerBytes `Mod` dataWidth))
       _ -> True
 
-  nextCounter = pred _deCounter
+  nextCounter = pred _counter
 
   nextSt =
-    case (_deCounter == 0, _last) of
+    case (_counter == 0, _last) of
       (False, Nothing) ->
-        DeParse nextAborted nextParseBuf fwdBuf nextCounter
+        Parse nextAborted nextParseBuf fwdBuf nextCounter
       (done, Just idx)
         | not done || prematureEnd idx ->
-            DeParse False nextParseBuf fwdBuf maxBound
+            Parse False nextParseBuf fwdBuf maxBound
       (True, Just idx) ->
-        DeLastForward
+        LastForward
           nextAborted
           nextParseBuf
           fwdBuf
           nextCounter
           (idx - natToNum @(headerBytes `Mod` dataWidth))
       (True, Nothing) ->
-        DeForward nextAborted nextParseBuf fwdBuf nextCounter
+        Forward nextAborted nextParseBuf fwdBuf nextCounter
       _ ->
         clashCompileError
           "depacketizerT Parse: Absurd, Report this to the Clash compiler team: https://github.com/clash-lang/clash-compiler/issues"
 
   outReady
-    | DeLastForward{} <- nextSt = False
+    | LastForward{} <- nextSt = False
     | otherwise = True
-depacketizerT _ st@DeParse{} (Nothing, bwdIn) = (st, (bwdIn, Nothing))
-depacketizerT toMetaOut st@DeForward{..} (Just pkt@PacketStreamM2S{..}, bwdIn) = (nextStOut, (PacketStreamS2M outReady, Just outPkt))
+depacketizerT _ st@Parse{} (Nothing, bwdIn) = (st, (bwdIn, Nothing))
+depacketizerT toMetaOut st@Forward{..} (Just pkt@PacketStreamM2S{..}, bwdIn) = (nextStOut, (PacketStreamS2M outReady, Just outPkt))
  where
-  nextAborted = _deAborted || _abort
+  nextAborted = _aborted || _abort
   dataOut :: Vec dataWidth (BitVector 8)
   nextFwdBuf :: Vec (DeForwardBufSize headerBytes dataWidth) (BitVector 8)
-  (dataOut, nextFwdBuf) = splitAt (SNat @dataWidth) $ _deFwdBuf ++ _data
+  (dataOut, nextFwdBuf) = splitAt (SNat @dataWidth) $ _fwdBuf ++ _data
 
-  deAdjustLast :: Index dataWidth -> Either (Index dataWidth) (Index dataWidth)
-  deAdjustLast idx = if outputNow then Left nowIdx else Right nextIdx
+  adjustLast :: Index dataWidth -> Either (Index dataWidth) (Index dataWidth)
+  adjustLast idx = if outputNow then Left nowIdx else Right nextIdx
    where
     outputNow = case compareSNat (SNat @(headerBytes `Mod` dataWidth)) d0 of
       SNatGT -> idx < natToNum @(headerBytes `Mod` dataWidth)
@@ -140,39 +149,39 @@ depacketizerT toMetaOut st@DeForward{..} (Just pkt@PacketStreamM2S{..}, bwdIn) =
     nowIdx = idx + natToNum @(DeForwardBufSize headerBytes dataWidth)
     nextIdx = idx - natToNum @(headerBytes `Mod` dataWidth)
 
-  newLast = fmap deAdjustLast _last
+  newLast = fmap adjustLast _last
   outPkt =
     pkt
       { _abort = nextAborted
       , _data = dataOut
-      , _meta = toMetaOut (bitCoerce $ takeLe (SNat @headerBytes) _deParseBuf) _meta
+      , _meta = toMetaOut (bitCoerce $ takeLe (SNat @headerBytes) _parseBuf) _meta
       , _last = either Just (const Nothing) =<< newLast
       }
 
   nextSt = case newLast of
-    Nothing -> DeForward nextAborted _deParseBuf nextFwdBuf _deCounter
-    Just (Left _) -> DeParse False _deParseBuf nextFwdBuf maxBound
-    Just (Right idx) -> DeLastForward nextAborted _deParseBuf nextFwdBuf _deCounter idx
+    Nothing -> Forward nextAborted _parseBuf nextFwdBuf _counter
+    Just (Left _) -> Parse False _parseBuf nextFwdBuf maxBound
+    Just (Right idx) -> LastForward nextAborted _parseBuf nextFwdBuf _counter idx
   nextStOut = if _ready bwdIn then nextSt else st
 
   outReady
-    | DeLastForward{} <- nextSt = False
+    | LastForward{} <- nextSt = False
     | otherwise = _ready bwdIn
-depacketizerT _ st@DeForward{} (Nothing, bwdIn) = (st, (bwdIn, Nothing))
-depacketizerT toMetaOut st@DeLastForward{..} (fwdIn, bwdIn) = (nextStOut, (bwdIn, Just outPkt))
+depacketizerT _ st@Forward{} (Nothing, bwdIn) = (st, (bwdIn, Nothing))
+depacketizerT toMetaOut st@LastForward{..} (fwdIn, bwdIn) = (nextStOut, (bwdIn, Just outPkt))
  where
   -- We can only get in this state if the previous clock cycle we received a fwdIn
   -- which was also the last fragment
   inPkt = fromJustX fwdIn
   outPkt =
     PacketStreamM2S
-      { _abort = _deAborted || _abort inPkt
+      { _abort = _aborted || _abort inPkt
       , _data =
-          _deFwdBuf ++ repeat @(dataWidth - DeForwardBufSize headerBytes dataWidth) defaultByte
-      , _meta = toMetaOut (bitCoerce $ takeLe (SNat @headerBytes) _deParseBuf) (_meta inPkt)
+          _fwdBuf ++ repeat @(dataWidth - DeForwardBufSize headerBytes dataWidth) defaultByte
+      , _meta = toMetaOut (bitCoerce $ takeLe (SNat @headerBytes) _parseBuf) (_meta inPkt)
       , _last = Just $ fromJustX (_last inPkt) - natToNum @(headerBytes `Mod` dataWidth)
       }
-  nextStOut = if _ready bwdIn then DeParse False _deParseBuf _deFwdBuf maxBound else st
+  nextStOut = if _ready bwdIn then Parse False _parseBuf _fwdBuf maxBound else st
 
 -- | Reads bytes at the start of each packet into metadata.
 depacketizerC ::
@@ -203,9 +212,7 @@ depacketizerC toMetaOut = forceResetSanity |> fromSignals outCircuit
     case (modProof, divProof) of
       (SNatLE, SNatLE) -> case compareSNat (SNat @(DeForwardBufSize headerBytes dataWidth)) (SNat @dataWidth) of
         SNatLE ->
-          mealyB
-            (depacketizerT @headerBytes toMetaOut)
-            (DeParse False (repeat undefined) (repeat undefined) maxBound)
+          mealyB (depacketizerT @headerBytes toMetaOut) def
         _ ->
           clashCompileError
             "depacketizerC1: Absurd, Report this to the Clash compiler team: https://github.com/clash-lang/clash-compiler/issues"
@@ -213,45 +220,42 @@ depacketizerC toMetaOut = forceResetSanity |> fromSignals outCircuit
         clashCompileError
           "depacketizerC0: Absurd, Report this to the Clash compiler team: https://github.com/clash-lang/clash-compiler/issues"
 
-type ParseBufSize (headerBytes :: Nat) (dataWidth :: Nat) =
-  dataWidth * headerBytes `DivRU` dataWidth
-
 type DepacketizeToDfCt (headerBytes :: Nat) (dataWidth :: Nat) =
   ( 1 <= headerBytes `DivRU` dataWidth
   , headerBytes `Mod` dataWidth <= dataWidth
-  , headerBytes <= ParseBufSize headerBytes dataWidth
+  , headerBytes <= dataWidth * headerBytes `DivRU` dataWidth
   , KnownNat dataWidth
   , 1 <= dataWidth
   , KnownNat headerBytes
   )
 
-data DfDepacketizerState (a :: Type) (headerBytes :: Nat) (dataWidth :: Nat)
-  = Parse
-      { _dfDeAborted :: Bool
+data DfDepacketizerState (headerBytes :: Nat) (dataWidth :: Nat)
+  = DfParse
+      { _dfAborted :: Bool
       -- ^ whether any of the fragments parsed from the current packet were aborted.
-      , _dfDeParseBuf :: Vec (ParseBufSize headerBytes dataWidth) (BitVector 8)
+      , _dfParseBuf :: Vec (dataWidth * headerBytes `DivRU` dataWidth) (BitVector 8)
       -- ^ the accumulator for header bytes.
-      , _dfDeCounter :: Index (headerBytes `DivRU` dataWidth)
+      , _dfCounter :: Index (headerBytes `DivRU` dataWidth)
       -- ^ how many of the _parseBuf bytes are currently valid (accumulation count). We flush at counter == maxBound
       }
-  | ConsumePadding
-      { _dfDeAborted :: Bool
+  | DfConsumePadding
+      { _dfAborted :: Bool
       -- ^ whether any of the fragments parsed from the current packet were aborted.
-      , _dfDeParseBuf :: Vec (ParseBufSize headerBytes dataWidth) (BitVector 8)
+      , _dfParseBuf :: Vec (dataWidth * headerBytes `DivRU` dataWidth) (BitVector 8)
       }
   deriving (Generic, Show, ShowX)
 
 deriving instance
-  (NFDataX a, DepacketizeToDfCt headerBytes dataWidth) =>
-  NFDataX (DfDepacketizerState a headerBytes dataWidth)
+  (DepacketizeToDfCt headerBytes dataWidth) =>
+  (NFDataX (DfDepacketizerState headerBytes dataWidth))
 
-dfDeInitialState ::
-  forall (a :: Type) (headerBytes :: Nat) (dataWidth :: Nat).
-  (KnownNat dataWidth) =>
-  (KnownNat headerBytes) =>
-  (1 <= dataWidth) =>
-  DfDepacketizerState a headerBytes dataWidth
-dfDeInitialState = Parse False (repeat undefined) maxBound
+-- | Initial state of @depacketizeToDfT@
+instance
+  (DepacketizeToDfCt headerBytes dataWidth) =>
+  Default (DfDepacketizerState headerBytes dataWidth)
+  where
+  def :: DfDepacketizerState headerBytes dataWidth
+  def = DfParse False (repeat undefined) maxBound
 
 depacketizeToDfT ::
   forall
@@ -267,13 +271,13 @@ depacketizeToDfT ::
   (BitSize header ~ headerBytes * 8) =>
   (DepacketizeToDfCt headerBytes dataWidth) =>
   (header -> meta -> a) ->
-  DfDepacketizerState a headerBytes dataWidth ->
+  DfDepacketizerState headerBytes dataWidth ->
   (Maybe (PacketStreamM2S dataWidth meta), Ack) ->
-  (DfDepacketizerState a headerBytes dataWidth, (PacketStreamS2M, Df.Data a))
-depacketizeToDfT toOut st@Parse{..} (Just (PacketStreamM2S{..}), Ack readyIn) = (nextStOut, (PacketStreamS2M readyOut, fwdOut))
+  (DfDepacketizerState headerBytes dataWidth, (PacketStreamS2M, Df.Data a))
+depacketizeToDfT toOut st@DfParse{..} (Just (PacketStreamM2S{..}), Ack readyIn) = (nextStOut, (PacketStreamS2M readyOut, fwdOut))
  where
-  nextAborted = _dfDeAborted || _abort
-  nextParseBuf = fst (shiftInAtN _dfDeParseBuf _data)
+  nextAborted = _dfAborted || _abort
+  nextParseBuf = fst (shiftInAtN _dfParseBuf _data)
   outDf = toOut (bitCoerce (takeLe (SNat @headerBytes) nextParseBuf)) _meta
 
   prematureEnd idx =
@@ -282,31 +286,31 @@ depacketizeToDfT toOut st@Parse{..} (Just (PacketStreamM2S{..}), Ack readyIn) = 
       _ -> idx < (natToNum @(dataWidth - 1))
 
   (nextSt, fwdOut) =
-    case (_dfDeCounter == 0, _last) of
+    case (_dfCounter == 0, _last) of
       (False, Nothing) ->
-        (Parse nextAborted nextParseBuf (pred _dfDeCounter), Df.NoData)
+        (DfParse nextAborted nextParseBuf (pred _dfCounter), Df.NoData)
       (c, Just idx)
         | not c || prematureEnd idx ->
-            (dfDeInitialState, Df.NoData)
+            (def, Df.NoData)
       (True, Just _) ->
-        (dfDeInitialState, if nextAborted then Df.NoData else Df.Data outDf)
+        (def, if nextAborted then Df.NoData else Df.Data outDf)
       (True, Nothing) ->
-        (ConsumePadding nextAborted nextParseBuf, Df.NoData)
+        (DfConsumePadding nextAborted nextParseBuf, Df.NoData)
       _ ->
         clashCompileError
           "depacketizeToDfT Parse: Absurd, Report this to the Clash compiler team: https://github.com/clash-lang/clash-compiler/issues"
 
   readyOut = isNothing (Df.dataToMaybe fwdOut) || readyIn
   nextStOut = if readyOut then nextSt else st
-depacketizeToDfT toOut st@ConsumePadding{..} (Just (PacketStreamM2S{..}), Ack readyIn) = (nextStOut, (PacketStreamS2M readyOut, fwdOut))
+depacketizeToDfT toOut st@DfConsumePadding{..} (Just (PacketStreamM2S{..}), Ack readyIn) = (nextStOut, (PacketStreamS2M readyOut, fwdOut))
  where
-  nextAborted = _dfDeAborted || _abort
-  outDf = toOut (bitCoerce (takeLe (SNat @headerBytes) _dfDeParseBuf)) _meta
+  nextAborted = _dfAborted || _abort
+  outDf = toOut (bitCoerce (takeLe (SNat @headerBytes) _dfParseBuf)) _meta
 
   (nextSt, fwdOut) =
     if isJust _last
-      then (dfDeInitialState, if nextAborted then Df.NoData else Df.Data outDf)
-      else (st{_dfDeAborted = nextAborted}, Df.NoData)
+      then (def, if nextAborted then Df.NoData else Df.Data outDf)
+      else (st{_dfAborted = nextAborted}, Df.NoData)
 
   readyOut = isNothing (Df.dataToMaybe fwdOut) || readyIn
   nextStOut = if readyOut then nextSt else st
@@ -346,7 +350,7 @@ depacketizeToDfC toOut = forceResetSanity |> fromSignals outCircuit
   outCircuit =
     case (divProof, modProof) of
       (SNatLE, SNatLE) -> case compareSNat d1 (SNat @(headerBytes `DivRU` dataWidth)) of
-        SNatLE -> mealyB (depacketizeToDfT toOut) dfDeInitialState
+        SNatLE -> mealyB (depacketizeToDfT toOut) def
         _ ->
           clashCompileError
             "depacketizeToDfC0: Absurd, Report this to the Clash compiler team: https://github.com/clash-lang/clash-compiler/issues"

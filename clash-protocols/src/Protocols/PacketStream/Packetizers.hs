@@ -3,6 +3,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# OPTIONS_HADDOCK hide #-}
 
 {- |
 Utility circuits for appending headers to the beginning of packets.
@@ -22,6 +23,9 @@ import Data.Maybe
 import Data.Maybe.Extra
 import Data.Type.Equality ((:~:) (Refl))
 
+defaultByte :: BitVector 8
+defaultByte = 0x00
+
 type HeaderBufSize (headerBytes :: Nat) (dataWidth :: Nat) =
   headerBytes + dataWidth
 
@@ -29,6 +33,12 @@ type HeaderBufSize (headerBytes :: Nat) (dataWidth :: Nat) =
 -- @headerBytes@ not aligning with @dataWidth@.
 type ForwardBufSize (headerBytes :: Nat) (dataWidth :: Nat) =
   headerBytes `Mod` dataWidth
+
+type PacketizerCt (headerBytes :: Nat) (dataWidth :: Nat) =
+  ( KnownNat dataWidth
+  , 1 <= dataWidth
+  , KnownNat headerBytes
+  )
 
 data PacketizerState (metaOut :: Type) (headerBytes :: Nat) (dataWidth :: Nat)
   = Insert
@@ -48,24 +58,13 @@ deriving instance
   (NFDataX metaOut, PacketizerCt headerBytes dataWidth) =>
   NFDataX (PacketizerState metaOut headerBytes dataWidth)
 
-type PacketizerCt (headerBytes :: Nat) (dataWidth :: Nat) =
-  ( KnownNat dataWidth
-  , 1 <= dataWidth
-  , KnownNat headerBytes
-  )
-
-defaultByte :: BitVector 8
-defaultByte = 0x00
-
--- The initial state of our packetizer. For readability purposes, because we use this exact expression a lot.
-initialState ::
-  forall
-    (metaOut :: Type)
-    (headerBytes :: Nat)
-    (dataWidth :: Nat).
+-- | Initial state of @packetizerT@
+instance
   (PacketizerCt headerBytes dataWidth) =>
-  PacketizerState metaOut headerBytes dataWidth
-initialState = Insert 0 (repeat defaultByte) False
+  Default (PacketizerState metaOut headerBytes dataWidth)
+  where
+  def :: PacketizerState metaOut headerBytes dataWidth
+  def = Insert 0 (repeat defaultByte) False
 
 adjustLast ::
   forall
@@ -131,7 +130,7 @@ packetizerT toMetaOut toHeader st@Insert{..} (Just pkt@PacketStreamM2S{..}, bwdI
   nextSt = case (_counter == maxBound, newLast) of
     (False, _) -> Insert (succ _counter) newHdrBuf nextAborted
     (True, Nothing) -> Forward forwardBytes nextAborted
-    (True, Just (Left _)) -> initialState
+    (True, Just (Left _)) -> def
     (True, Just (Right idx)) ->
       LastForward
         (PacketStreamM2S (take (SNat @dataWidth) newHdrBuf) (Just idx) metaOut nextAborted)
@@ -162,13 +161,13 @@ packetizerT toMetaOut _ st@Forward{..} (Just pkt@PacketStreamM2S{..}, bwdIn) = (
 
   nextSt = case newLast of
     Nothing -> Forward nextFwdBuf nextAborted
-    Just (Left _) -> initialState
+    Just (Left _) -> def
     Just (Right idx) -> LastForward (PacketStreamM2S dataLast (Just idx) metaOut nextAborted)
 
   nextStOut = if _ready bwdIn then nextSt else st
 packetizerT _ _ st@LastForward{..} (_, bwdIn) = (nextStOut, (PacketStreamS2M False, Just _lastFragment))
  where
-  nextStOut = if _ready bwdIn then initialState else st
+  nextStOut = if _ready bwdIn then def else st
 packetizerT _ _ s (Nothing, bwdIn) = (s, (bwdIn, Nothing))
 
 {- | Puts a portion of the metadata in front of the packet stream, and shifts the stream accordingly.
@@ -198,7 +197,7 @@ packetizerC ::
 packetizerC toMetaOut toHeader = fromSignals outCircuit
  where
   outCircuit = case compareSNat (SNat @(ForwardBufSize headerBytes dataWidth)) (SNat @dataWidth) of
-    SNatLE -> mealyB (packetizerT @headerBytes toMetaOut toHeader) initialState
+    SNatLE -> mealyB (packetizerT @headerBytes toMetaOut toHeader) def
     _ ->
       clashCompileError
         "packetizerC: Absurd, Report this to the Clash compiler team: https://github.com/clash-lang/clash-compiler/issues"
