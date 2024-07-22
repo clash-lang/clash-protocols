@@ -14,7 +14,6 @@ import qualified Clash.Prelude as C
 
 -- hedgehog
 import Hedgehog hiding (Parallel)
-import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
 -- tasty
@@ -30,10 +29,10 @@ import Protocols.PacketStream.Base
 import Protocols.PacketStream.Routing
 
 -- tests
-import Tests.Protocols.PacketStream.Base (chunkByPacket, fullPackets)
+import Tests.Protocols.PacketStream.Base
 
-genVec :: (C.KnownNat n, 1 <= n) => Gen a -> Gen (C.Vec n a)
-genVec gen = sequence (C.repeat gen)
+import qualified Data.List as L
+
 
 -- | Tests the round-robin packet arbiter with one source; essentially an id test
 prop_packetarbiter_roundrobin_id :: Property
@@ -75,14 +74,10 @@ makePropPacketArbiter _ _ mode =
     (C.exposeClockResetEnable (packetArbiterC mode))
     (\xs ys -> partitionPackets xs === partitionPackets ys)
  where
-  genSources = mapM (fmap fullPackets . Gen.list (Range.linear 0 100) . genPacket) (C.indicesI @p)
-  -- TODO use util function from client review branch
-  genPacket i =
-    PacketStreamM2S
-      <$> genVec @n Gen.enumBounded
-      <*> Gen.maybe Gen.enumBounded
-      <*> pure i
-      <*> Gen.enumBounded
+  genSources = mapM setMeta (C.indicesI @p)
+  setMeta j = do
+    pkts <- genValidPackets @n @() (Range.linear 1 10) (Range.linear 1 10) Abort
+    pure $ L.map (\pkt -> pkt {_meta = j}) pkts
 
   partitionPackets packets =
     sortOn (_meta . head . head) $
@@ -123,7 +118,7 @@ makePropPacketDispatcher ::
   , 1 <= dataWidth
   , TestType a
   , Bounded a
-  , Enum a
+  , C.BitPack a
   ) =>
   C.SNat dataWidth ->
   C.Vec p (a -> Bool) ->
@@ -131,7 +126,7 @@ makePropPacketDispatcher ::
 makePropPacketDispatcher _ fs =
   idWithModelSingleDomain @C.System
     defExpectOptions
-    (Gen.list (Range.linear 0 100) genPackets)
+    (genValidPackets (Range.linear 1 10) (Range.linear 1 10) Abort)
     (C.exposeClockResetEnable (model 0))
     (C.exposeClockResetEnable (packetDispatcherC fs))
  where
@@ -143,17 +138,9 @@ makePropPacketDispatcher _ fs =
     | i < maxBound = model (i + 1) (y : ys)
     | otherwise = model 0 ys
 
-  -- TODO use util function from client review branch
-  genPackets =
-    PacketStreamM2S
-      <$> genVec @dataWidth Gen.enumBounded
-      <*> Gen.maybe Gen.enumBounded
-      <*> Gen.enumBounded
-      <*> Gen.enumBounded
-
 tests :: TestTree
 tests =
-  localOption (mkTimeout 12_000_000 {- 12 seconds -}) $
+  localOption (mkTimeout 20_000_000 {- 20 seconds -}) $
     localOption
       (HedgehogTestLimit (Just 1_000))
       $(testGroupGenerator)
