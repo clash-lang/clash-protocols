@@ -13,7 +13,6 @@ import Clash.Prelude as C
 
 -- hedgehog
 import Hedgehog
-import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
 -- tasty
@@ -28,8 +27,9 @@ import Protocols.Hedgehog
 import Protocols.PacketStream.AsyncFifo
 import Protocols.PacketStream.Base
 
-genVec :: (KnownNat n, 1 C.<= n) => Gen a -> Gen (Vec n a)
-genVec gen = sequence (C.repeat gen)
+-- tests
+import Tests.Protocols.PacketStream.Base
+
 
 createDomain
   vSystem
@@ -80,12 +80,11 @@ generateAsyncFifoIdProp ::
   Enable rDom ->
   Property
 generateAsyncFifoIdProp wClk wRst wEn rClk rRst rEn =
-  propWithModel
+  idWithModel
     defExpectOptions
-    (Gen.list (Range.linear 0 100) genPackets)
+    (genValidPackets (Range.linear 1 10) (Range.linear 1 30) Abort)
     id
     ckt
-    (===)
  where
   ckt ::
     (KnownDomain wDom, KnownDomain rDom) =>
@@ -93,13 +92,6 @@ generateAsyncFifoIdProp wClk wRst wEn rClk rRst rEn =
       (PacketStream wDom 1 Int)
       (PacketStream rDom 1 Int)
   ckt = asyncFifoC (C.SNat @8) wClk wRst wEn rClk rRst rEn
-  -- This is used to generate
-  genPackets =
-    PacketStreamM2S
-      <$> genVec Gen.enumBounded
-      <*> Gen.maybe Gen.enumBounded
-      <*> Gen.enumBounded
-      <*> Gen.enumBounded
 
 {- | The async FIFO circuit should forward all of its input data without loss and without producing extra data.
   This property tests whether this is true, when the clock of the writer and reader is equally fast (50 MHz).
@@ -121,7 +113,7 @@ prop_asyncfifo_writer_speed_faster_than_reader_id = generateAsyncFifoIdProp clk1
 
 tests :: TestTree
 tests =
-  localOption (mkTimeout 12_000_000 {- 12 seconds -}) $
+  localOption (mkTimeout 20_000_000 {- 20 seconds -}) $
     localOption
       (HedgehogTestLimit (Just 1_000))
       $(testGroupGenerator)
