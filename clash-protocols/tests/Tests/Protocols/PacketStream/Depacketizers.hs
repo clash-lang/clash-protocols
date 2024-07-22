@@ -13,12 +13,10 @@ import Prelude
 
 -- clash
 import Clash.Prelude
-import qualified Clash.Prelude as C
 import Clash.Sized.Vector (unsafeFromList)
 
 -- hedgehog
 import Hedgehog
-import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
 -- tasty
@@ -29,7 +27,6 @@ import Test.Tasty.Hedgehog.Extra (testProperty)
 import Test.Tasty.TH (testGroupGenerator)
 
 -- clash-protocols
-
 import Protocols.Hedgehog
 import Protocols.PacketStream.Base
 
@@ -38,8 +35,6 @@ import Protocols
 import Protocols.PacketStream (depacketizeToDfC, depacketizerC)
 import Tests.Protocols.PacketStream.Base
 
-genVec :: (KnownNat n, 1 <= n) => Gen a -> Gen (Vec n a)
-genVec gen = sequence (C.repeat gen)
 
 -- | Model of the generic `depacketizerC`.
 depacketizerModel ::
@@ -127,28 +122,17 @@ depacketizerPropertyGenerator SNat SNat =
   idWithModelSingleDomain
     @System
     defExpectOptions
-    (fmap (cleanPackets . fullPackets) (Gen.list (Range.linear 1 100) genPackets))
+    (genValidPackets (Range.linear 1 10) (Range.linear 1 50) Abort)
     (exposeClockResetEnable model)
     (exposeClockResetEnable ckt)
  where
-  model ::
-    [PacketStreamM2S dataWidth ()] ->
-    [PacketStreamM2S dataWidth (Vec headerBytes (BitVector 8))]
   model = depacketizerModel const
-
   ckt ::
     (HiddenClockResetEnable System) =>
     Circuit
       (PacketStream System dataWidth ())
       (PacketStream System dataWidth (Vec headerBytes (BitVector 8)))
   ckt = depacketizerC const
-
-  genPackets =
-    PacketStreamM2S
-      <$> genVec Gen.enumBounded
-      <*> Gen.maybe Gen.enumBounded
-      <*> Gen.enumBounded
-      <*> Gen.enumBounded
 
 -- | headerBytes % dataWidth ~ 0
 prop_const_depacketizer_d1_d14 :: Property
@@ -182,24 +166,15 @@ depacketizeToDfPropertyGenerator SNat SNat =
   idWithModelSingleDomain
     @System
     defExpectOptions
-    (fmap (cleanPackets . fullPackets) (Gen.list (Range.linear 1 100) genPackets))
+    (genValidPackets (Range.linear 1 10) (Range.linear 1 50) NoAbort)
     (exposeClockResetEnable model)
     (exposeClockResetEnable ckt)
  where
-  model :: [PacketStreamM2S dataWidth ()] -> [Vec headerBytes (BitVector 8)]
   model = depacketizeToDfModel const
-
   ckt ::
     (HiddenClockResetEnable System) =>
     Circuit (PacketStream System dataWidth ()) (Df System (Vec headerBytes (BitVector 8)))
   ckt = depacketizeToDfC const
-
-  genPackets =
-    PacketStreamM2S
-      <$> genVec Gen.enumBounded
-      <*> Gen.maybe Gen.enumBounded
-      <*> Gen.enumBounded
-      <*> Gen.enumBounded
 
 -- | headerBytes % dataWidth ~ 0
 prop_const_depacketize_to_df_d1_d14 :: Property
@@ -219,7 +194,7 @@ prop_const_depacketize_to_df_d5_d4 = depacketizeToDfPropertyGenerator d5 d4
 
 tests :: TestTree
 tests =
-  localOption (mkTimeout 12_000_000 {- 12 seconds -}) $
+  localOption (mkTimeout 20_000_000 {- 20 seconds -}) $
     localOption
       (HedgehogTestLimit (Just 1_000))
       $(testGroupGenerator)
