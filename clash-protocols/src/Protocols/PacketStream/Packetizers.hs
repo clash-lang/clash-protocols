@@ -244,7 +244,6 @@ packetizeFromDfT toMetaOut toHeader DfIdle (Df.Data dataIn, bwdIn) = (nextStOut,
 
 -- fwdIn is always Data in this state, because we assert backpressure in Idle before we go here
 -- Thus, we don't need to store the metadata in the state.
--- explicitly eliminates the state machine because synthesis tool is not smart enough to do it in this case
 packetizeFromDfT toMetaOut _ st@DfInsert{..} (Df.Data dataIn, bwdIn) = (nextStOut, (bwdOut, Just outPkt))
  where
   (dataOut, newHdrBuf) = splitAt (SNat @dataWidth) (_dfHdrBuf ++ repeat @dataWidth defaultByte)
