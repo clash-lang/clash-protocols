@@ -1,5 +1,3 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE NoImplicitPrelude #-}
@@ -21,7 +19,6 @@ import Protocols.PacketStream.Base
 
 import Data.Maybe
 import Data.Maybe.Extra
-import Data.Type.Equality ((:~:) (Refl))
 
 defaultByte :: BitVector 8
 defaultByte = 0x00
@@ -202,20 +199,19 @@ packetizerC toMetaOut toHeader = fromSignals outCircuit
       clashCompileError
         "packetizerC: Absurd, Report this to the Clash compiler team: https://github.com/clash-lang/clash-compiler/issues"
 
-{- | If dataWidth >= headerBytes, we don't need a buffer because we can immediately send
-  the fragment. Else, we need a buffer that stores the headerBytes minus the size
-  of the fragment we send out immediately.
--}
-type DfHeaderBufSize headerBytes dataWidth = dataWidth `Max` headerBytes - dataWidth
-
 data DfPacketizerState (metaOut :: Type) (headerBytes :: Nat) (dataWidth :: Nat)
   = DfIdle
   | DfInsert
       { _dfCounter :: Index (headerBytes `DivRU` dataWidth - 1)
-      , _dfHdrBuf :: Vec (DfHeaderBufSize headerBytes dataWidth) (BitVector 8)
+      , _dfHdrBuf :: Vec (headerBytes - dataWidth) (BitVector 8)
       }
-  deriving (Generic, NFDataX, Show, ShowX)
+  deriving (Generic, Show, ShowX)
 
+deriving instance
+  (dataWidth <= headerBytes, KnownNat headerBytes, KnownNat dataWidth) =>
+  NFDataX (DfPacketizerState metaOut headerBytes dataWidth)
+
+-- | packetizeFromDf state transition function in case dataWidth < headerBytes.
 packetizeFromDfT ::
   forall
     (dataWidth :: Nat)
@@ -230,8 +226,7 @@ packetizeFromDfT ::
   (KnownNat dataWidth) =>
   (1 <= dataWidth) =>
   (1 <= headerBytes `DivRU` dataWidth) =>
-  (dataWidth `Min` headerBytes <= dataWidth) =>
-  (dataWidth `Max` headerBytes - dataWidth + dataWidth `Min` headerBytes ~ headerBytes) =>
+  ((dataWidth + 1) <= headerBytes) =>
   -- | function that transforms the Df input to the output metadata.
   (a -> metaOut) ->
   -- | function that transforms the Df input to the header that will be packetized.
@@ -241,26 +236,15 @@ packetizeFromDfT ::
   ( DfPacketizerState metaOut headerBytes dataWidth
   , (Ack, Maybe (PacketStreamM2S dataWidth metaOut))
   )
-packetizeFromDfT toMetaOut toHeader DfIdle (Df.Data dataIn, bwdIn) = (nextStOut, (bwdOut, Just outPkt))
+packetizeFromDfT toMetaOut toHeader DfIdle (Df.Data dataIn, bwdIn) = (nextStOut, (Ack False, Just outPkt))
  where
-  rotatedHdr =
-    rotateRightS (bitCoerce (toHeader dataIn)) (SNat @(DfHeaderBufSize headerBytes dataWidth))
-  (hdrBuf, dataOut) = splitAt (SNat @(DfHeaderBufSize headerBytes dataWidth)) rotatedHdr
-  dataOutPadded = dataOut ++ repeat @(dataWidth - dataWidth `Min` headerBytes) defaultByte
-  outPkt = PacketStreamM2S dataOutPadded newLast (toMetaOut dataIn) False
-
-  (nextSt, bwdOut, newLast) = case compareSNat (SNat @headerBytes) (SNat @dataWidth) of
-    SNatLE -> (DfIdle, Ack (_ready bwdIn), Just l)
-     where
-      l = case compareSNat (SNat @(headerBytes `Mod` dataWidth)) d0 of
-        SNatGT -> natToNum @(headerBytes `Mod` dataWidth - 1)
-        _ -> natToNum @(dataWidth - 1)
-    SNatGT -> (DfInsert 0 hdrBuf, Ack False, Nothing)
-
-  nextStOut = if _ready bwdIn then nextSt else DfIdle
+  (dataOut, hdrBuf) = splitAt (SNat @dataWidth) (bitCoerce (toHeader dataIn))
+  outPkt = PacketStreamM2S dataOut Nothing (toMetaOut dataIn) False
+  nextStOut = if _ready bwdIn then DfInsert 0 hdrBuf else DfIdle
 
 -- fwdIn is always Data in this state, because we assert backpressure in Idle before we go here
 -- Thus, we don't need to store the metadata in the state.
+-- explicitly eliminates the state machine because synthesis tool is not smart enough to do it in this case
 packetizeFromDfT toMetaOut _ st@DfInsert{..} (Df.Data dataIn, bwdIn) = (nextStOut, (bwdOut, Just outPkt))
  where
   (dataOut, newHdrBuf) = splitAt (SNat @dataWidth) (_dfHdrBuf ++ repeat @dataWidth defaultByte)
@@ -299,17 +283,21 @@ packetizeFromDfC ::
   -- | Function that transforms the Df input to the header that will be packetized.
   (a -> header) ->
   Circuit (Df dom a) (PacketStream dom dataWidth metaOut)
-packetizeFromDfC toMetaOut toHeader = fromSignals ckt
- where
-  maxMinProof =
-    sameNat
-      (SNat @headerBytes)
-      (SNat @(dataWidth `Max` headerBytes - dataWidth + dataWidth `Min` headerBytes))
-  minProof = compareSNat (SNat @(dataWidth `Min` headerBytes)) (SNat @dataWidth)
-  divRuProof = compareSNat d1 (SNat @(headerBytes `DivRU` dataWidth))
-
-  ckt = case (maxMinProof, minProof, divRuProof) of
-    (Just Refl, SNatLE, SNatLE) -> mealyB (packetizeFromDfT toMetaOut toHeader) DfIdle
-    _ ->
-      clashCompileError
-        "packetizeFromDfC: Absurd, Report this to the Clash compiler team: https://github.com/clash-lang/clash-compiler/issues"
+packetizeFromDfC toMetaOut toHeader = case compareSNat d1 (SNat @(headerBytes `DivRU` dataWidth)) of
+  SNatLE -> case compareSNat (SNat @headerBytes) (SNat @dataWidth) of
+    -- We don't need a state machine in this case, as we are able to packetize
+    -- the entire payload in one clock cycle.
+    SNatLE -> Circuit (unbundle . fmap go . bundle)
+     where
+      go (Df.NoData, _) = (Ack False, Nothing)
+      go (Df.Data dataIn, bwdIn) = (Ack (_ready bwdIn), Just outPkt)
+       where
+        outPkt = PacketStreamM2S dataOut (Just l) (toMetaOut dataIn) False
+        dataOut = bitCoerce (toHeader dataIn) ++ repeat @(dataWidth - headerBytes) defaultByte
+        l = case compareSNat (SNat @(headerBytes `Mod` dataWidth)) d0 of
+          SNatGT -> natToNum @(headerBytes `Mod` dataWidth - 1)
+          _ -> natToNum @(dataWidth - 1)
+    SNatGT -> fromSignals (mealyB (packetizeFromDfT toMetaOut toHeader) DfIdle)
+  SNatGT ->
+    clashCompileError
+      "packetizeFromDfC: Absurd, Report this to the Clash compiler team: https://github.com/clash-lang/clash-compiler/issues"
