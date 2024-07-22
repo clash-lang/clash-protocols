@@ -36,7 +36,6 @@ import Protocols.PacketStream.Base
 import Protocols.PacketStream (packetizeFromDfC, packetizerC)
 import Tests.Protocols.PacketStream.Base
 
-
 -- | Model of the generic `packetizerC`.
 packetizerModel ::
   forall
@@ -114,14 +113,14 @@ packetizerPropertyGenerator SNat SNat =
     (genValidPackets (Range.linear 1 50) (Range.linear 1 10) Abort)
     (exposeClockResetEnable model)
     (exposeClockResetEnable ckt)
-  where
-    model = packetizerModel (const ()) id
-    ckt ::
-      (HiddenClockResetEnable System) =>
-      Circuit
-        (PacketStream System dataWidth (Vec headerBytes (BitVector 8)))
-        (PacketStream System dataWidth ())
-    ckt = packetizerC (const ()) id
+ where
+  model = packetizerModel (const ()) id
+  ckt ::
+    (HiddenClockResetEnable System) =>
+    Circuit
+      (PacketStream System dataWidth (Vec headerBytes (BitVector 8)))
+      (PacketStream System dataWidth ())
+  ckt = packetizerC (const ()) id
 
 -- | headerBytes % dataWidth ~ 0
 prop_const_packetizer_d1_d14 :: Property

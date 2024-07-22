@@ -31,7 +31,6 @@ import Protocols.PacketStream.PacketFifo (overflowDropPacketFifoC, packetFifoC)
 -- tests
 import Tests.Protocols.PacketStream.Base as U
 
-
 isSubsequenceOf :: (Eq a) => [a] -> [a] -> Bool
 isSubsequenceOf [] _ = True
 isSubsequenceOf _ [] = False
@@ -48,11 +47,11 @@ prop_packetFifo_id =
     (genValidPackets (Range.linear 1 50) (Range.linear 1 10) Abort)
     (C.exposeClockResetEnable dropAbortedPackets)
     (C.exposeClockResetEnable ckt)
-  where
-    ckt ::
-      (HiddenClockResetEnable System) =>
-      Circuit (PacketStream System 4 Int16) (PacketStream System 4 Int16)
-    ckt = packetFifoC d12 d12
+ where
+  ckt ::
+    (HiddenClockResetEnable System) =>
+    Circuit (PacketStream System 4 Int16) (PacketStream System 4 Int16)
+  ckt = packetFifoC d12 d12
 
 -- | test for id with a small buffer to ensure backpressure is tested
 prop_packetFifo_small_buffer_id :: Property
