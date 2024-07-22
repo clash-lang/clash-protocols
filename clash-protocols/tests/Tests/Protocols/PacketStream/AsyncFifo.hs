@@ -30,7 +30,6 @@ import Protocols.PacketStream.Base
 -- tests
 import Tests.Protocols.PacketStream.Base
 
-
 createDomain
   vSystem
     { vName = "TestDom50"

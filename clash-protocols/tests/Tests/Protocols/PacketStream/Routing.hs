@@ -33,7 +33,6 @@ import Tests.Protocols.PacketStream.Base
 
 import qualified Data.List as L
 
-
 -- | Tests the round-robin packet arbiter with one source; essentially an id test
 prop_packetarbiter_roundrobin_id :: Property
 prop_packetarbiter_roundrobin_id = makePropPacketArbiter C.d1 C.d2 RoundRobin
@@ -77,7 +76,7 @@ makePropPacketArbiter _ _ mode =
   genSources = mapM setMeta (C.indicesI @p)
   setMeta j = do
     pkts <- genValidPackets @n @() (Range.linear 1 10) (Range.linear 1 10) Abort
-    pure $ L.map (\pkt -> pkt {_meta = j}) pkts
+    pure $ L.map (\pkt -> pkt{_meta = j}) pkts
 
   partitionPackets packets =
     sortOn (_meta . head . head) $

@@ -30,7 +30,6 @@ import Protocols.PacketStream.Converters
 -- tests
 import Tests.Protocols.PacketStream.Base
 
-
 ucModel :: forall n. (C.KnownNat n) => [PacketStreamM2S 1 ()] -> [PacketStreamM2S n ()]
 ucModel fragments = out
  where
