@@ -1,8 +1,9 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# OPTIONS_HADDOCK hide #-}
 
 {- |
-Definitions and instances of the packet stream protocol
+Definitions and instances of the PacketStream protocol
 -}
 module Protocols.PacketStream.Base (
   PacketStreamM2S (..),
@@ -30,35 +31,56 @@ import Data.Coerce (coerce)
 import qualified Data.Maybe as Maybe
 import Data.Proxy
 
-{- | Data sent from manager to subordinate, a simplified AXI4-Stream like interface
-with metadata that can only change on packet delineation.
-_tdest, _tuser and _tid are bundled into one big _meta field which holds metadata.
-There are no null or position bytes so _tstrb is replaced by a last indicator
-that indicates the index of the last valid byte in the _data vector.
-_tvalid is modeled via wrapping this in a `Maybe`.
+{- | Data sent from manager to subordinate.
+
+Heavily inspired by the M2S data of AMBA AXI4-Stream, but simplified:
+
+- @_tdata@ is moved into @_data@, which serves the exact same purpose: the actual
+  data of the transfer.
+- @_tkeep@ is changed to `_last`.
+- @_tstrb@ is removed as there are no position bytes.
+- @_tid@ is removed, because packets may not be interrupted by other packets.
+- @_tdest@ is moved into `_meta`.
+- @_tuser@ is moved into `_meta`.
+- @_tvalid@ is modeled by wrapping this type into a @Maybe@.
 -}
 data PacketStreamM2S (dataWidth :: Nat) (metaType :: Type) = PacketStreamM2S
   { _data :: Vec dataWidth (BitVector 8)
-  -- ^ The bytes to be transmitted
+  -- ^ The bytes to be transmitted.
   , _last :: Maybe (Index dataWidth)
-  -- ^ If Nothing, we are not yet at the last byte, otherwise index of last valid byte of _data
+  -- ^ If this is @Just@ then it signals that this transfer
+  --   is the end of a packet and contains the index of the last valid byte in `_data`.
+  --   If it is @Nothing@ then this transfer is not yet the end of a packet and all
+  --   bytes are valid. This implies that no null bytes are allowed in the middle of
+  --   a packet, only after a packet.
   , _meta :: metaType
-  -- ^ the metadata of a packet. Must be constant during a packet.
+  -- ^ Metadata of a packet. Must be constant during a packet.
   , _abort :: Bool
-  -- ^ If True, the current transfer is aborted and the subordinate should ignore the current transfer
+  -- ^ Iff true, the packet corresponding to this transfer is invalid. The subordinate
+  --   must either drop the packet or forward the `_abort`.
   }
   deriving (Eq, Generic, ShowX, Show, NFData, Bundle, Functor)
 
-{- | Data sent from the subordinate to the manager
-The only information transmitted is whether the subordinate is ready to receive data
+{- | Data sent from the subordinate to manager.
+
+The only information transmitted is whether the subordinate is ready to receive data.
 -}
 newtype PacketStreamS2M = PacketStreamS2M
   { _ready :: Bool
-  -- ^ Iff True, the subordinate is ready to receive data
+  -- ^ Iff True, the subordinate is ready to receive data.
   }
   deriving (Eq, Generic, ShowX, Show, NFData, Bundle, NFDataX)
 
--- | The packet stream protocol for communication between components
+{- | Simple valid-ready streaming protocol for transferring packets between components.
+
+Invariants:
+
+1. A manager must not check the `Bwd` channel when it is sending @Nothing@ over the `Fwd` channel.
+2. A manager must keep sending the same data until the subordinate has acknowledged it, i.e. upon observing `_ready` as @True@.
+3. A manager must keep the metadata (`_meta`) of an entire packet it sends constant.
+4. A subordinate which receives a transfer with `_abort` asserted must either forward this `_abort` or drop the packet.
+5. A packet may not be interrupted by another packet.
+-}
 data PacketStream (dom :: Domain) (dataWidth :: Nat) (metaType :: Type)
 
 deriving instance
@@ -86,13 +108,13 @@ instance DfConv.DfConv (PacketStream dom dataWidth metaType) where
    where
     go (fwdIn, bwdIn) =
       ( (fmap coerce bwdIn, pure undefined)
-      , fmap Df.dataToMaybe $ P.fst fwdIn
+      , Df.dataToMaybe <$> P.fst fwdIn
       )
 
   fromDfCircuit _ = fromSignals go
    where
     go (fwdIn, bwdIn) =
-      ( fmap coerce $ P.fst bwdIn
+      ( coerce <$> P.fst bwdIn
       , (fmap Df.maybeToData fwdIn, pure undefined)
       )
 
@@ -183,8 +205,6 @@ filterMetaS pS = Circuit $ \(fwdIn, bwdIn) -> unbundle (go <$> bundle (fwdIn, bw
   go (Nothing, bwdIn, _) = (bwdIn, Nothing)
   go (Just inPkt, bwdIn, predicate)
     | predicate (_meta inPkt) = (bwdIn, Just inPkt)
-    -- It's illegal to look at bwdIn when sending out a Nothing.
-    -- So if we drive a Nothing, force an acknowledgement.
     | otherwise = (PacketStreamS2M True, Nothing)
 
 -- | Filter a packet stream based on its metadata.
