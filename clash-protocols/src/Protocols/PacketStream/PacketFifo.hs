@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# OPTIONS_HADDOCK hide #-}
 
 {- |
 Optimized Store and forward FIFO circuit for packet streams.

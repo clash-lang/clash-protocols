@@ -1,4 +1,5 @@
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# OPTIONS_HADDOCK hide #-}
 
 {- |
 Provides `asyncFifoC` for crossing clock domains in the packet stream protocol.
@@ -10,7 +11,7 @@ import Data.Maybe.Extra (toMaybe)
 import Clash.Explicit.Prelude (asyncFIFOSynchronizer)
 import Clash.Prelude
 
-import Protocols (Circuit, fromSignals)
+import Protocols
 import Protocols.PacketStream.Base
 
 {- | Asynchronous FIFO circuit that can be used to safely cross clock domains.
@@ -45,7 +46,8 @@ asyncFifoC ::
   -- | Enable signal in the read domain
   Enable rDom ->
   Circuit (PacketStream wDom dataWidth metaType) (PacketStream rDom dataWidth metaType)
-asyncFifoC depth wClk wRst wEn rClk rRst rEn = fromSignals ckt
+asyncFifoC depth wClk wRst wEn rClk rRst rEn =
+  exposeClockResetEnable forceResetSanity wClk wRst wEn |> fromSignals ckt
  where
   ckt (fwdIn, bwdIn) = (bwdOut, fwdOut)
    where

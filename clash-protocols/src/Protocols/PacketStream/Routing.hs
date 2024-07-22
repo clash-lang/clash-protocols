@@ -1,4 +1,5 @@
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# OPTIONS_HADDOCK hide #-}
 
 {- |
 Provides a packet arbiter and dispatcher, for merging and splitting packet streams.
