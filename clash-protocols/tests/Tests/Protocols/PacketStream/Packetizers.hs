@@ -13,7 +13,6 @@ import Prelude
 
 -- clash
 import Clash.Prelude
-import qualified Clash.Prelude as C
 
 -- hedgehog
 import Hedgehog
@@ -34,21 +33,9 @@ import Protocols.Hedgehog
 import Protocols.PacketStream.Base
 
 -- tests
-
 import Protocols.PacketStream (packetizeFromDfC, packetizerC)
 import Tests.Protocols.PacketStream.Base
 
-genVec :: (KnownNat n, 1 <= n) => Gen a -> Gen (Vec n a)
-genVec gen = sequence (C.repeat gen)
-
-genMeta ::
-  forall (meta :: Type) (metaBytes :: Nat).
-  (KnownNat metaBytes) =>
-  (1 <= metaBytes) =>
-  (BitPack meta) =>
-  (BitSize meta ~ metaBytes * 8) =>
-  Gen meta
-genMeta = fmap bitCoerce (genVec Gen.enumBounded :: Gen (Vec metaBytes (BitVector 8)))
 
 -- | Model of the generic `packetizerC`.
 packetizerModel ::
@@ -124,28 +111,17 @@ packetizerPropertyGenerator SNat SNat =
   idWithModelSingleDomain
     @System
     defExpectOptions
-    (fmap (cleanPackets . fullPackets) (Gen.list (Range.linear 1 100) genPackets))
+    (genValidPackets (Range.linear 1 50) (Range.linear 1 10) Abort)
     (exposeClockResetEnable model)
     (exposeClockResetEnable ckt)
- where
-  model ::
-    [PacketStreamM2S dataWidth (Vec headerBytes (BitVector 8))] ->
-    [PacketStreamM2S dataWidth ()]
-  model = packetizerModel (const ()) id
-
-  ckt ::
-    (HiddenClockResetEnable System) =>
-    Circuit
-      (PacketStream System dataWidth (Vec headerBytes (BitVector 8)))
-      (PacketStream System dataWidth ())
-  ckt = packetizerC (const ()) id
-
-  genPackets =
-    PacketStreamM2S
-      <$> genVec Gen.enumBounded
-      <*> Gen.maybe Gen.enumBounded
-      <*> genMeta
-      <*> Gen.enumBounded
+  where
+    model = packetizerModel (const ()) id
+    ckt ::
+      (HiddenClockResetEnable System) =>
+      Circuit
+        (PacketStream System dataWidth (Vec headerBytes (BitVector 8)))
+        (PacketStream System dataWidth ())
+    ckt = packetizerC (const ()) id
 
 -- | headerBytes % dataWidth ~ 0
 prop_const_packetizer_d1_d14 :: Property
@@ -183,9 +159,7 @@ packetizeFromDfPropertyGenerator SNat SNat =
     (exposeClockResetEnable model)
     (exposeClockResetEnable ckt)
  where
-  model :: [Vec headerBytes (BitVector 8)] -> [PacketStreamM2S dataWidth ()]
   model = packetizeFromDfModel (const ()) id
-
   ckt ::
     (HiddenClockResetEnable System) =>
     Circuit (Df.Df System (Vec headerBytes (BitVector 8))) (PacketStream System dataWidth ())
@@ -209,7 +183,7 @@ prop_const_packetizeFromDf_d5_d4 = packetizeFromDfPropertyGenerator d5 d4
 
 tests :: TestTree
 tests =
-  localOption (mkTimeout 12_000_000 {- 12 seconds -}) $
+  localOption (mkTimeout 20_000_000 {- 20 seconds -}) $
     localOption
       (HedgehogTestLimit (Just 1_000))
       $(testGroupGenerator)

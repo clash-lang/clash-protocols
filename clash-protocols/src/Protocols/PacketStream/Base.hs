@@ -80,6 +80,7 @@ Invariants:
 3. A manager must keep the metadata (`_meta`) of an entire packet it sends constant.
 4. A subordinate which receives a transfer with `_abort` asserted must either forward this `_abort` or drop the packet.
 5. A packet may not be interrupted by another packet.
+6. All bytes in `_data` which are not enabled must be 0x00.
 -}
 data PacketStream (dom :: Domain) (dataWidth :: Nat) (metaType :: Type)
 
@@ -223,7 +224,7 @@ mapMetaS ::
   Circuit (PacketStream dom dataWidth a) (PacketStream dom dataWidth b)
 mapMetaS fS = Circuit $ \(fwdIn, bwdIn) -> (bwdIn, go <$> bundle (fwdIn, fS))
  where
-  go (inp, f) = (\inPkt -> inPkt{_meta = f (_meta inPkt)}) <$> inp
+  go (inp, f) = (\inPkt -> inPkt {_meta = f (_meta inPkt)} ) <$> inp
 
 -- | Map a function on the metadata of a packet stream.
 mapMeta ::
