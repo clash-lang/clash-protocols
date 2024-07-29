@@ -69,7 +69,11 @@ smallInt :: Range Int
 smallInt = Range.linear 0 10
 
 genSmallInt :: Gen Int
-genSmallInt = Gen.integral smallInt
+genSmallInt =
+  Gen.frequency
+    [ (90, Gen.integral smallInt)
+    , (10, Gen.constant (Range.lowerBound 99 smallInt))
+    ]
 
 genSmallPlusInt :: Gen PlusInt
 genSmallPlusInt = coerce <$> genSmallInt

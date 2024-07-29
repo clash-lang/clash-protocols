@@ -135,7 +135,8 @@ library
 
   build-depends:
       -- inline-circuit-notation
-      circuit-notation
+    , circuit-notation
+    , clash-prelude-hedgehog
     , data-default
     , deepseq
     , extra
