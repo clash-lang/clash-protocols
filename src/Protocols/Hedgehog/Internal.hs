@@ -46,6 +46,8 @@ data ExpectOptions = ExpectOptions
   , eoDriveEarly :: Bool
   -- ^ Start driving the circuit with its reset asserted. Circuits should
   -- never acknowledge data while this is happening.
+  , eoTimeoutMs :: Maybe Int
+  -- ^ Terminate the test after /n/ milliseconds.
   }
 
 {- | Resets for 30 cycles, checks for superfluous data for 50 cycles after
@@ -64,6 +66,7 @@ defExpectOptions =
     , eoSampleMax = 256
     , eoResetCycles = 30
     , eoDriveEarly = True
+    , eoTimeoutMs = Nothing
     }
 
 -- | Superclass class to reduce syntactical noise.
