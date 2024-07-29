@@ -48,6 +48,8 @@ data ExpectOptions = ExpectOptions
   -- never acknowledge data while this is happening.
   , eoTimeoutMs :: Maybe Int
   -- ^ Terminate the test after /n/ milliseconds.
+  , eoTrace :: Bool
+  -- ^ Trace data generation for debugging purposes
   }
 
 {- | Resets for 30 cycles, checks for superfluous data for 50 cycles after
@@ -67,6 +69,7 @@ defExpectOptions =
     , eoResetCycles = 30
     , eoDriveEarly = True
     , eoTimeoutMs = Nothing
+    , eoTrace = False
     }
 
 -- | Superclass class to reduce syntactical noise.

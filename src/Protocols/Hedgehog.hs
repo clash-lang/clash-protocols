@@ -30,6 +30,7 @@ module Protocols.Hedgehog (
 
 -- base
 import Control.Concurrent (threadDelay)
+import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import Data.Proxy (Proxy (Proxy))
 import GHC.Stack (HasCallStack)
@@ -119,9 +120,11 @@ propWithModel ::
 propWithModel eOpts genData model prot prop =
   H.property $ maybe id withTimeoutMs (eoTimeoutMs eOpts) $ do
     dat <- H.forAll genData
+    when (eoTrace eOpts) $ liftIO $ putStr "propWithModel: dat: " >> print dat
 
     -- TODO: Different 'n's for each output
     n <- H.forAll (Gen.integral (Range.linear 0 (eoSampleMax eOpts)))
+    when (eoTrace eOpts) $ liftIO $ putStr "propWithModel: n: " >> print n
 
     -- TODO: Different distributions?
     let genStall = genSmallInt
@@ -130,13 +133,21 @@ propWithModel eOpts genData model prot prop =
     -- whether to stall or not. The second determines how many cycles to stall
     -- on each _valid_ cycle.
     lhsStallModes <- H.forAll (genVec genStallMode)
+    when (eoTrace eOpts) $
+      liftIO $
+        putStr "propWithModel: lhsStallModes: " >> print lhsStallModes
     lhsStalls <- H.forAll (traverse (genStalls genStall n) lhsStallModes)
+    when (eoTrace eOpts) $ liftIO $ putStr "propWithModel: lhsStalls: " >> print lhsStalls
 
     -- Generate stalls for RHS part of the protocol. The first line determines
     -- whether to stall or not. The second determines how many cycles to stall
     -- on each _valid_ cycle.
     rhsStallModes <- H.forAll (genVec genStallMode)
+    when (eoTrace eOpts) $
+      liftIO $
+        putStr "propWithModel: rhsStallModes: " >> print rhsStallModes
     rhsStalls <- H.forAll (traverse (genStalls genStall n) rhsStallModes)
+    when (eoTrace eOpts) $ liftIO $ putStr "propWithModel: rhsStalls: " >> print rhsStalls
 
     let
       simConfig = def{resetCycles = eoResetCycles eOpts}
@@ -157,9 +168,14 @@ propWithModel eOpts genData model prot prop =
     -- expectN errors if circuit does not produce enough data
     trimmed <- expectN (Proxy @b) eOpts sampled
 
+    when (eoTrace eOpts) $ liftIO $ putStrLn "propWithModel: before forcing trimmed.."
     _ <- H.evalNF trimmed
+    when (eoTrace eOpts) $ liftIO $ putStrLn "propWithModel: before forcing expected.."
     _ <- H.evalNF expected
 
+    when (eoTrace eOpts) $
+      liftIO $
+        putStrLn "propWithModel: executing property.."
     prop expected trimmed
 
 {- | Test a protocol against a pure model implementation. Circuit under test will
