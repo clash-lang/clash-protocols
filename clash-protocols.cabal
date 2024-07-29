@@ -143,6 +143,7 @@ library
     , ghc >= 8.7 && < 9.7
     , hashable
     , hedgehog >= 1.0.2
+    , lifted-async
     , mtl
     , pretty-show
     , strict-tuple

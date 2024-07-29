@@ -29,7 +29,8 @@ module Protocols.Hedgehog (
 ) where
 
 -- base
-
+import Control.Concurrent (threadDelay)
+import Control.Monad.IO.Class (liftIO)
 import Data.Proxy (Proxy (Proxy))
 import GHC.Stack (HasCallStack)
 import Prelude
@@ -49,6 +50,9 @@ import Hedgehog ((===))
 import qualified Hedgehog as H
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
+
+-- lifted-async
+import Control.Concurrent.Async.Lifted (race)
 
 -- | Whether to stall or not. Used in 'idWithModel'.
 data StallMode = NoStall | Stall
@@ -71,6 +75,19 @@ genSmallInt =
     [ (90, Gen.integral smallInt)
     , (10, Gen.constant (Range.lowerBound 99 smallInt))
     ]
+
+{- | Attach a timeout to a property. Fails if the property does not finish in
+the given time. The timeout is given in milliseconds.
+-}
+withTimeoutMs :: Int -> H.PropertyT IO a -> H.PropertyT IO a
+withTimeoutMs timeout v = do
+  result <-
+    race
+      (liftIO $ threadDelay (timeout * 1000))
+      v
+  case result of
+    Left () -> fail "Timeout exceeded"
+    Right x -> pure x
 
 {- | Test a protocol against a pure model implementation. Circuit under test will
 be arbitrarily stalled on the left hand and right hand side and tested for
@@ -99,50 +116,51 @@ propWithModel ::
   -- as a first argument, and the sampled data as a second argument.
   (ExpectType b -> ExpectType b -> H.PropertyT IO ()) ->
   H.Property
-propWithModel eOpts genData model prot prop = H.property $ do
-  dat <- H.forAll genData
+propWithModel eOpts genData model prot prop =
+  H.property $ maybe id withTimeoutMs (eoTimeoutMs eOpts) $ do
+    dat <- H.forAll genData
 
-  -- TODO: Different 'n's for each output
-  n <- H.forAll (Gen.integral (Range.linear 0 (eoSampleMax eOpts)))
+    -- TODO: Different 'n's for each output
+    n <- H.forAll (Gen.integral (Range.linear 0 (eoSampleMax eOpts)))
 
-  -- TODO: Different distributions?
-  let genStall = genSmallInt
+    -- TODO: Different distributions?
+    let genStall = genSmallInt
 
-  -- Generate stalls for LHS part of the protocol. The first line determines
-  -- whether to stall or not. The second determines how many cycles to stall
-  -- on each _valid_ cycle.
-  lhsStallModes <- H.forAll (genVec genStallMode)
-  lhsStalls <- H.forAll (traverse (genStalls genStall n) lhsStallModes)
+    -- Generate stalls for LHS part of the protocol. The first line determines
+    -- whether to stall or not. The second determines how many cycles to stall
+    -- on each _valid_ cycle.
+    lhsStallModes <- H.forAll (genVec genStallMode)
+    lhsStalls <- H.forAll (traverse (genStalls genStall n) lhsStallModes)
 
-  -- Generate stalls for RHS part of the protocol. The first line determines
-  -- whether to stall or not. The second determines how many cycles to stall
-  -- on each _valid_ cycle.
-  rhsStallModes <- H.forAll (genVec genStallMode)
-  rhsStalls <- H.forAll (traverse (genStalls genStall n) rhsStallModes)
+    -- Generate stalls for RHS part of the protocol. The first line determines
+    -- whether to stall or not. The second determines how many cycles to stall
+    -- on each _valid_ cycle.
+    rhsStallModes <- H.forAll (genVec genStallMode)
+    rhsStalls <- H.forAll (traverse (genStalls genStall n) rhsStallModes)
 
-  let
-    simConfig = def{resetCycles = eoResetCycles eOpts}
-    simDriveConfig =
-      if eoDriveEarly eOpts
-        then def{resetCycles = max 1 (eoResetCycles eOpts - 5)}
-        else def{resetCycles = eoResetCycles eOpts}
-    expected = model dat
-    lhsStallC = stallC simConfig lhsStalls
-    rhsStallC = stallC simConfig rhsStalls
-    stalledProtocol =
-      driveC simDriveConfig (toSimulateType (Proxy @a) dat)
-        |> lhsStallC
-        |> prot
-        |> rhsStallC
-    sampled = sampleC simConfig stalledProtocol
+    let
+      simConfig = def{resetCycles = eoResetCycles eOpts}
+      simDriveConfig =
+        if eoDriveEarly eOpts
+          then def{resetCycles = max 1 (eoResetCycles eOpts - 5)}
+          else def{resetCycles = eoResetCycles eOpts}
+      expected = model dat
+      lhsStallC = stallC simConfig lhsStalls
+      rhsStallC = stallC simConfig rhsStalls
+      stalledProtocol =
+        driveC simDriveConfig (toSimulateType (Proxy @a) dat)
+          |> lhsStallC
+          |> prot
+          |> rhsStallC
+      sampled = sampleC simConfig stalledProtocol
 
-  -- expectN errors if circuit does not produce enough data
-  trimmed <- expectN (Proxy @b) eOpts sampled
+    -- expectN errors if circuit does not produce enough data
+    trimmed <- expectN (Proxy @b) eOpts sampled
 
-  _ <- H.evalNF trimmed
-  _ <- H.evalNF expected
+    _ <- H.evalNF trimmed
+    _ <- H.evalNF expected
 
-  prop expected trimmed
+    prop expected trimmed
 
 {- | Test a protocol against a pure model implementation. Circuit under test will
 be arbitrarily stalled on the left hand and right hand side and tested for
