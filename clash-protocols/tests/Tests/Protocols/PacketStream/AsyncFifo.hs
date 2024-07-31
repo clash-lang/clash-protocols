@@ -22,10 +22,8 @@ import Test.Tasty.Hedgehog.Extra (testProperty)
 import Test.Tasty.TH (testGroupGenerator)
 
 -- clash-protocols
-import Protocols
 import Protocols.Hedgehog
 import Protocols.PacketStream.AsyncFifo
-import Protocols.PacketStream.Base
 
 -- tests
 import Tests.Protocols.PacketStream.Base
