@@ -128,65 +128,66 @@ upConverterC ::
   Circuit (PacketStream dom 1 ()) (PacketStream dom dataWidth ())
 upConverterC = forceResetSanity |> fromSignals upConverter
 
-data DownConverterState (dataWidth :: Nat) =
-  DownConverterState
-    { _dcBuf :: Vec dataWidth (BitVector 8)
-      -- ^ Buffer
-    , _dcSize :: Index (dataWidth + 1)
-      -- ^ Number of valid bytes in _dcBuf
-    }
-    deriving (Generic, NFDataX)
+data DownConverterState (dataWidth :: Nat) = DownConverterState
+  { _dcBuf :: Vec dataWidth (BitVector 8)
+  -- ^ Buffer
+  , _dcSize :: Index (dataWidth + 1)
+  -- ^ Number of valid bytes in _dcBuf
+  }
+  deriving (Generic, NFDataX)
 
-downConverterT
-  :: forall (dataWidth :: Nat).
-     1 <= dataWidth
-  => KnownNat dataWidth
-  => DownConverterState dataWidth
-  -> (Maybe (PacketStreamM2S dataWidth ()), PacketStreamS2M)
-  -> (DownConverterState dataWidth, (PacketStreamS2M, Maybe (PacketStreamM2S 1 ())))
+downConverterT ::
+  forall (dataWidth :: Nat).
+  (1 <= dataWidth) =>
+  (KnownNat dataWidth) =>
+  DownConverterState dataWidth ->
+  (Maybe (PacketStreamM2S dataWidth ()), PacketStreamS2M) ->
+  (DownConverterState dataWidth, (PacketStreamS2M, Maybe (PacketStreamM2S 1 ())))
 downConverterT st (Nothing, _) = (st, (PacketStreamS2M True, Nothing))
 downConverterT st@DownConverterState{..} (Just inPkt, bwdIn) = (nextSt, (PacketStreamS2M outReady, Just outPkt))
-  where
-    -- If _dcSize == 0, then we have received a new transfer and should use
-    -- its corresponding _data. Else, we should use our stored buffer.
-    (nextSize, buf) = case (_dcSize == 0, _last inPkt) of
-      (True, Nothing) -> (natToNum @(dataWidth - 1), _data inPkt)
-      (True, Just i)  -> (resize i, _data inPkt)
-      (False, _)      -> (pred _dcSize, _dcBuf)
+ where
+  -- If _dcSize == 0, then we have received a new transfer and should use
+  -- its corresponding _data. Else, we should use our stored buffer.
+  (nextSize, buf) = case (_dcSize == 0, _last inPkt) of
+    (True, Nothing) -> (natToNum @(dataWidth - 1), _data inPkt)
+    (True, Just i) -> (resize i, _data inPkt)
+    (False, _) -> (pred _dcSize, _dcBuf)
 
-    outPkt =
-      PacketStreamM2S
-        { _data = singleton (leToPlus @1 @dataWidth head buf)
-        , _last = outLast
-        , _meta = ()
-        , _abort = _abort inPkt
-        }
+  outPkt =
+    PacketStreamM2S
+      { _data = singleton (leToPlus @1 @dataWidth head buf)
+      , _last = outLast
+      , _meta = ()
+      , _abort = _abort inPkt
+      }
 
-    (outReady, outLast)
-      | nextSize == 0 = (_ready bwdIn, 0 <$ _last inPkt)
-      | otherwise     = (False, Nothing)
+  (outReady, outLast)
+    | nextSize == 0 = (_ready bwdIn, 0 <$ _last inPkt)
+    | otherwise = (False, Nothing)
 
-    -- Keep the buffer in the state and rotate it once the byte is acknowledged to avoid
-    -- dynamic indexing.
-    nextSt
-      | _ready bwdIn = DownConverterState (rotateLeftS buf d1) nextSize
-      | otherwise    = st
+  -- Keep the buffer in the state and rotate it once the byte is acknowledged to avoid
+  -- dynamic indexing.
+  nextSt
+    | _ready bwdIn = DownConverterState (rotateLeftS buf d1) nextSize
+    | otherwise = st
 
--- | Converts packet streams of arbitrary data widths to packet streams of single bytes.
--- If @_abort@ is asserted on an input transfer, it will be asserted on all
--- corresponding output transfers as well.
---
--- Has one clock cycle of latency, but optimal throughput, i.e. a packet of n bytes is
--- sent out in n clock cycles, even if `_last` is set.
-downConverterC
-  :: forall (dataWidth :: Nat) (dom :: Domain).
-  HiddenClockResetEnable dom
-  => 1 <= dataWidth
-  => KnownNat dataWidth
-  => Circuit (PacketStream dom dataWidth ()) (PacketStream dom 1 ())
+{- | Converts packet streams of arbitrary data widths to packet streams of single bytes.
+If @_abort@ is asserted on an input transfer, it will be asserted on all
+corresponding output transfers as well.
+
+Has one clock cycle of latency, but optimal throughput, i.e. a packet of n bytes is
+sent out in n clock cycles, even if `_last` is set.
+-}
+downConverterC ::
+  forall (dataWidth :: Nat) (dom :: Domain).
+  (HiddenClockResetEnable dom) =>
+  (1 <= dataWidth) =>
+  (KnownNat dataWidth) =>
+  Circuit (PacketStream dom dataWidth ()) (PacketStream dom 1 ())
 downConverterC = forceResetSanity |> fromSignals (mealyB downConverterT s0)
-  where
-    s0 = DownConverterState
+ where
+  s0 =
+    DownConverterState
       { _dcBuf = errorX "downConverter: undefined initial value"
       , _dcSize = 0
       }
