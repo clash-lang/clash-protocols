@@ -114,7 +114,7 @@ prop_overFlowDrop_packetFifo_drop :: Property
 prop_overFlowDrop_packetFifo_drop =
   idWithModelSingleDomain
     @C.System
-    (ExpectOptions 50 (Just 1_000) 30 False)
+    defExpectOptions
     -- make sure the timeout is long as the packetFifo can be quiet for a while while dropping
     (liftA3 (\a b c -> a ++ b ++ c) genSmall genBig genSmall)
     (C.exposeClockResetEnable model)
