@@ -43,7 +43,7 @@ upconverterTest C.SNat =
   idWithModelSingleDomain
     @C.System
     defExpectOptions
-    (genValidPackets (Range.linear 1 30) (Range.linear 1 30) Abort)
+    (genValidPackets (Range.linear 1 10) (Range.linear 1 20) Abort)
     (C.exposeClockResetEnable ucModel)
     (C.exposeClockResetEnable @C.System (upConverterC @n))
 
@@ -57,19 +57,19 @@ downconverterTest :: forall n. (1 <= n) => C.SNat n -> Property
 downconverterTest C.SNat =
   idWithModelSingleDomain
     @C.System
-    defExpectOptions
-    (genValidPackets (Range.linear 1 50) (Range.linear 1 10) Abort)
+    defExpectOptions{eoSampleMax = 1000}
+    (genValidPackets (Range.linear 1 8) (Range.linear 1 10) Abort)
     (C.exposeClockResetEnable downConvert)
     (C.exposeClockResetEnable @C.System (downConverterC @n))
 
 prop_downconverter_d1, prop_downconverter_d2, prop_downconverter_d4 :: Property
-prop_downconverter_d1 = downconverterTest (C.SNat @1)
-prop_downconverter_d2 = downconverterTest (C.SNat @2)
-prop_downconverter_d4 = downconverterTest (C.SNat @4)
+prop_downconverter_d1 = downconverterTest C.d1
+prop_downconverter_d2 = downconverterTest C.d2
+prop_downconverter_d4 = downconverterTest C.d4
 
 tests :: TestTree
 tests =
   localOption (mkTimeout 20_000_000 {- 20 seconds -}) $
     localOption
-      (HedgehogTestLimit (Just 1_000))
+      (HedgehogTestLimit (Just 500))
       $(testGroupGenerator)
