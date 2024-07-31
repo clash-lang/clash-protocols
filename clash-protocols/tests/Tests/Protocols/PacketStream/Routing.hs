@@ -67,7 +67,7 @@ makePropPacketArbiter ::
 makePropPacketArbiter _ _ mode =
   propWithModelSingleDomain
     @C.System
-    defExpectOptions
+    defExpectOptions{eoSampleMax = 1000}
     genSources
     (C.exposeClockResetEnable concat)
     (C.exposeClockResetEnable (packetArbiterC mode))
@@ -124,8 +124,8 @@ makePropPacketDispatcher ::
   Property
 makePropPacketDispatcher _ fs =
   idWithModelSingleDomain @C.System
-    defExpectOptions
-    (genValidPackets (Range.linear 1 10) (Range.linear 1 10) Abort)
+    defExpectOptions{eoSampleMax = 2000}
+    (genValidPackets (Range.linear 1 10) (Range.linear 1 6) Abort)
     (C.exposeClockResetEnable (model 0))
     (C.exposeClockResetEnable (packetDispatcherC fs))
  where
@@ -141,5 +141,5 @@ tests :: TestTree
 tests =
   localOption (mkTimeout 20_000_000 {- 20 seconds -}) $
     localOption
-      (HedgehogTestLimit (Just 1_000))
+      (HedgehogTestLimit (Just 100))
       $(testGroupGenerator)

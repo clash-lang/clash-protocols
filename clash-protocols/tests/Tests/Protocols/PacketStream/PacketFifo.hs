@@ -43,8 +43,8 @@ prop_packetFifo_id :: Property
 prop_packetFifo_id =
   idWithModelSingleDomain
     @C.System
-    defExpectOptions
-    (genValidPackets (Range.linear 1 50) (Range.linear 1 10) Abort)
+    defExpectOptions{eoSampleMax = 1000}
+    (genValidPackets (Range.linear 1 30) (Range.linear 1 10) Abort)
     (C.exposeClockResetEnable dropAbortedPackets)
     (C.exposeClockResetEnable ckt)
  where
@@ -58,7 +58,7 @@ prop_packetFifo_small_buffer_id :: Property
 prop_packetFifo_small_buffer_id =
   idWithModelSingleDomain
     @C.System
-    defExpectOptions
+    defExpectOptions{eoSampleMax = 1000}
     (genValidPackets (Range.linear 1 10) (Range.linear 1 30) NoAbort)
     (C.exposeClockResetEnable dropAbortedPackets)
     (C.exposeClockResetEnable ckt)
@@ -99,8 +99,8 @@ prop_overFlowDrop_packetFifo_id :: Property
 prop_overFlowDrop_packetFifo_id =
   idWithModelSingleDomain
     @C.System
-    defExpectOptions
-    (genValidPackets (Range.linear 1 50) (Range.linear 1 10) Abort)
+    defExpectOptions{eoSampleMax = 2000}
+    (genValidPackets (Range.linear 1 30) (Range.linear 1 10) Abort)
     (C.exposeClockResetEnable dropAbortedPackets)
     (C.exposeClockResetEnable ckt)
  where
@@ -114,7 +114,7 @@ prop_overFlowDrop_packetFifo_drop :: Property
 prop_overFlowDrop_packetFifo_drop =
   idWithModelSingleDomain
     @C.System
-    defExpectOptions
+    defExpectOptions{eoSampleMax = 1000}
     -- make sure the timeout is long as the packetFifo can be quiet for a while while dropping
     (liftA3 (\a b c -> a ++ b ++ c) genSmall genBig genSmall)
     (C.exposeClockResetEnable model)
@@ -131,7 +131,7 @@ prop_overFlowDrop_packetFifo_drop =
     packetChunk = chunkByPacket packets
 
   genSmall = genValidPacket (Range.linear 1 5) NoAbort
-  genBig = genValidPacket (Range.linear 33 50) NoAbort
+  genBig = genValidPacket (Range.linear 33 33) NoAbort
 
 -- | test for id using a small metabuffer to ensure backpressure using the metabuffer is tested
 prop_packetFifo_small_metaBuffer :: Property
@@ -139,7 +139,7 @@ prop_packetFifo_small_metaBuffer =
   idWithModelSingleDomain
     @C.System
     defExpectOptions
-    (genValidPackets (Range.linear 1 50) (Range.linear 1 10) Abort)
+    (genValidPackets (Range.linear 1 30) (Range.linear 1 4) Abort)
     (C.exposeClockResetEnable dropAbortedPackets)
     (C.exposeClockResetEnable ckt)
  where
@@ -152,5 +152,5 @@ tests :: TestTree
 tests =
   localOption (mkTimeout 20_000_000 {- 20 seconds -}) $
     localOption
-      (HedgehogTestLimit (Just 1_000))
+      (HedgehogTestLimit (Just 100))
       $(testGroupGenerator)

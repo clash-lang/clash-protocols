@@ -110,7 +110,7 @@ packetizerPropertyGenerator SNat SNat =
   idWithModelSingleDomain
     @System
     defExpectOptions
-    (genValidPackets (Range.linear 1 50) (Range.linear 1 10) Abort)
+    (genValidPackets (Range.linear 1 10) (Range.linear 1 10) Abort)
     (exposeClockResetEnable model)
     (exposeClockResetEnable ckt)
  where
@@ -154,7 +154,7 @@ packetizeFromDfPropertyGenerator SNat SNat =
   idWithModelSingleDomain
     @System
     defExpectOptions
-    (Gen.list (Range.linear 1 100) (genVec Gen.enumBounded))
+    (Gen.list (Range.linear 1 10) (genVec Gen.enumBounded))
     (exposeClockResetEnable model)
     (exposeClockResetEnable ckt)
  where

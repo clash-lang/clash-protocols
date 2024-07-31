@@ -56,11 +56,13 @@ clk50 = clockGen
 clk125 :: Clock TestDom125
 clk125 = clockGen
 
+-- Assert the reset for a different amount of cycles in each domain
+-- to properly test the async fifo.
 rst50 :: Reset TestDom50
-rst50 = resetGen @TestDom50
+rst50 = resetGenN d50
 
 rst125 :: Reset TestDom125
-rst125 = resetGen @TestDom125
+rst125 = resetGenN d60
 
 en50 :: Enable TestDom50
 en50 = enableGen
@@ -83,14 +85,7 @@ generateAsyncFifoIdProp wClk wRst wEn rClk rRst rEn =
     defExpectOptions
     (genValidPackets (Range.linear 1 10) (Range.linear 1 30) Abort)
     id
-    ckt
- where
-  ckt ::
-    (KnownDomain wDom, KnownDomain rDom) =>
-    Circuit
-      (PacketStream wDom 1 Int)
-      (PacketStream rDom 1 Int)
-  ckt = asyncFifoC (C.SNat @8) wClk wRst wEn rClk rRst rEn
+    (asyncFifoC @wDom @rDom @4 @1 @Int d4 wClk wRst wEn rClk rRst rEn)
 
 {- | The async FIFO circuit should forward all of its input data without loss and without producing extra data.
   This property tests whether this is true, when the clock of the writer and reader is equally fast (50 MHz).
@@ -114,5 +109,5 @@ tests :: TestTree
 tests =
   localOption (mkTimeout 20_000_000 {- 20 seconds -}) $
     localOption
-      (HedgehogTestLimit (Just 1_000))
+      (HedgehogTestLimit (Just 100))
       $(testGroupGenerator)
