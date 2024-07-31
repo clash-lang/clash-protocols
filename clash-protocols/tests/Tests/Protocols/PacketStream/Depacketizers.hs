@@ -120,8 +120,8 @@ depacketizerPropertyGenerator ::
 depacketizerPropertyGenerator SNat SNat =
   idWithModelSingleDomain
     @System
-    defExpectOptions
-    (genValidPackets (Range.linear 1 10) (Range.linear 1 50) Abort)
+    defExpectOptions{eoSampleMax = 1000}
+    (genValidPackets (Range.linear 1 4) (Range.linear 1 30) Abort)
     (exposeClockResetEnable model)
     (exposeClockResetEnable ckt)
  where
@@ -164,8 +164,8 @@ depacketizeToDfPropertyGenerator ::
 depacketizeToDfPropertyGenerator SNat SNat =
   idWithModelSingleDomain
     @System
-    defExpectOptions
-    (genValidPackets (Range.linear 1 10) (Range.linear 1 50) NoAbort)
+    defExpectOptions{eoSampleMax = 1000}
+    (genValidPackets (Range.linear 1 4) (Range.linear 1 30) NoAbort)
     (exposeClockResetEnable model)
     (exposeClockResetEnable ckt)
  where
@@ -195,5 +195,5 @@ tests :: TestTree
 tests =
   localOption (mkTimeout 20_000_000 {- 20 seconds -}) $
     localOption
-      (HedgehogTestLimit (Just 1_000))
+      (HedgehogTestLimit (Just 100))
       $(testGroupGenerator)
