@@ -164,7 +164,7 @@ depacketizeToDfPropertyGenerator ::
 depacketizeToDfPropertyGenerator SNat SNat =
   idWithModelSingleDomain
     @System
-    defExpectOptions{eoSampleMax = 1000}
+    defExpectOptions{eoSampleMax = 1000, eoStopAfterEmpty = 1000}
     (genValidPackets (Range.linear 1 4) (Range.linear 1 30) NoAbort)
     (exposeClockResetEnable model)
     (exposeClockResetEnable ckt)

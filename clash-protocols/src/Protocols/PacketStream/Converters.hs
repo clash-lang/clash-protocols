@@ -177,10 +177,10 @@ downConverterT st@DownConverterState{..} (Just inPkt, bwdIn) = (nextSt, (PacketS
     | _ready bwdIn = DownConverterState newBuf nextSize
     | otherwise = st
 
-{- | Converts packet streams of arbitrary data width `dwIn` to packet streams of
-a smaller data width, `dwOut`, where `dwOut` must divide `dwIn`.
+{- | Converts packet streams of arbitrary data width @dwIn@ to packet streams of
+a smaller data width, @dwOut@, where @dwOut@ must divide @dwIn@.
 
-If @_abort@ is asserted on an input transfer, it will be asserted on all
+If `_abort` is asserted on an input transfer, it will be asserted on all
 corresponding output transfers as well.
 
 Provides zero latency and optimal throughput, i.e. a packet of n bytes is
