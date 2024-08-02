@@ -22,7 +22,7 @@ newtype DelayState cycles dataWidth meta = DelayState
   }
   deriving (Generic, NFDataX, Show, ShowX)
 
--- | Forwards incoming packets with `cycles` clock cycles latency.
+-- | Forwards incoming packets with @cycles@ clock cycles latency.
 delayStream ::
   forall (dom :: Domain) (dataWidth :: Nat) (meta :: Type) (cycles :: Nat).
   (HiddenClockResetEnable dom) =>
