@@ -7,7 +7,6 @@ module Tests.Protocols.PacketStream.Delay where
 import Prelude
 
 -- clash-prelude
-import Clash.Prelude (type (<=))
 import qualified Clash.Prelude as C
 
 -- hedgehog
