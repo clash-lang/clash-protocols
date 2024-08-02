@@ -19,6 +19,7 @@ module Protocols.PacketStream (
   module Protocols.PacketStream.PacketFifo,
   module Protocols.PacketStream.AsyncFifo,
   module Protocols.PacketStream.Converters,
+  module Protocols.PacketStream.Delay,
   module Protocols.PacketStream.Depacketizers,
   module Protocols.PacketStream.Packetizers,
   module Protocols.PacketStream.Routing,
@@ -28,6 +29,7 @@ where
 import Protocols.PacketStream.AsyncFifo
 import Protocols.PacketStream.Base
 import Protocols.PacketStream.Converters
+import Protocols.PacketStream.Delay
 import Protocols.PacketStream.Depacketizers
 import Protocols.PacketStream.PacketFifo
 import Protocols.PacketStream.Packetizers
