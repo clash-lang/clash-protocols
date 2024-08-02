@@ -20,10 +20,10 @@ import Data.Maybe (isJust)
 import Data.Maybe.Extra
 
 -- | Upconverter state, consisting of at most p `BitVector 8`s and a vector indicating which bytes are valid
-data UpConverterState (dataWidth :: Nat) = UpConverterState
-  { _ucBuf :: Vec dataWidth (BitVector 8)
+data UpConverterState (dwOut :: Nat) (n :: Nat) (meta :: Type) = UpConverterState
+  { _ucBuf :: Vec dwOut (BitVector 8)
   -- ^ The buffer we are filling
-  , _ucIdx :: Index dataWidth
+  , _ucIdx :: Index n
   -- ^ Where in the buffer we need to write the next element
   , _ucFlush :: Bool
   -- ^ If this is true the current state can presented as packetstream word
@@ -31,20 +31,29 @@ data UpConverterState (dataWidth :: Nat) = UpConverterState
   -- ^ If this is true we need to start a fresh buffer
   , _ucAborted :: Bool
   -- ^ Current packet is aborted
-  , _ucLastIdx :: Maybe (Index dataWidth)
+  , _ucLastIdx :: Maybe (Index dwOut)
   -- ^ If true the current buffer contains the last byte of the current packet
+  , _ucMeta :: meta
   }
   deriving (Generic, NFDataX)
 
-toPacketStream :: UpConverterState dataWidth -> Maybe (PacketStreamM2S dataWidth ())
-toPacketStream UpConverterState{..} = toMaybe _ucFlush (PacketStreamM2S _ucBuf _ucLastIdx () _ucAborted)
+toPacketStream :: UpConverterState dwOut n meta -> Maybe (PacketStreamM2S dwOut meta)
+toPacketStream UpConverterState{..} = toMaybe _ucFlush (PacketStreamM2S _ucBuf _ucLastIdx _ucMeta _ucAborted)
 
 nextState ::
-  (KnownNat dataWidth) =>
-  UpConverterState dataWidth ->
-  Maybe (PacketStreamM2S 1 ()) ->
+  forall (dwIn :: Nat) (dwOut :: Nat) (meta :: Type) (n :: Nat).
+  (1 <= dwIn) =>
+  (1 <= dwOut) =>
+  (1 <= n) =>
+  (KnownNat dwIn) =>
+  (KnownNat dwOut) =>
+  (KnownNat n) =>
+  (NFDataX meta) =>
+  (dwOut ~ dwIn * n) =>
+  UpConverterState dwOut n meta ->
+  Maybe (PacketStreamM2S dwIn meta) ->
   PacketStreamS2M ->
-  UpConverterState dataWidth
+  UpConverterState dwOut n meta
 nextState st@(UpConverterState{..}) Nothing (PacketStreamS2M inReady) =
   nextSt
  where
@@ -61,7 +70,6 @@ nextState st@(UpConverterState{..}) Nothing (PacketStreamS2M inReady) =
 nextState st@(UpConverterState{..}) (Just PacketStreamM2S{..}) (PacketStreamS2M inReady) =
   nextSt
  where
-  inLast = isJust _last
   nextAbort = (not _ucFlush && _ucAborted) || _abort
   -- If we are not flushing we can accept data to be stored in _ucBuf,
   -- but when we are flushing we can only accept if the current
@@ -69,9 +77,15 @@ nextState st@(UpConverterState{..}) (Just PacketStreamM2S{..}) (PacketStreamS2M 
   outReady = not _ucFlush || inReady
   bufFull = _ucIdx == maxBound
   currBuf = if _ucFreshBuf then repeat 0 else _ucBuf
-  nextBuf = replace _ucIdx (head _data) currBuf
 
-  nextFlush = inLast || bufFull
+  nextBuf =
+    bitCoerce
+      $ replace
+        _ucIdx
+        (bitCoerce _data :: BitVector (8 * dwIn))
+        (bitCoerce currBuf :: Vec n (BitVector (8 * dwIn)))
+
+  nextFlush = isJust _last || bufFull
   nextIdx = if nextFlush then 0 else _ucIdx + 1
 
   nextStRaw =
@@ -81,7 +95,8 @@ nextState st@(UpConverterState{..}) (Just PacketStreamM2S{..}) (PacketStreamS2M 
       , _ucFlush = nextFlush
       , _ucFreshBuf = nextFlush
       , _ucAborted = nextAbort
-      , _ucLastIdx = toMaybe inLast _ucIdx
+      , _ucLastIdx = (\i -> resize _ucIdx * natToNum @dwIn + resize i) <$> _last
+      , _ucMeta = _meta
       }
   nextSt = if outReady then nextStRaw else st
 
@@ -89,18 +104,26 @@ nextState st@(UpConverterState{..}) (Just PacketStreamM2S{..}) (PacketStreamS2M 
 Has one cycle of latency, but optimal throughput.
 -}
 upConverterC ::
-  forall (dataWidth :: Nat) (dom :: Domain).
+  forall (dwIn :: Nat) (dwOut :: Nat) (meta :: Type) (dom :: Domain) (n :: Nat).
   (HiddenClockResetEnable dom) =>
-  (1 <= dataWidth) =>
-  (KnownNat dataWidth) =>
-  Circuit (PacketStream dom 1 ()) (PacketStream dom dataWidth ())
-upConverterC = forceResetSanity |> fromSignals (mealyB go s0)
- where
-  s0 = UpConverterState (repeat undefined) 0 False True False Nothing
-  go st@(UpConverterState{..}) (fwdIn, bwdIn) =
-    (nextState st fwdIn bwdIn, (PacketStreamS2M outReady, toPacketStream st))
+  (1 <= dwIn) =>
+  (1 <= dwOut) =>
+  (1 <= n) =>
+  (KnownNat dwIn) =>
+  (KnownNat dwOut) =>
+  (KnownNat n) =>
+  (dwOut ~ dwIn * n) =>
+  (NFDataX meta) =>
+  Circuit (PacketStream dom dwIn meta) (PacketStream dom dwOut meta)
+upConverterC = case sameNat (SNat @dwIn) (SNat @dwOut) of
+  Just Refl -> idC
+  _ -> forceResetSanity |> fromSignals (mealyB go s0)
    where
-    outReady = not _ucFlush || _ready bwdIn
+    s0 = UpConverterState (repeat undefined) 0 False True False Nothing undefined
+    go st@(UpConverterState{..}) (fwdIn, bwdIn) =
+      (nextState st fwdIn bwdIn, (PacketStreamS2M outReady, toPacketStream st))
+     where
+      outReady = not _ucFlush || _ready bwdIn
 
 data DownConverterState (dwIn :: Nat) = DownConverterState
   { _dcBuf :: Vec dwIn (BitVector 8)
