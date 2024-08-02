@@ -17,7 +17,7 @@ tests =
     , Tests.Protocols.Avalon.tests
     , Tests.Protocols.Axi4.tests
     , Tests.Protocols.Wishbone.tests
-    ,  Tests.Protocols.PacketStream.tests
+    , Tests.Protocols.PacketStream.tests
     ]
 
 main :: IO ()
