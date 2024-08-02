@@ -99,7 +99,7 @@ prop_overFlowDrop_packetFifo_id :: Property
 prop_overFlowDrop_packetFifo_id =
   idWithModelSingleDomain
     @C.System
-    defExpectOptions{eoSampleMax = 2000}
+    defExpectOptions{eoSampleMax = 2000, eoStopAfterEmpty = 1000}
     (genValidPackets (Range.linear 1 30) (Range.linear 1 10) Abort)
     (C.exposeClockResetEnable dropAbortedPackets)
     (C.exposeClockResetEnable ckt)
