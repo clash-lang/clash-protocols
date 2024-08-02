@@ -16,7 +16,7 @@ import Protocols.PacketStream.Base
 import Data.Maybe
 
 -- TODO Optimization: _meta only needs to be buffered once because it is constant per packet
-data DelayState cycles dataWidth meta = DelayState
+newtype DelayState cycles dataWidth meta = DelayState
   { _buf :: Vec cycles (Maybe (PacketStreamM2S dataWidth meta))
   -- ^ Transfer buffer
   }
