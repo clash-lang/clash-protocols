@@ -69,11 +69,13 @@ chunkToPacket :: (C.KnownNat n) => [PacketStreamM2S 1 meta] -> PacketStreamM2S n
 chunkToPacket l =
   PacketStreamM2S
     { _last =
-        if M.isJust $ _last $ L.last l then M.Just (fromIntegral $ L.length l - 1) else Nothing
+        if M.isJust (_last lastTransfer) then M.Just (fromIntegral $ L.length l - 1) else Nothing
     , _abort = any _abort l
-    , _meta = _meta $ L.head l
+    , _meta = _meta lastTransfer
     , _data = foldr ((C.+>>) . C.head . _data) (C.repeat 0) l
     }
+ where
+  lastTransfer = L.last l
 
 -- | Split a PacketStream n into a list of PacketStream 1
 chopPacket ::
@@ -121,7 +123,7 @@ upConvert ::
   (C.KnownNat n) =>
   [PacketStreamM2S 1 meta] ->
   [PacketStreamM2S n meta]
-upConvert packets = chunkToPacket <$> chopBy (C.natToNum @n) packets
+upConvert packets = map chunkToPacket (chunkByPacket packets >>= chopBy (C.natToNum @n))
 
 {- | If set to @NoAbort@, packets will never contain a transfer with _abort set.
   Otherwise, transfers of roughly 50% of the packets will randomly have _abort set.

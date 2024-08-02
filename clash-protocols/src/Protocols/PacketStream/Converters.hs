@@ -12,10 +12,11 @@ module Protocols.PacketStream.Converters (
 
 import Clash.Prelude
 
-import Protocols (Circuit (..), fromSignals, (|>))
+import Protocols (Circuit (..), fromSignals, idC, (|>))
 import Protocols.PacketStream.Base
 
-import Data.Maybe (isJust, isNothing)
+import Data.Data ((:~:) (Refl))
+import Data.Maybe (isJust)
 import Data.Maybe.Extra
 
 -- | Upconverter state, consisting of at most p `BitVector 8`s and a vector indicating which bytes are valid
@@ -53,7 +54,7 @@ nextState st@(UpConverterState{..}) Nothing (PacketStreamS2M inReady) =
   nextStRaw =
     st
       { _ucFlush = False
-      , _ucAborted = isNothing _ucLastIdx && _ucAborted
+      , _ucAborted = not _ucFlush && _ucAborted
       , _ucLastIdx = Nothing
       }
   nextSt = if outReady then nextStRaw else st
@@ -61,17 +62,13 @@ nextState st@(UpConverterState{..}) (Just PacketStreamM2S{..}) (PacketStreamS2M 
   nextSt
  where
   inLast = isJust _last
-  -- We smear an abort over the entire rest of the packet
-  -- so the next abort is set:
-  --  - If fragment we are potentially flushing was not the last and we were already aborting;
-  --  - or if the incoming fragment is aborted
-  nextAbort = (isNothing _ucLastIdx && _ucAborted) || _abort
+  nextAbort = (not _ucFlush && _ucAborted) || _abort
   -- If we are not flushing we can accept data to be stored in _ucBuf,
   -- but when we are flushing we can only accept if the current
   -- output fragment is accepted by the sink
   outReady = not _ucFlush || inReady
   bufFull = _ucIdx == maxBound
-  currBuf = if _ucFreshBuf then (repeat 0) else _ucBuf
+  currBuf = if _ucFreshBuf then repeat 0 else _ucBuf
   nextBuf = replace _ucIdx (head _data) currBuf
 
   nextFlush = inLast || bufFull
@@ -88,35 +85,6 @@ nextState st@(UpConverterState{..}) (Just PacketStreamM2S{..}) (PacketStreamS2M 
       }
   nextSt = if outReady then nextStRaw else st
 
-upConverter ::
-  forall (dataWidth :: Nat) (dom :: Domain).
-  (HiddenClockResetEnable dom) =>
-  (1 <= dataWidth) =>
-  (KnownNat dataWidth) =>
-  -- | Input packet stream from the source
-  --   Input backpressure from the sink
-  ( Signal dom (Maybe (PacketStreamM2S 1 ()))
-  , Signal dom PacketStreamS2M
-  ) ->
-  -- | Output backpressure to the source
-  --   Output packet stream to the sink
-  ( Signal dom PacketStreamS2M
-  , Signal dom (Maybe (PacketStreamM2S dataWidth ()))
-  )
-upConverter = mealyB go s0
- where
-  s0 = UpConverterState (repeat undefined) 0 False True False Nothing
-  go ::
-    UpConverterState dataWidth ->
-    (Maybe (PacketStreamM2S 1 ()), PacketStreamS2M) ->
-    ( UpConverterState dataWidth
-    , (PacketStreamS2M, Maybe (PacketStreamM2S dataWidth ()))
-    )
-  go st@(UpConverterState{..}) (fwdIn, bwdIn) =
-    (nextState st fwdIn bwdIn, (PacketStreamS2M outReady, toPacketStream st))
-   where
-    outReady = not _ucFlush || (_ready bwdIn)
-
 {- | Converts packet streams of single bytes to packet streams of a higher data widths.
 Has one cycle of latency, but optimal throughput.
 -}
@@ -126,68 +94,91 @@ upConverterC ::
   (1 <= dataWidth) =>
   (KnownNat dataWidth) =>
   Circuit (PacketStream dom 1 ()) (PacketStream dom dataWidth ())
-upConverterC = forceResetSanity |> fromSignals upConverter
+upConverterC = forceResetSanity |> fromSignals (mealyB go s0)
+ where
+  s0 = UpConverterState (repeat undefined) 0 False True False Nothing
+  go st@(UpConverterState{..}) (fwdIn, bwdIn) =
+    (nextState st fwdIn bwdIn, (PacketStreamS2M outReady, toPacketStream st))
+   where
+    outReady = not _ucFlush || _ready bwdIn
 
-data DownConverterState (dataWidth :: Nat) = DownConverterState
-  { _dcBuf :: Vec dataWidth (BitVector 8)
+data DownConverterState (dwIn :: Nat) = DownConverterState
+  { _dcBuf :: Vec dwIn (BitVector 8)
   -- ^ Buffer
-  , _dcSize :: Index (dataWidth + 1)
+  , _dcSize :: Index (dwIn + 1)
   -- ^ Number of valid bytes in _dcBuf
   }
   deriving (Generic, NFDataX)
 
 downConverterT ::
-  forall (dataWidth :: Nat).
-  (1 <= dataWidth) =>
-  (KnownNat dataWidth) =>
-  DownConverterState dataWidth ->
-  (Maybe (PacketStreamM2S dataWidth ()), PacketStreamS2M) ->
-  (DownConverterState dataWidth, (PacketStreamS2M, Maybe (PacketStreamM2S 1 ())))
+  forall (dwIn :: Nat) (dwOut :: Nat) (meta :: Type) (n :: Nat).
+  (1 <= dwIn) =>
+  (1 <= dwOut) =>
+  (1 <= n) =>
+  (KnownNat dwIn) =>
+  (KnownNat dwOut) =>
+  (dwIn ~ dwOut * n) =>
+  DownConverterState dwIn ->
+  (Maybe (PacketStreamM2S dwIn meta), PacketStreamS2M) ->
+  ( DownConverterState dwIn
+  , (PacketStreamS2M, Maybe (PacketStreamM2S dwOut meta))
+  )
 downConverterT st (Nothing, _) = (st, (PacketStreamS2M True, Nothing))
 downConverterT st@DownConverterState{..} (Just inPkt, bwdIn) = (nextSt, (PacketStreamS2M outReady, Just outPkt))
  where
   -- If _dcSize == 0, then we have received a new transfer and should use
   -- its corresponding _data. Else, we should use our stored buffer.
   (nextSize, buf) = case (_dcSize == 0, _last inPkt) of
-    (True, Nothing) -> (natToNum @(dataWidth - 1), _data inPkt)
-    (True, Just i) -> (resize i, _data inPkt)
-    (False, _) -> (pred _dcSize, _dcBuf)
+    (True, Nothing) -> (maxBound - natToNum @dwOut, _data inPkt)
+    (True, Just i) -> (satSub SatBound (resize i + 1) (natToNum @dwOut), _data inPkt)
+    (False, _) -> (satSub SatBound _dcSize (natToNum @dwOut), _dcBuf)
+
+  (newBuf, dataOut) = leToPlus @dwOut @dwIn shiftOutFrom0 (SNat @dwOut) buf
 
   outPkt =
     PacketStreamM2S
-      { _data = singleton (leToPlus @1 @dataWidth head buf)
+      { _data = dataOut
       , _last = outLast
-      , _meta = ()
+      , _meta = _meta inPkt
       , _abort = _abort inPkt
       }
 
   (outReady, outLast)
-    | nextSize == 0 = (_ready bwdIn, 0 <$ _last inPkt)
+    | nextSize == 0 =
+        (_ready bwdIn, resize . (\i -> i `mod` natToNum @dwOut) <$> _last inPkt)
     | otherwise = (False, Nothing)
 
   -- Keep the buffer in the state and rotate it once the byte is acknowledged to avoid
   -- dynamic indexing.
   nextSt
-    | _ready bwdIn = DownConverterState (rotateLeftS buf d1) nextSize
+    | _ready bwdIn = DownConverterState newBuf nextSize
     | otherwise = st
 
-{- | Converts packet streams of arbitrary data widths to packet streams of single bytes.
+{- | Converts packet streams of arbitrary data width `dwIn` to packet streams of
+a smaller data width, `dwOut`, where `dwOut` must divide `dwIn`.
+
 If @_abort@ is asserted on an input transfer, it will be asserted on all
 corresponding output transfers as well.
 
-Has one clock cycle of latency, but optimal throughput, i.e. a packet of n bytes is
+Provides zero latency and optimal throughput, i.e. a packet of n bytes is
 sent out in n clock cycles, even if `_last` is set.
 -}
 downConverterC ::
-  forall (dataWidth :: Nat) (dom :: Domain).
+  forall (dwIn :: Nat) (dwOut :: Nat) (meta :: Type) (dom :: Domain) (n :: Nat).
   (HiddenClockResetEnable dom) =>
-  (1 <= dataWidth) =>
-  (KnownNat dataWidth) =>
-  Circuit (PacketStream dom dataWidth ()) (PacketStream dom 1 ())
-downConverterC = forceResetSanity |> fromSignals (mealyB downConverterT s0)
- where
-  s0 =
-    DownConverterState
-      { _dcBuf = errorX "downConverter: undefined initial value"
-      , _dcSize = 0
-      }
+  (1 <= dwIn) =>
+  (1 <= dwOut) =>
+  (1 <= n) =>
+  (KnownNat dwIn) =>
+  (KnownNat dwOut) =>
+  (dwIn ~ dwOut * n) =>
+  Circuit (PacketStream dom dwIn meta) (PacketStream dom dwOut meta)
+downConverterC = case sameNat (SNat @dwIn) (SNat @dwOut) of
+  Just Refl -> idC
+  _ -> forceResetSanity |> fromSignals (mealyB downConverterT s0)
+   where
+    s0 =
+      DownConverterState
+        { _dcBuf = errorX "downConverterC: undefined initial value"
+        , _dcSize = 0
+        }
