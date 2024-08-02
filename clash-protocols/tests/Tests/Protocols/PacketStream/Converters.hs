@@ -28,20 +28,40 @@ import Protocols.PacketStream.Converters
 -- tests
 import Tests.Protocols.PacketStream.Base
 
--- | Test the upconverter stream instance
-upconverterTest :: forall n. (1 <= n) => C.SNat n -> Property
-upconverterTest C.SNat =
+generateUpConverterProperty ::
+  forall (dwIn :: C.Nat) (dwOut :: C.Nat) (n :: C.Nat).
+  (1 <= dwIn) =>
+  (1 <= dwOut) =>
+  (1 <= n) =>
+  (C.KnownNat n) =>
+  (dwOut ~ n C.* dwIn) =>
+  C.SNat dwIn ->
+  C.SNat dwOut ->
+  Property
+generateUpConverterProperty C.SNat C.SNat =
   idWithModelSingleDomain
-    @C.System
     defExpectOptions
     (genValidPackets (Range.linear 1 10) (Range.linear 1 20) Abort)
-    (C.exposeClockResetEnable upConvert)
-    (C.exposeClockResetEnable @C.System (upConverterC @n))
+    (C.exposeClockResetEnable (upConvert . downConvert))
+    (C.exposeClockResetEnable @C.System (upConverterC @dwIn @dwOut @Int))
 
-prop_upconverter_d1, prop_upconverter_d2, prop_upconverter_d4 :: Property
-prop_upconverter_d1 = upconverterTest C.d1
-prop_upconverter_d2 = upconverterTest C.d2
-prop_upconverter_d4 = upconverterTest C.d4
+prop_upConverter4to8 :: Property
+prop_upConverter4to8 = generateUpConverterProperty C.d4 C.d8
+
+prop_upConverter3to6 :: Property
+prop_upConverter3to6 = generateUpConverterProperty C.d3 C.d6
+
+prop_upConverter2to4 :: Property
+prop_upConverter2to4 = generateUpConverterProperty C.d2 C.d4
+
+prop_upConverter1to4 :: Property
+prop_upConverter1to4 = generateUpConverterProperty C.d1 C.d4
+
+prop_upConverter1to2 :: Property
+prop_upConverter1to2 = generateUpConverterProperty C.d1 C.d2
+
+prop_upConverter1to1 :: Property
+prop_upConverter1to1 = generateUpConverterProperty C.d1 C.d1
 
 generateDownConverterProperty ::
   forall (dwIn :: C.Nat) (dwOut :: C.Nat) (n :: C.Nat).
