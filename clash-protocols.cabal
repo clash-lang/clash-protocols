@@ -77,6 +77,7 @@ common common-options
     -fplugin GHC.TypeLits.Extra.Solver
     -fplugin GHC.TypeLits.Normalise
     -fplugin GHC.TypeLits.KnownNat.Solver
+    -fconstraint-solver-iterations=6
 
     -- Clash needs access to the source code in compiled modules
     -fexpose-all-unfoldings
@@ -165,6 +166,15 @@ library
     Protocols.Axi4.WriteAddress
     Protocols.Axi4.WriteData
     Protocols.Axi4.WriteResponse
+    Protocols.PacketStream
+    Protocols.PacketStream.Base
+    Protocols.PacketStream.AsyncFifo
+    Protocols.PacketStream.Converters
+    Protocols.PacketStream.Delay
+    Protocols.PacketStream.Depacketizers
+    Protocols.PacketStream.PacketFifo
+    Protocols.PacketStream.Packetizers
+    Protocols.PacketStream.Routing
     Protocols.Cpp
     Protocols.Df
     Protocols.DfConv
@@ -191,6 +201,8 @@ library
 
   other-modules:
     Data.Bifunctor.Extra
+    Data.Maybe.Extra
+    Clash.Sized.Vector.Extra
     Paths_clash_protocols
     Protocols.Internal.Classes
 
@@ -210,6 +222,15 @@ test-suite unittests
     Tests.Protocols.Axi4
     Tests.Protocols.Plugin
     Tests.Protocols.Wishbone
+    Tests.Protocols.PacketStream
+    Tests.Protocols.PacketStream.AsyncFifo
+    Tests.Protocols.PacketStream.Base
+    Tests.Protocols.PacketStream.Converters
+    Tests.Protocols.PacketStream.Delay
+    Tests.Protocols.PacketStream.Depacketizers
+    Tests.Protocols.PacketStream.Packetizers
+    Tests.Protocols.PacketStream.PacketFifo
+    Tests.Protocols.PacketStream.Routing
 
     Util
   build-depends:
