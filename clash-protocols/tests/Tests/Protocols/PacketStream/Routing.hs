@@ -124,7 +124,7 @@ makePropPacketDispatcher ::
   Property
 makePropPacketDispatcher _ fs =
   idWithModelSingleDomain @C.System
-    defExpectOptions{eoSampleMax = 2000}
+    defExpectOptions{eoSampleMax = 2000, eoStopAfterEmpty = 1000}
     (genValidPackets (Range.linear 1 10) (Range.linear 1 6) Abort)
     (C.exposeClockResetEnable (model 0))
     (C.exposeClockResetEnable (packetDispatcherC fs))
