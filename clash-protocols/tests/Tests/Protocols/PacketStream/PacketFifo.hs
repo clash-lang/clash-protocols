@@ -43,7 +43,7 @@ prop_packetFifo_id :: Property
 prop_packetFifo_id =
   idWithModelSingleDomain
     @C.System
-    defExpectOptions{eoSampleMax = 1000}
+    defExpectOptions{eoSampleMax = 1000, eoStopAfterEmpty = 1000}
     (genValidPackets (Range.linear 1 30) (Range.linear 1 10) Abort)
     (C.exposeClockResetEnable dropAbortedPackets)
     (C.exposeClockResetEnable ckt)
@@ -58,7 +58,7 @@ prop_packetFifo_small_buffer_id :: Property
 prop_packetFifo_small_buffer_id =
   idWithModelSingleDomain
     @C.System
-    defExpectOptions{eoSampleMax = 1000}
+    defExpectOptions{eoSampleMax = 1000, eoStopAfterEmpty = 1000}
     (genValidPackets (Range.linear 1 10) (Range.linear 1 30) NoAbort)
     (C.exposeClockResetEnable dropAbortedPackets)
     (C.exposeClockResetEnable ckt)
@@ -114,7 +114,7 @@ prop_overFlowDrop_packetFifo_drop :: Property
 prop_overFlowDrop_packetFifo_drop =
   idWithModelSingleDomain
     @C.System
-    defExpectOptions{eoSampleMax = 1000}
+    defExpectOptions{eoSampleMax = 1000, eoStopAfterEmpty = 1000}
     -- make sure the timeout is long as the packetFifo can be quiet for a while while dropping
     (liftA3 (\a b c -> a ++ b ++ c) genSmall genBig genSmall)
     (C.exposeClockResetEnable model)
