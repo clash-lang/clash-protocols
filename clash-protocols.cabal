@@ -179,7 +179,7 @@ library
     Protocols.Internal.Units.TH
     Protocols.Plugin
     Protocols.Plugin.Internal
-    Protocols.ReqResp
+    Protocols.BiDf
     Protocols.Wishbone
     Protocols.Wishbone.Standard
     Protocols.Wishbone.Standard.Hedgehog
