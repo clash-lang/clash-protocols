@@ -1,8 +1,9 @@
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# OPTIONS_HADDOCK hide #-}
 
 {- |
-Provides a circuit that delays a stream by a configurable amount of clock cycles.
+Provides a circuit that delays a stream by a configurable amount of transfers.
 -}
 module Protocols.PacketStream.Delay (
   delayStream,
@@ -16,31 +17,75 @@ import Protocols.PacketStream.Base
 import Data.Maybe
 
 -- TODO Optimization: _meta only needs to be buffered once because it is constant per packet
-newtype DelayState cycles dataWidth meta = DelayState
-  { _buf :: Vec cycles (Maybe (PacketStreamM2S dataWidth meta))
+-- Holds for _abort and _last too
+data DelayState n dataWidth meta = DelayState
+  { _buf :: Vec n (PacketStreamM2S dataWidth meta)
   -- ^ Transfer buffer
+  , _size :: Index (n + 1)
+  , _flush :: Bool
+  , _readPtr :: Index n
+  , _writePtr :: Index n
   }
   deriving (Generic, NFDataX, Show, ShowX)
 
--- | Forwards incoming packets with @cycles@ clock cycles latency.
+-- | Forwards incoming packets with @n@ fragments latency.
 delayStream ::
-  forall (dom :: Domain) (dataWidth :: Nat) (meta :: Type) (cycles :: Nat).
+  forall (dom :: Domain) (dataWidth :: Nat) (meta :: Type) (n :: Nat).
   (HiddenClockResetEnable dom) =>
   (KnownNat dataWidth) =>
-  (1 <= cycles) =>
+  (1 <= n) =>
   (1 <= dataWidth) =>
   (NFDataX meta) =>
-  SNat cycles ->
+  SNat n ->
   Circuit (PacketStream dom dataWidth meta) (PacketStream dom dataWidth meta)
-delayStream SNat = forceResetSanity |> fromSignals (mealyB go (DelayState @cycles (repeat Nothing)))
+-- TODO this component is very unoptimized/ugly. The most important thing is
+-- that it works now, but it should be improved in the future by removing.
+-- dynamic indexing and perhaps using blockram.
+delayStream SNat =
+  forceResetSanity
+    |> fromSignals
+      (mealyB go (DelayState @n (repeat (errorX "undefined initial contents")) 0 False 0 0))
  where
-  go st (fwdIn, bwdIn) = (nextStOut, (PacketStreamS2M outReady, fwdOut))
+  go st@DelayState{..} (Nothing, bwdIn) = (nextStOut, (bwdOut, fwdOut))
    where
-    (newBuf, out) = shiftInAtN (_buf st) (singleton fwdIn)
-    fwdOut = head out
+    out = _buf !! _readPtr
 
-    nextSt = DelayState newBuf
+    readEn = _size > 0 && _flush
 
-    (nextStOut, outReady)
-      | isJust fwdOut && not (_ready bwdIn) = (st, False)
-      | otherwise = (nextSt, True)
+    fwdOut =
+      if readEn
+        then Just out
+        else Nothing
+
+    bwdOut = PacketStreamS2M True
+
+    nextSt =
+      st
+        { _size = _size - 1
+        , _flush = _size - 1 > 0
+        , _readPtr = satSucc SatWrap _readPtr
+        }
+    nextStOut = if readEn && _ready bwdIn then nextSt else st
+  go st@DelayState{..} (Just inPkt, bwdIn) = (nextStOut, (bwdOut, fwdOut))
+   where
+    readEn = _flush || _size == maxBound
+
+    out = _buf !! _readPtr
+    newBuf = replace _writePtr inPkt _buf
+
+    fwdOut =
+      if readEn
+        then Just out
+        else Nothing
+
+    bwdOut = PacketStreamS2M $ not _flush && (not readEn || _ready bwdIn)
+
+    nextReadPtr = if readEn then satSucc SatWrap _readPtr else _readPtr
+
+    (nextBuf, nextSize, nextFlush, nextWritePtr)
+      | _flush = (_buf, satPred SatBound _size, satPred SatBound _size > 0, _writePtr)
+      | otherwise =
+          (newBuf, satSucc SatBound _size, isJust (_last inPkt), satSucc SatWrap _writePtr)
+
+    nextSt = DelayState nextBuf nextSize nextFlush nextReadPtr nextWritePtr
+    nextStOut = if isNothing fwdOut || _ready bwdIn then nextSt else st
