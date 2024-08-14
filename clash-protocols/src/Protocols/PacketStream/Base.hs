@@ -232,3 +232,25 @@ mapMeta ::
   (a -> b) ->
   Circuit (PacketStream dom dataWidth a) (PacketStream dom dataWidth b)
 mapMeta f = mapMetaS (pure f)
+
+{- |
+Sets data bytes that are not enabled in a @PacketStream@ to @0x00@.
+-}
+zeroOutInvalidBytesC ::
+  forall (dom :: Domain) (dataWidth :: Nat) (meta :: Type).
+  (KnownNat dataWidth) =>
+  (1 <= dataWidth) =>
+  Circuit
+    (PacketStream dom dataWidth meta)
+    (PacketStream dom dataWidth meta)
+zeroOutInvalidBytesC = Circuit $ \(fwdIn, bwdIn) -> (bwdIn, fmap (go <$>) fwdIn)
+ where
+  go transferIn = transferIn{_data = dataOut}
+   where
+    dataOut = case _last transferIn of
+      Nothing -> _data transferIn
+      Just i -> a ++ b
+       where
+        -- The first byte is always valid, so we only map over the rest.
+        (a, b') = splitAt d1 (_data transferIn)
+        b = imap (\(j :: Index (dataWidth - 1)) byte -> if resize j < i then byte else 0x00) b'
