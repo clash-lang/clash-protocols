@@ -1,6 +1,7 @@
 resolver: lts-21.25 # ghc-9.4.8
 
 packages:
+  - clash-protocols-base
   - .
 
 extra-deps:

@@ -1,5 +1,7 @@
 cradle:
   multi:
+    - path: "./clash-protocols-base/src"
+      config: {cradle: {cabal: {component: "lib:clash-protocols-base"}}}
     - path: "./src"
       config: {cradle: {cabal: {component: "lib:clash-protocols"}}}
     - path: "./tests"
@@ -8,5 +10,7 @@ cradle:
       config: {cradle: {cabal: {component: "clash"}}}
     - path: "./bin/Clashi.hs"
       config: {cradle: {cabal: {component: "clashi"}}}
+    - path: "./clash-protocols-base/Setup.hs"
+      config: {cradle: {none: }}
     - path: "./Setup.hs"
       config: {cradle: {none: }}
