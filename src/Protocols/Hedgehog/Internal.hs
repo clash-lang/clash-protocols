@@ -111,11 +111,11 @@ class
     --   in order to produce pretty reports.
     m (ExpectType a)
 
-instance (TestType a, C.KnownDomain dom) => Test (Df.Df dom a) where
+instance (TestType a, C.KnownDomain dom) => Test (Df dom a) where
   expectN ::
     forall m.
     (HasCallStack, H.MonadTest m) =>
-    Proxy (Df.Df dom a) ->
+    Proxy (Df dom a) ->
     ExpectOptions ->
     [Df.Data a] ->
     m [a]
