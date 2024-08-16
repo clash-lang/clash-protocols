@@ -2,7 +2,7 @@
 set -xeou pipefail
 
 # Build dependencies first, so they don't end up in logs
-cabal build \
+cabal v2-build \
   --constraint=clash-prelude==$clash_version \
   --enable-documentation \
   --allow-newer=circuit-notation:ghc \
@@ -12,7 +12,7 @@ cabal build \
 # other GHC version it supports is 8.6.5, but this GHC bundles a Haddock that
 # cannot generate documentation for clash-prelude. Hence, we build docs with
 # 8.10 and relax circuit-notation's ghc bounds
-cabal haddock \
+cabal v2-haddock \
   --constraint=clash-prelude==$clash_version \
   --enable-documentation \
   --allow-newer=circuit-notation:ghc \
