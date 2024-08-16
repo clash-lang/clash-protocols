@@ -91,7 +91,6 @@ common common-options
 
   default-language: Haskell2010
   build-depends:
-    -- GHC >= 9.0
     base >= 4.15.0.0,
     Cabal,
 
@@ -135,6 +134,7 @@ library
     , tasty-hedgehog >= 1.2
 
   exposed-modules:
+    Protocols
     Protocols.Avalon.MemMap
     Protocols.Avalon.Stream
     Protocols.Axi4.Common
@@ -152,7 +152,6 @@ library
     Protocols.Wishbone
     Protocols.Wishbone.Standard
     Protocols.Wishbone.Standard.Hedgehog
-    Protocols
 
     -- 'testProperty' is broken upstream, it reports wrong test names
     -- TODO: test / upstream ^
@@ -179,13 +178,12 @@ test-suite unittests
     Tests.Protocols.Axi4
     Tests.Protocols.Plugin
     Tests.Protocols.Wishbone
-
     Util
+
   build-depends:
     clash-protocols-base,
     clash-protocols,
     clash-prelude-hedgehog,
-    data-default,
     unordered-containers,
     deepseq,
     extra,
@@ -210,4 +208,3 @@ test-suite doctests
     clash-protocols,
     process,
     doctest
-

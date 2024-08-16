@@ -2,7 +2,7 @@ resolver: lts-21.25 # ghc-9.4.8
 
 packages:
   - clash-protocols-base
-  - .
+  - clash-protocols
 
 extra-deps:
 - git: https://github.com/cchalmers/circuit-notation.git

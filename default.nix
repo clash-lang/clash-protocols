@@ -3,4 +3,4 @@
 with nixpkgs.pkgs;
 with gitignore;
 
-haskellPackages.callCabal2nix "clash-protocols" (gitignoreSource ./.) {}
+haskellPackages.callCabal2nix "clash-protocols" (gitignoreSource ./clash-protocols) {}

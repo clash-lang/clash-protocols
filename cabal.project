@@ -1,5 +1,6 @@
 packages:
-  ./clash-protocols-base, .
+  ./clash-protocols-base
+  ./clash-protocols
 
 tests: True
 
