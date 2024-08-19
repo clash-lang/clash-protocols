@@ -91,7 +91,6 @@ common common-options
 
   default-language: Haskell2010
   build-depends:
-    -- GHC >= 9.0
     base >= 4.15.0.0,
     Cabal,
 
@@ -106,26 +105,6 @@ custom-setup
     Cabal         >= 2.4,
     cabal-doctest >= 1.0.1 && <1.1
 
--- library inline-circuit-notation
---   visibility: private
---   hs-source-dirs: deps/circuit-notation/src
---   build-depends:
---     , base
---     , clash-prelude >= 1.0
---     , containers
---     , data-default
---     , ghc >=8.6
---     , syb
---     , lens
---     , mtl
---     , pretty
---     , parsec
---     , pretty-show
---     , template-haskell
---   exposed-modules:
---     CircuitNotation
---   default-language: Haskell2010
-
 library
   import: common-options
   hs-source-dirs: src
@@ -134,7 +113,7 @@ library
     CPP-Options: -DLARGE_TUPLES
 
   build-depends:
-      -- inline-circuit-notation
+    , clash-protocols-base
     , circuit-notation
     , clash-prelude-hedgehog
     , data-default
@@ -165,20 +144,11 @@ library
     Protocols.Axi4.WriteAddress
     Protocols.Axi4.WriteData
     Protocols.Axi4.WriteResponse
-    Protocols.Cpp
     Protocols.Df
     Protocols.DfConv
     Protocols.Hedgehog
     Protocols.Hedgehog.Internal
     Protocols.Idle
-    Protocols.Internal
-    Protocols.Internal.TaggedBundle
-    Protocols.Internal.TaggedBundle.TH
-    Protocols.Internal.TH
-    Protocols.Internal.Units
-    Protocols.Internal.Units.TH
-    Protocols.Plugin
-    Protocols.Plugin.Internal
     Protocols.Wishbone
     Protocols.Wishbone.Standard
     Protocols.Wishbone.Standard.Hedgehog
@@ -190,9 +160,7 @@ library
   autogen-modules:    Paths_clash_protocols
 
   other-modules:
-    Data.Bifunctor.Extra
     Paths_clash_protocols
-    Protocols.Internal.Classes
 
   default-language: Haskell2010
 
@@ -210,12 +178,12 @@ test-suite unittests
     Tests.Protocols.Axi4
     Tests.Protocols.Plugin
     Tests.Protocols.Wishbone
-
     Util
+
   build-depends:
+    clash-protocols-base,
     clash-protocols,
     clash-prelude-hedgehog,
-    data-default,
     unordered-containers,
     deepseq,
     extra,
@@ -236,6 +204,7 @@ test-suite doctests
 
   build-depends:
     base,
+    clash-protocols-base,
     clash-protocols,
     process,
     doctest

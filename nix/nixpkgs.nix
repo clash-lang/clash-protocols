@@ -40,6 +40,8 @@ let
           self.callCabal2nix "tasty-hedgehog" sources.tasty-hedgehog {};
         hedgehog =
           self.callCabal2nix "hedgehog" (sources.haskell-hedgehog + "/hedgehog") {};
+        clash-protocols-base =
+          self.callCabal2nix "clash-protocols-base" (../clash-protocols-base) {};
       };
     };
   };

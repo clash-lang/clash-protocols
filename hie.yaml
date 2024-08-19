@@ -1,12 +1,16 @@
 cradle:
   multi:
-    - path: "./src"
+    - path: "./clash-protocols-base/src"
+      config: {cradle: {cabal: {component: "lib:clash-protocols-base"}}}
+    - path: "./clash-protocols/src"
       config: {cradle: {cabal: {component: "lib:clash-protocols"}}}
-    - path: "./tests"
+    - path: "./clash-protocols/tests"
       config: {cradle: {cabal: {component: "test-suite:unittests"}}}
     - path: "./bin/Clash.hs"
       config: {cradle: {cabal: {component: "clash"}}}
     - path: "./bin/Clashi.hs"
       config: {cradle: {cabal: {component: "clashi"}}}
-    - path: "./Setup.hs"
+    - path: "./clash-protocols-base/Setup.hs"
+      config: {cradle: {none: }}
+    - path: "./clash-protocols/Setup.hs"
       config: {cradle: {none: }}

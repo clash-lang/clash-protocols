@@ -66,6 +66,5 @@ module Protocols (
 import Data.Default (def)
 import Protocols.Df (Df)
 import Protocols.Internal
-
 import Protocols.Internal.TaggedBundle
 import Protocols.Internal.Units

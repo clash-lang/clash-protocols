@@ -24,7 +24,7 @@ if [[ "$#" -eq 0 || "$1" == "-h" || "$1" == "--help" ]]; then
 fi
 
 exclude_files=(
-  "src/Protocols/Cpp.hs"
+  "clash-protocols-base/src/Protocols/Cpp.hs"
 )
 
 # Make sure it doesn't matter from where this script is executed
@@ -34,7 +34,7 @@ cd $DIR
 if [ $1 == "diff" ] ; then
   src_files=$(git diff --cached --name-only --diff-filter=ACMR -- '*.hs')
 else
-  src_files=$(find Setup.hs src tests -type f -name "*.hs")
+  src_files=$(find clash-protocols-base/Setup.hs clash-protocols/Setup.hs clash-protocols-base/src clash-protocols/src clash-protocols/tests -type f -name "*.hs")
 fi
 
 src_files_str=$(printf "%s\n" "${src_files[@]}" | sed 's| |\\ |g')
