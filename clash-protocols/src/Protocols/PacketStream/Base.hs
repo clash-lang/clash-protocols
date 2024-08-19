@@ -16,6 +16,7 @@ module Protocols.PacketStream.Base (
   filterMeta,
   mapMetaS,
   mapMeta,
+  zeroOutInvalidBytesC,
 ) where
 
 import Clash.Prelude hiding (sample)

@@ -1,4 +1,3 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -20,6 +19,7 @@ import Protocols
 import qualified Protocols.Df as Df
 import Protocols.PacketStream.Base
 
+import Data.Data ((:~:) (Refl))
 import Data.Maybe
 
 defaultByte :: BitVector 8
@@ -27,12 +27,12 @@ defaultByte = 0x00
 
 -- Since the header might be unaligned compared to the datawidth
 -- we need to store a partial fragment when forwarding.
--- The fragment we need to store depends on our "unalignedness".
+-- The number of bytes we need to store depends on our "unalignedness".
 --
 -- Ex. We parse a header of 17 bytes and our @dataWidth@ is 4 bytes.
 -- That means at the end of the header we can have upto 3 bytes left
 -- in the fragment which we may need to forward.
-type DeForwardBufSize (headerBytes :: Nat) (dataWidth :: Nat) =
+type ForwardBufSize (headerBytes :: Nat) (dataWidth :: Nat) =
   (dataWidth - (headerBytes `Mod` dataWidth)) `Mod` dataWidth
 
 type DepacketizerCt (headerBytes :: Nat) (dataWidth :: Nat) =
@@ -42,25 +42,29 @@ type DepacketizerCt (headerBytes :: Nat) (dataWidth :: Nat) =
   , KnownNat headerBytes
   )
 
+-- TODO remove _fwdBuf and just use the last ForwardBufSize bytes of _parseBuf instead
+-- See https://github.com/clash-lang/clash-protocols/issues/105
 data DepacketizerState (headerBytes :: Nat) (dataWidth :: Nat)
   = Parse
       { _aborted :: Bool
+      -- ^ Whether the packet is aborted. We need this, because _abort might
+      --   have been set in the bytes to be parsed.
       , _parseBuf :: Vec (dataWidth * headerBytes `DivRU` dataWidth) (BitVector 8)
-      , _fwdBuf :: Vec (DeForwardBufSize headerBytes dataWidth) (BitVector 8)
+      -- ^ Parse buffer.
+      , _fwdBuf :: Vec (ForwardBufSize headerBytes dataWidth) (BitVector 8)
+      -- ^ Buffer containing data bytes that could not be sent immediately
+      --   due to misalignment of @dataWidth@ and @headerBytes@.
       , _counter :: Index (headerBytes `DivRU` dataWidth)
+      -- ^ @maxBound + 1@ is the number of fragments we need to parse.
       }
   | Forward
       { _aborted :: Bool
       , _parseBuf :: Vec (dataWidth * headerBytes `DivRU` dataWidth) (BitVector 8)
-      , _fwdBuf :: Vec (DeForwardBufSize headerBytes dataWidth) (BitVector 8)
+      , _fwdBuf :: Vec (ForwardBufSize headerBytes dataWidth) (BitVector 8)
       , _counter :: Index (headerBytes `DivRU` dataWidth)
-      }
-  | LastForward
-      { _aborted :: Bool
-      , _parseBuf :: Vec (dataWidth * headerBytes `DivRU` dataWidth) (BitVector 8)
-      , _fwdBuf :: Vec (DeForwardBufSize headerBytes dataWidth) (BitVector 8)
-      , _counter :: Index (headerBytes `DivRU` dataWidth)
-      , _lastIdx :: Index dataWidth
+      , _lastFwd :: Bool
+      -- ^ True iff we have seen @_last@ set but the number of data bytes was too
+      --   big to send immediately along with our buffered bytes.
       }
   deriving (Show, ShowX, Generic)
 
@@ -85,9 +89,9 @@ depacketizerT ::
     (metaOut :: Type).
   (BitSize header ~ headerBytes * 8) =>
   (BitPack header) =>
-  (NFDataX metaIn) =>
   (DepacketizerCt headerBytes dataWidth) =>
-  (DeForwardBufSize headerBytes dataWidth <= dataWidth) =>
+  (NFDataX metaIn) =>
+  (ForwardBufSize headerBytes dataWidth <= dataWidth) =>
   (headerBytes <= dataWidth * headerBytes `DivRU` dataWidth) =>
   (header -> metaIn -> metaOut) ->
   DepacketizerState headerBytes dataWidth ->
@@ -95,93 +99,86 @@ depacketizerT ::
   ( DepacketizerState headerBytes dataWidth
   , (PacketStreamS2M, Maybe (PacketStreamM2S dataWidth metaOut))
   )
-depacketizerT _ Parse{..} (Just PacketStreamM2S{..}, _) = (nextSt, (PacketStreamS2M outReady, Nothing))
+depacketizerT _ Parse{..} (Just PacketStreamM2S{..}, _) = (nextStOut, (PacketStreamS2M outReady, Nothing))
  where
   nextAborted = _aborted || _abort
-  nextParseBuf = fst $ shiftInAtN _parseBuf _data
-  fwdBuf :: Vec (DeForwardBufSize headerBytes dataWidth) (BitVector 8)
-  fwdBuf = dropLe (SNat @(dataWidth - DeForwardBufSize headerBytes dataWidth)) _data
-
-  prematureEnd idx =
-    case compareSNat (SNat @(headerBytes `Mod` dataWidth)) d0 of
-      SNatGT -> idx < (natToNum @(headerBytes `Mod` dataWidth))
-      _ -> True
-
   nextCounter = pred _counter
+  nextParseBuf = fst (shiftInAtN _parseBuf _data)
+  nextFwdBuf = dropLe (SNat @(dataWidth - ForwardBufSize headerBytes dataWidth)) _data
 
-  nextSt =
-    case (_counter == 0, _last) of
-      (False, Nothing) ->
-        Parse nextAborted nextParseBuf fwdBuf nextCounter
-      (done, Just idx)
-        | not done || prematureEnd idx ->
-            Parse False nextParseBuf fwdBuf maxBound
-      (True, Just idx) ->
-        LastForward
-          nextAborted
-          nextParseBuf
-          fwdBuf
-          nextCounter
-          (idx - natToNum @(headerBytes `Mod` dataWidth))
-      (True, Nothing) ->
-        Forward nextAborted nextParseBuf fwdBuf nextCounter
-      _ ->
-        clashCompileError
-          "depacketizerT Parse: Absurd, Report this to the Clash compiler team: https://github.com/clash-lang/clash-compiler/issues"
+  prematureEnd idx = case sameNat d0 (SNat @(headerBytes `Mod` dataWidth)) of
+    Just Refl -> True
+    _ -> idx < natToNum @(headerBytes `Mod` dataWidth)
+
+  -- Upon seeing _last being set, move back to the initial state if the
+  -- right amount of bytes were not parsed yet, or if they were, but there
+  -- were no data bytes after that. In any case, we pass the same buffers
+  -- for efficiency reasons, because their initial contents are undefined
+  -- anyway.
+  nextStOut = case (_counter == 0, _last) of
+    (False, Nothing) ->
+      Parse nextAborted nextParseBuf nextFwdBuf nextCounter
+    (False, Just _) ->
+      def
+    (True, Just idx)
+      | prematureEnd idx ->
+          def
+    (True, _) ->
+      Forward nextAborted nextParseBuf nextFwdBuf nextCounter (isJust _last)
 
   outReady
-    | LastForward{} <- nextSt = False
+    | Forward{_lastFwd = True} <- nextStOut = False
     | otherwise = True
-depacketizerT _ st@Parse{} (Nothing, bwdIn) = (st, (bwdIn, Nothing))
 depacketizerT toMetaOut st@Forward{..} (Just pkt@PacketStreamM2S{..}, bwdIn) = (nextStOut, (PacketStreamS2M outReady, Just outPkt))
  where
   nextAborted = _aborted || _abort
-  dataOut :: Vec dataWidth (BitVector 8)
-  nextFwdBuf :: Vec (DeForwardBufSize headerBytes dataWidth) (BitVector 8)
-  (dataOut, nextFwdBuf) = splitAt (SNat @dataWidth) $ _fwdBuf ++ _data
+  newLast = adjustLast <$> _last
+  (dataOut, nextFwdBuf) = splitAt (SNat @dataWidth) (_fwdBuf ++ _data)
 
+  -- Only use if headerBytes `Mod` dataWidth > 0.
   adjustLast :: Index dataWidth -> Either (Index dataWidth) (Index dataWidth)
-  adjustLast idx = if outputNow then Left nowIdx else Right nextIdx
+  adjustLast idx = if idx < x then Left (idx + y) else Right (idx - x)
    where
-    outputNow = case compareSNat (SNat @(headerBytes `Mod` dataWidth)) d0 of
-      SNatGT -> idx < natToNum @(headerBytes `Mod` dataWidth)
-      _ -> True
-    nowIdx = idx + natToNum @(DeForwardBufSize headerBytes dataWidth)
-    nextIdx = idx - natToNum @(headerBytes `Mod` dataWidth)
+    x = natToNum @(headerBytes `Mod` dataWidth)
+    y = natToNum @(ForwardBufSize headerBytes dataWidth)
 
-  newLast = fmap adjustLast _last
-  outPkt =
-    pkt
-      { _abort = nextAborted
-      , _data = dataOut
-      , _meta = toMetaOut (bitCoerce $ takeLe (SNat @headerBytes) _parseBuf) _meta
-      , _last = either Just (const Nothing) =<< newLast
-      }
+  outPkt = case sameNat d0 (SNat @(headerBytes `Mod` dataWidth)) of
+    Just Refl ->
+      pkt
+        { _meta = toMetaOut (bitCoerce $ takeLe (SNat @headerBytes) _parseBuf) _meta
+        , _abort = nextAborted
+        }
+    Nothing ->
+      pkt
+        { _data =
+            if _lastFwd
+              then _fwdBuf ++ repeat @(dataWidth - ForwardBufSize headerBytes dataWidth) defaultByte
+              else dataOut
+        , _last =
+            if _lastFwd
+              then either Just Just =<< newLast
+              else either Just (const Nothing) =<< newLast
+        , _meta = toMetaOut (bitCoerce $ takeLe (SNat @headerBytes) _parseBuf) _meta
+        , _abort = nextAborted
+        }
 
-  nextSt = case newLast of
-    Nothing -> Forward nextAborted _parseBuf nextFwdBuf _counter
-    Just (Left _) -> Parse False _parseBuf nextFwdBuf maxBound
-    Just (Right idx) -> LastForward nextAborted _parseBuf nextFwdBuf _counter idx
+  nextForwardSt = Forward nextAborted _parseBuf nextFwdBuf maxBound
+  nextSt = case sameNat d0 (SNat @(headerBytes `Mod` dataWidth)) of
+    Just Refl
+      | isJust _last -> def
+      | otherwise -> nextForwardSt False
+    Nothing ->
+      case (_lastFwd, newLast) of
+        (False, Nothing) -> nextForwardSt False
+        (False, Just (Right _)) -> nextForwardSt True
+        _ -> def
+
   nextStOut = if _ready bwdIn then nextSt else st
 
   outReady
-    | LastForward{} <- nextSt = False
+    | Forward{_lastFwd = True} <- nextStOut = False
     | otherwise = _ready bwdIn
-depacketizerT _ st@Forward{} (Nothing, bwdIn) = (st, (bwdIn, Nothing))
-depacketizerT toMetaOut st@LastForward{..} (fwdIn, bwdIn) = (nextStOut, (bwdIn, Just outPkt))
- where
-  -- We can only get in this state if the previous clock cycle we received a fwdIn
-  -- which was also the last fragment
-  inPkt = fromJustX fwdIn
-  outPkt =
-    PacketStreamM2S
-      { _abort = _aborted || _abort inPkt
-      , _data =
-          _fwdBuf ++ repeat @(dataWidth - DeForwardBufSize headerBytes dataWidth) defaultByte
-      , _meta = toMetaOut (bitCoerce $ takeLe (SNat @headerBytes) _parseBuf) (_meta inPkt)
-      , _last = Just $ fromJustX (_last inPkt) - natToNum @(headerBytes `Mod` dataWidth)
-      }
-  nextStOut = if _ready bwdIn then Parse False _parseBuf _fwdBuf maxBound else st
+depacketizerT _ st (Nothing, bwdIn) = (st, (bwdIn, Nothing))
 
 -- | Reads bytes at the start of each packet into metadata.
 depacketizerC ::
@@ -192,14 +189,15 @@ depacketizerC ::
     (metaOut :: Type)
     (header :: Type)
     (headerBytes :: Nat).
-  (HiddenClockResetEnable dom) =>
-  (NFDataX metaOut) =>
-  (NFDataX metaIn) =>
-  (BitPack header) =>
-  (BitSize header ~ headerBytes * 8) =>
-  (KnownNat headerBytes) =>
-  (1 <= dataWidth) =>
-  (KnownNat dataWidth) =>
+  ( HiddenClockResetEnable dom
+  , NFDataX metaOut
+  , NFDataX metaIn
+  , BitPack header
+  , BitSize header ~ headerBytes * 8
+  , KnownNat headerBytes
+  , 1 <= dataWidth
+  , KnownNat dataWidth
+  ) =>
   -- | Used to compute final metadata of outgoing packets from header and incoming metadata
   (header -> metaIn -> metaOut) ->
   Circuit (PacketStream dom dataWidth metaIn) (PacketStream dom dataWidth metaOut)
@@ -210,15 +208,14 @@ depacketizerC toMetaOut = forceResetSanity |> fromSignals outCircuit
 
   outCircuit =
     case (modProof, divProof) of
-      (SNatLE, SNatLE) -> case compareSNat (SNat @(DeForwardBufSize headerBytes dataWidth)) (SNat @dataWidth) of
-        SNatLE ->
-          mealyB (depacketizerT @headerBytes toMetaOut) def
+      (SNatLE, SNatLE) -> case compareSNat (SNat @(ForwardBufSize headerBytes dataWidth)) (SNat @dataWidth) of
+        SNatLE -> mealyB (depacketizerT @headerBytes toMetaOut) def
         _ ->
           clashCompileError
-            "depacketizerC1: Absurd, Report this to the Clash compiler team: https://github.com/clash-lang/clash-compiler/issues"
+            "depacketizer1: Absurd, Report this to the Clash compiler team: https://github.com/clash-lang/clash-compiler/issues"
       _ ->
         clashCompileError
-          "depacketizerC0: Absurd, Report this to the Clash compiler team: https://github.com/clash-lang/clash-compiler/issues"
+          "depacketizer0: Absurd, Report this to the Clash compiler team: https://github.com/clash-lang/clash-compiler/issues"
 
 type DepacketizeToDfCt (headerBytes :: Nat) (dataWidth :: Nat) =
   ( 1 <= headerBytes `DivRU` dataWidth
