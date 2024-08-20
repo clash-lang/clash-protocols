@@ -19,10 +19,10 @@ import qualified Protocols.Df as Df
 import Protocols.PacketStream.Base
 
 import Clash.Sized.Vector.Extra (takeLe)
+import Data.Constraint (Dict (Dict))
+import Data.Constraint.Nat.Extra (leModulusDivisor, leZeroIsZero, strictlyPositiveDivRu)
 import Data.Maybe
 import Data.Maybe.Extra
-import Data.Constraint.Nat.Extra (leModulusDivisor, strictlyPositiveDivRu, leZeroIsZero)
-import Data.Constraint (Dict(Dict))
 
 defaultByte :: BitVector 8
 defaultByte = 0x00
