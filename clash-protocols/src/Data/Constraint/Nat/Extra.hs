@@ -23,13 +23,17 @@ leModulusDivisor :: forall a b. (1 <= b) => Dict (Mod a b + 1 <= b)
 leModulusDivisor = unsafeCoerce (Dict :: Dict (0 <= 0))
 
 -- | if (a <= 0) then (a ~ 0)
-leZeroIsZero :: forall a. (a <= 0) => Dict (a ~ 0)
+leZeroIsZero :: forall (a :: Nat). (a <= 0) => Dict (a ~ 0)
 leZeroIsZero = unsafeCoerce (Dict :: Dict (0 ~ 0))
 
 -- | if (1 <= a) and (1 <= b) then (1 <= DivRU a b)
 strictlyPositiveDivRu :: forall a b. (1 <= a, 1 <= b) => Dict (1 <= DivRU a b)
 strictlyPositiveDivRu = unsafeCoerce (Dict :: Dict (0 <= 0))
 
--- | if (1 <= a) then (b <= ceiling(b/a) * a)
-timesDivRu :: forall a b. (1 <= a) => Dict (b <= Div (b + (a - 1)) a * a)
-timesDivRu = unsafeCoerce (Dict :: Dict (0 <= 0))
+-- | if (1 <= a) then (b <= ceil(b/a) * a)
+leTimesDivRu :: forall a b. (1 <= a) => Dict (b <= a * DivRU b a)
+leTimesDivRu = unsafeCoerce (Dict :: Dict (0 <= 0))
+
+-- | if (1 <= a) then (a * ceil(b/a) ~ b + Mod (a - Mod b a) a)
+eqTimesDivRu :: forall a b. (1 <= a) => Dict (a * DivRU b a ~ b + Mod (a - Mod b a) a)
+eqTimesDivRu = unsafeCoerce (Dict :: Dict (0 ~ 0))
