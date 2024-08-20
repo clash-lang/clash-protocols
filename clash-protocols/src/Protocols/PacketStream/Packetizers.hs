@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# OPTIONS_GHC -fconstraint-solver-iterations=10 #-}
 {-# OPTIONS_HADDOCK hide #-}
 
 {- |
@@ -18,9 +19,10 @@ import qualified Protocols.Df as Df
 import Protocols.PacketStream.Base
 
 import Clash.Sized.Vector.Extra (takeLe)
-import Data.Data ((:~:) (Refl))
 import Data.Maybe
 import Data.Maybe.Extra
+import Data.Constraint.Nat.Extra (leModulusDivisor, strictlyPositiveDivRu, leZeroIsZero)
+import Data.Constraint (Dict(Dict))
 
 defaultByte :: BitVector 8
 defaultByte = 0x00
@@ -313,19 +315,13 @@ packetizerC ::
   Circuit (PacketStream dom dataWidth metaIn) (PacketStream dom dataWidth metaOut)
 packetizerC toMetaOut toHeader = fromSignals outCircuit
  where
-  outCircuit = case compareSNat (SNat @(headerBytes `Mod` dataWidth)) (SNat @dataWidth) of
-    SNatLE -> case compareSNat (SNat @(headerBytes + 1)) (SNat @dataWidth) of
+  outCircuit = case leModulusDivisor @headerBytes @dataWidth of
+    Dict -> case compareSNat (SNat @(headerBytes + 1)) (SNat @dataWidth) of
       SNatLE -> mealyB (packetizerT1 @headerBytes toMetaOut toHeader) (Insert1 False)
-      SNatGT -> case sameNat (SNat @(headerBytes `Mod` dataWidth)) d0 of
-        Just Refl -> mealyB (packetizerT2 @headerBytes toMetaOut toHeader) LoadHeader2
-        _ -> case compareSNat d1 (SNat @(headerBytes `Mod` dataWidth)) of
-          SNatLE -> mealyB (packetizerT3 @headerBytes toMetaOut toHeader) LoadHeader3
-          SNatGT ->
-            clashCompileError
-              "packetizerC0: Absurd, Report this to the Clash compiler team: https://github.com/clash-lang/clash-compiler/issues"
-    _ ->
-      clashCompileError
-        "packetizerC1: Absurd, Report this to the Clash compiler team: https://github.com/clash-lang/clash-compiler/issues"
+      SNatGT -> case compareSNat (SNat @(headerBytes `Mod` dataWidth)) d0 of
+        SNatLE -> case leZeroIsZero @(headerBytes `Mod` dataWidth) of
+          Dict -> mealyB (packetizerT2 @headerBytes toMetaOut toHeader) LoadHeader2
+        SNatGT -> mealyB (packetizerT3 @headerBytes toMetaOut toHeader) LoadHeader3
 
 data DfPacketizerState (metaOut :: Type) (headerBytes :: Nat) (dataWidth :: Nat)
   = DfIdle
@@ -404,14 +400,15 @@ packetizeFromDfC ::
   (BitSize header ~ headerBytes * 8) =>
   (KnownNat headerBytes) =>
   (KnownNat dataWidth) =>
+  (1 <= headerBytes) =>
   (1 <= dataWidth) =>
   -- | Function that transforms the Df input to the output metadata.
   (a -> metaOut) ->
   -- | Function that transforms the Df input to the header that will be packetized.
   (a -> header) ->
   Circuit (Df dom a) (PacketStream dom dataWidth metaOut)
-packetizeFromDfC toMetaOut toHeader = case compareSNat d1 (SNat @(headerBytes `DivRU` dataWidth)) of
-  SNatLE -> case compareSNat (SNat @headerBytes) (SNat @dataWidth) of
+packetizeFromDfC toMetaOut toHeader = case strictlyPositiveDivRu @headerBytes @dataWidth of
+  Dict -> case compareSNat (SNat @headerBytes) (SNat @dataWidth) of
     -- We don't need a state machine in this case, as we are able to packetize
     -- the entire payload in one clock cycle.
     SNatLE -> Circuit (unbundle . fmap go . bundle)
@@ -425,6 +422,3 @@ packetizeFromDfC toMetaOut toHeader = case compareSNat d1 (SNat @(headerBytes `D
           SNatGT -> natToNum @(headerBytes `Mod` dataWidth - 1)
           _ -> natToNum @(dataWidth - 1)
     SNatGT -> fromSignals (mealyB (packetizeFromDfT toMetaOut toHeader) DfIdle)
-  SNatGT ->
-    clashCompileError
-      "packetizeFromDfC: Absurd, Report this to the Clash compiler team: https://github.com/clash-lang/clash-compiler/issues"
