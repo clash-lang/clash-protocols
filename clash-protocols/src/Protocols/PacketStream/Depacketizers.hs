@@ -19,10 +19,10 @@ import Protocols
 import qualified Protocols.Df as Df
 import Protocols.PacketStream.Base
 
+import Data.Constraint (Dict (Dict))
+import Data.Constraint.Nat.Extra (leModulusDivisor, timesDivRu)
 import Data.Data ((:~:) (Refl))
 import Data.Maybe
-import Data.Constraint (Dict(Dict))
-import Data.Constraint.Nat.Extra (timesDivRu, leModulusDivisor)
 
 defaultByte :: BitVector 8
 defaultByte = 0x00

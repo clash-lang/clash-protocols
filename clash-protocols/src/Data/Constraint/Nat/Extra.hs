@@ -19,7 +19,7 @@ cancelMulDiv :: forall a b. (1 <= b) => Dict (DivRU (a * b) b ~ a)
 cancelMulDiv = unsafeCoerce (Dict :: Dict (0 ~ 0))
 
 -- | if (1 <= b) then (Mod a b + 1 <= b)
-leModulusDivisor :: forall a b. 1 <= b => Dict (Mod a b + 1 <= b)
+leModulusDivisor :: forall a b. (1 <= b) => Dict (Mod a b + 1 <= b)
 leModulusDivisor = unsafeCoerce (Dict :: Dict (0 <= 0))
 
 -- | if (a <= 0) then (a ~ 0)
