@@ -1,7 +1,7 @@
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# OPTIONS_GHC -fconstraint-solver-iterations=10 #-}
 {-# OPTIONS_HADDOCK hide #-}
 
 {- |
@@ -21,6 +21,8 @@ import Protocols.PacketStream.Base
 
 import Data.Data ((:~:) (Refl))
 import Data.Maybe
+import Data.Constraint (Dict(Dict))
+import Data.Constraint.Nat.Extra (timesDivRu, leModulusDivisor)
 
 defaultByte :: BitVector 8
 defaultByte = 0x00
@@ -36,10 +38,12 @@ type ForwardBufSize (headerBytes :: Nat) (dataWidth :: Nat) =
   (dataWidth - (headerBytes `Mod` dataWidth)) `Mod` dataWidth
 
 type DepacketizerCt (headerBytes :: Nat) (dataWidth :: Nat) =
-  ( headerBytes `Mod` dataWidth <= dataWidth
+  ( KnownNat headerBytes
   , KnownNat dataWidth
+  , 1 <= headerBytes
   , 1 <= dataWidth
-  , KnownNat headerBytes
+  , headerBytes <= headerBytes `DivRU` dataWidth * dataWidth
+  , headerBytes `Mod` dataWidth <= dataWidth
   )
 
 -- TODO remove _fwdBuf and just use the last ForwardBufSize bytes of _parseBuf instead
@@ -92,7 +96,6 @@ depacketizerT ::
   (DepacketizerCt headerBytes dataWidth) =>
   (NFDataX metaIn) =>
   (ForwardBufSize headerBytes dataWidth <= dataWidth) =>
-  (headerBytes <= dataWidth * headerBytes `DivRU` dataWidth) =>
   (header -> metaIn -> metaOut) ->
   DepacketizerState headerBytes dataWidth ->
   (Maybe (PacketStreamM2S dataWidth metaIn), PacketStreamS2M) ->
@@ -196,34 +199,29 @@ depacketizerC ::
   , BitSize header ~ headerBytes * 8
   , KnownNat headerBytes
   , 1 <= dataWidth
+  , 1 <= headerBytes
   , KnownNat dataWidth
   ) =>
   -- | Used to compute final metadata of outgoing packets from header and incoming metadata
   (header -> metaIn -> metaOut) ->
   Circuit (PacketStream dom dataWidth metaIn) (PacketStream dom dataWidth metaOut)
-depacketizerC toMetaOut = forceResetSanity |> fromSignals outCircuit
+depacketizerC toMetaOut = forceResetSanity |> fromSignals ckt
  where
-  modProof = compareSNat (SNat @(headerBytes `Mod` dataWidth)) (SNat @dataWidth)
-  divProof = compareSNat (SNat @headerBytes) (SNat @(dataWidth * headerBytes `DivRU` dataWidth))
-
-  outCircuit =
-    case (modProof, divProof) of
-      (SNatLE, SNatLE) -> case compareSNat (SNat @(ForwardBufSize headerBytes dataWidth)) (SNat @dataWidth) of
-        SNatLE -> mealyB (depacketizerT @headerBytes toMetaOut) def
-        _ ->
-          clashCompileError
-            "depacketizer1: Absurd, Report this to the Clash compiler team: https://github.com/clash-lang/clash-compiler/issues"
+  ckt = case ( timesDivRu @dataWidth @headerBytes
+             , leModulusDivisor @headerBytes @dataWidth
+             ) of
+    (Dict, Dict) -> case compareSNat (SNat @(ForwardBufSize headerBytes dataWidth)) (SNat @dataWidth) of
+      SNatLE -> mealyB (depacketizerT toMetaOut) def
       _ ->
         clashCompileError
-          "depacketizer0: Absurd, Report this to the Clash compiler team: https://github.com/clash-lang/clash-compiler/issues"
+          "depacketizer1: Absurd, Report this to the Clash compiler team: https://github.com/clash-lang/clash-compiler/issues"
 
 type DepacketizeToDfCt (headerBytes :: Nat) (dataWidth :: Nat) =
-  ( 1 <= headerBytes `DivRU` dataWidth
-  , headerBytes `Mod` dataWidth <= dataWidth
-  , headerBytes <= dataWidth * headerBytes `DivRU` dataWidth
+  ( KnownNat headerBytes
   , KnownNat dataWidth
+  , 1 <= headerBytes
   , 1 <= dataWidth
-  , KnownNat headerBytes
+  , headerBytes <= headerBytes `DivRU` dataWidth * dataWidth
   )
 
 data DfDepacketizerState (headerBytes :: Nat) (dataWidth :: Nat)
@@ -334,23 +332,13 @@ depacketizeToDfC ::
   (BitPack header) =>
   (KnownNat headerBytes) =>
   (KnownNat dataWidth) =>
+  (1 <= headerBytes) =>
   (1 <= dataWidth) =>
   (BitSize header ~ headerBytes * 8) =>
   -- | function that transforms the given meta + parsed header to the output Df
   (header -> meta -> a) ->
   Circuit (PacketStream dom dataWidth meta) (Df dom a)
-depacketizeToDfC toOut = forceResetSanity |> fromSignals outCircuit
+depacketizeToDfC toOut = forceResetSanity |> fromSignals ckt
  where
-  divProof = compareSNat (SNat @headerBytes) (SNat @(dataWidth * headerBytes `DivRU` dataWidth))
-  modProof = compareSNat (SNat @(headerBytes `Mod` dataWidth)) (SNat @dataWidth)
-
-  outCircuit =
-    case (divProof, modProof) of
-      (SNatLE, SNatLE) -> case compareSNat d1 (SNat @(headerBytes `DivRU` dataWidth)) of
-        SNatLE -> mealyB (depacketizeToDfT toOut) def
-        _ ->
-          clashCompileError
-            "depacketizeToDfC0: Absurd, Report this to the Clash compiler team: https://github.com/clash-lang/clash-compiler/issues"
-      _ ->
-        clashCompileError
-          "depacketizeToDfC1: Absurd, Report this to the Clash compiler team: https://github.com/clash-lang/clash-compiler/issues"
+  ckt = case timesDivRu @dataWidth @headerBytes of
+    Dict -> mealyB (depacketizeToDfT toOut) def
