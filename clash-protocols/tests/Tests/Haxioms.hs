@@ -78,19 +78,35 @@ prop_strictlyPositiveDivRu = property $ do
 
 {- | Test whether the following equation holds:
 
-     b <= Div (b + (a - 1)) a * a
+     b <= a * DivRU b a
 
 Given:
 
      1 <= a
 
-Tests: 'Data.Constraint.Nat.Extra.timesDivRU'.
+Tests: 'Data.Constraint.Nat.Extra.leTimesDivRu'.
 -}
-prop_timesDivRU :: Property
-prop_timesDivRU = property $ do
+prop_leTimesDivRu :: Property
+prop_leTimesDivRu = property $ do
   a <- forAll (genNatural 1)
   b <- forAll (genNatural 0)
-  assert (b <= (b + (a - 1) `div` a) * a)
+  assert (b <= a * divRU b a)
+
+{- | Test whether the following equation holds:
+
+     a * DivRU b a ~ b + Mod (a - Mod b a) a
+
+Given:
+
+     1 <= a
+
+Tests: 'Data.Constraint.Nat.Extra.eqTimesDivRu'.
+-}
+prop_eqTimesDivRu :: Property
+prop_eqTimesDivRu = property $ do
+  a <- forAll (genNatural 1)
+  b <- forAll (genNatural 0)
+  a * (b `divRU` a) === b + (a - b `mod` a) `mod` a
 
 tests :: TestTree
 tests =
