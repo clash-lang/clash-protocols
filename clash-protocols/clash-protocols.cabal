@@ -117,6 +117,7 @@ library
     , clash-protocols-base
     , circuit-notation
     , clash-prelude-hedgehog
+    , constraints
     , data-default
     , deepseq
     , extra
@@ -173,6 +174,7 @@ library
   autogen-modules:    Paths_clash_protocols
 
   other-modules:
+    Data.Constraint.Nat.Extra
     Data.Maybe.Extra
     Clash.Sized.Vector.Extra
     Paths_clash_protocols
@@ -186,6 +188,7 @@ test-suite unittests
   ghc-options: -threaded -with-rtsopts=-N
   main-is: unittests.hs
   other-modules:
+    Tests.Haxioms
     Tests.Protocols
     Tests.Protocols.Df
     Tests.Protocols.DfConv
