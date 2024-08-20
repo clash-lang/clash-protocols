@@ -157,6 +157,9 @@ library
     -- TODO: test / upstream ^
     Test.Tasty.Hedgehog.Extra
 
+  reexported-modules:
+    Protocols.Plugin
+
   autogen-modules:    Paths_clash_protocols
 
   other-modules:
