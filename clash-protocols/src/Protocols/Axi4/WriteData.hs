@@ -105,7 +105,8 @@ data
 
 -- | See Table A2-3 "Write data channel signals"
 newtype S2M_WriteData = S2M_WriteData {_wready :: Bool}
-  deriving (Show, Generic, C.NFDataX)
+  deriving stock (Show, Generic)
+  deriving anyclass (C.NFDataX)
 
 {- | Shorthand for a "well-behaved" write data config,
 so that we don't need to write out a bunch of type constraints later.

@@ -188,7 +188,8 @@ data
 -- | See Table A2-5 "Read address channel signals"
 newtype S2M_ReadAddress = S2M_ReadAddress
   {_arready :: Bool}
-  deriving (Show, Generic, C.NFDataX)
+  deriving stock (Show, Generic)
+  deriving anyclass (C.NFDataX)
 
 {- | Shorthand for a "well-behaved" read address config,
 so that we don't need to write out a bunch of type constraints later.

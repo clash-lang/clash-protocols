@@ -185,7 +185,8 @@ data
 
 -- | See Table A2-2 "Write address channel signals"
 newtype S2M_WriteAddress = S2M_WriteAddress {_awready :: Bool}
-  deriving (Show, Generic, C.NFDataX)
+  deriving stock (Show, Generic)
+  deriving anyclass (C.NFDataX)
 
 {- | Shorthand for a "well-behaved" write address config,
 so that we don't need to write out a bunch of type constraints later.
