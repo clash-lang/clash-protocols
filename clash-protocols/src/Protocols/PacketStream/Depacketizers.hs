@@ -246,7 +246,7 @@ data DfDepacketizerState (headerBytes :: Nat) (dataWidth :: Nat)
       }
   | DfConsumePadding
       { _dfAborted :: Bool
-      , _dfParseBuf :: Vec (BufSize headerBytes dataWidth)  (BitVector 8)
+      , _dfParseBuf :: Vec (BufSize headerBytes dataWidth) (BitVector 8)
       }
   deriving (Generic, Show, ShowX)
 
