@@ -225,6 +225,7 @@ depacketizerC toMetaOut = forceResetSanity |> fromSignals ckt
              ) of
     (Dict, Dict, Dict) -> mealyB (depacketizerT toMetaOut) def
 
+-- | Df depacketizer constraints.
 type DepacketizeToDfCt (headerBytes :: Nat) (dataWidth :: Nat) =
   ( KnownNat headerBytes
   , KnownNat dataWidth
@@ -236,16 +237,16 @@ type DepacketizeToDfCt (headerBytes :: Nat) (dataWidth :: Nat) =
 data DfDepacketizerState (headerBytes :: Nat) (dataWidth :: Nat)
   = DfParse
       { _dfAborted :: Bool
-      -- ^ whether any of the fragments parsed from the current packet were aborted.
-      , _dfParseBuf :: Vec (dataWidth * headerBytes `DivRU` dataWidth) (BitVector 8)
-      -- ^ the accumulator for header bytes.
+      -- ^ Whether the current packet is aborted. We need this, because _abort
+      --   might have been set in the bytes to be parsed.
+      , _dfParseBuf :: Vec (BufSize headerBytes dataWidth) (BitVector 8)
+      -- ^ Buffer for the header that we need to parse.
       , _dfCounter :: Index (headerBytes `DivRU` dataWidth)
-      -- ^ how many of the _parseBuf bytes are currently valid (accumulation count). We flush at counter == maxBound
+      -- ^ @maxBound + 1@ is the number of fragments we need to parse.
       }
   | DfConsumePadding
       { _dfAborted :: Bool
-      -- ^ whether any of the fragments parsed from the current packet were aborted.
-      , _dfParseBuf :: Vec (dataWidth * headerBytes `DivRU` dataWidth) (BitVector 8)
+      , _dfParseBuf :: Vec (BufSize headerBytes dataWidth)  (BitVector 8)
       }
   deriving (Generic, Show, ShowX)
 
@@ -253,7 +254,7 @@ deriving instance
   (DepacketizeToDfCt headerBytes dataWidth) =>
   (NFDataX (DfDepacketizerState headerBytes dataWidth))
 
--- | Initial state of @depacketizeToDfT@
+-- | Initial state of @depacketizeToDfT@.
 instance
   (DepacketizeToDfCt headerBytes dataWidth) =>
   Default (DfDepacketizerState headerBytes dataWidth)
@@ -261,15 +262,14 @@ instance
   def :: DfDepacketizerState headerBytes dataWidth
   def = DfParse False (repeat undefined) maxBound
 
+-- | Df depacketizer transition function.
 depacketizeToDfT ::
   forall
-    (dom :: Domain)
-    (dataWidth :: Nat)
-    (a :: Type)
-    (meta :: Type)
+    (headerBytes :: Nat)
     (header :: Type)
-    (headerBytes :: Nat).
-  (HiddenClockResetEnable dom) =>
+    (meta :: Type)
+    (a :: Type)
+    (dataWidth :: Nat).
   (NFDataX meta) =>
   (BitPack header) =>
   (BitSize header ~ headerBytes * 8) =>
@@ -278,34 +278,28 @@ depacketizeToDfT ::
   DfDepacketizerState headerBytes dataWidth ->
   (Maybe (PacketStreamM2S dataWidth meta), Ack) ->
   (DfDepacketizerState headerBytes dataWidth, (PacketStreamS2M, Df.Data a))
-depacketizeToDfT toOut st@DfParse{..} (Just (PacketStreamM2S{..}), Ack readyIn) = (nextStOut, (PacketStreamS2M readyOut, fwdOut))
+depacketizeToDfT _ DfParse{..} (Just (PacketStreamM2S{..}), _) = (nextStOut, (PacketStreamS2M readyOut, Df.NoData))
  where
   nextAborted = _dfAborted || _abort
   nextParseBuf = fst (shiftInAtN _dfParseBuf _data)
-  outDf = toOut (bitCoerce (takeLe (SNat @headerBytes) nextParseBuf)) _meta
 
   prematureEnd idx =
     case compareSNat (SNat @(headerBytes `Mod` dataWidth)) d0 of
       SNatGT -> idx < (natToNum @(headerBytes `Mod` dataWidth - 1))
       _ -> idx < (natToNum @(dataWidth - 1))
 
-  (nextSt, fwdOut) =
+  (nextStOut, readyOut) =
     case (_dfCounter == 0, _last) of
       (False, Nothing) ->
-        (DfParse nextAborted nextParseBuf (pred _dfCounter), Df.NoData)
-      (c, Just idx)
-        | not c || prematureEnd idx ->
-            (def, Df.NoData)
-      (True, Just _) ->
-        (def, if nextAborted then Df.NoData else Df.Data outDf)
+        (DfParse nextAborted nextParseBuf (pred _dfCounter), True)
+      (False, Just _) ->
+        (def, True)
+      (True, Just idx) ->
+        if nextAborted || prematureEnd idx
+          then (def, True)
+          else (DfConsumePadding nextAborted nextParseBuf, False)
       (True, Nothing) ->
-        (DfConsumePadding nextAborted nextParseBuf, Df.NoData)
-      _ ->
-        clashCompileError
-          "depacketizeToDfT Parse: Absurd, Report this to the Clash compiler team: https://github.com/clash-lang/clash-compiler/issues"
-
-  readyOut = isNothing (Df.dataToMaybe fwdOut) || readyIn
-  nextStOut = if readyOut then nextSt else st
+        (DfConsumePadding nextAborted nextParseBuf, True)
 depacketizeToDfT toOut st@DfConsumePadding{..} (Just (PacketStreamM2S{..}), Ack readyIn) = (nextStOut, (PacketStreamS2M readyOut, fwdOut))
  where
   nextAborted = _dfAborted || _abort
@@ -318,23 +312,30 @@ depacketizeToDfT toOut st@DfConsumePadding{..} (Just (PacketStreamM2S{..}), Ack 
 
   readyOut = isNothing (Df.dataToMaybe fwdOut) || readyIn
   nextStOut = if readyOut then nextSt else st
-depacketizeToDfT _ st (Nothing, Ack ready) = (st, (PacketStreamS2M ready, Df.NoData))
+depacketizeToDfT _ st (Nothing, Ack readyIn) = (st, (PacketStreamS2M readyIn, Df.NoData))
 
-{- | Reads bytes at the start of each packet into a dataflow.
-Consumes the remainder of the packet and drops this. If a
-packet ends sooner than the assumed length of the header,
-`depacketizeToDfC` does not send out anything.
-If any of the fragments in the packet has _abort set, it drops
-the entire packet.
+{- |
+Reads bytes at the start of each packet into a header structure, and
+transforms this header structure along with the input metadata to an output
+structure @a@, which is transmitted over a @Df@ channel. Such a structure
+is sent once per packet over the @Df@ channel, but only if the packet was big
+enough (contained at least @headerBytes@ valid data bytes) and did not
+contain any transfer with @_abort@ set.
+The remainder of the packet (padding) is dropped.
+
+If the packet is not padded, or if the packet is padded but the padding fits
+in the last transfer of the packet together with valid data bytes, this
+component will give one clock cycle of backpressure per packet (for efficiency
+reasons). Otherwise, it runs at full throughput.
 -}
 depacketizeToDfC ::
   forall
-    (dom :: Domain)
-    (dataWidth :: Nat)
-    (a :: Type)
-    (meta :: Type)
+    (headerBytes :: Nat)
     (header :: Type)
-    (headerBytes :: Nat).
+    (meta :: Type)
+    (a :: Type)
+    (dataWidth :: Nat)
+    (dom :: Domain).
   (HiddenClockResetEnable dom) =>
   (NFDataX meta) =>
   (NFDataX a) =>
