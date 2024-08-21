@@ -1,3 +1,4 @@
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -140,7 +141,8 @@ Manager can only send 'AvalonStreamM2S' when '_ready' was true
 @readyLatency@ clock cycles ago.
 -}
 newtype AvalonStreamS2M (readyLatency :: Nat) = AvalonStreamS2M {_ready :: Bool}
-  deriving (Generic, C.NFDataX, C.ShowX, Eq, NFData, Show, Bundle)
+  deriving stock (Generic, Show, Eq)
+  deriving anyclass (C.NFDataX, C.ShowX, NFData, Bundle)
 
 -- | Type for Avalon Stream protocol.
 data AvalonStream (dom :: Domain) (conf :: AvalonStreamConfig) (dataType :: Type)

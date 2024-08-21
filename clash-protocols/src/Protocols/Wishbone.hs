@@ -171,7 +171,8 @@ instance (C.ShowX dat) => Show (WishboneS2M dat) where
   increase throughput by reducing handshake-overhead
 -}
 newtype CycleTypeIdentifier = CycleTypeIdentifier (C.BitVector 3)
-  deriving (NFData, C.Generic, C.NFDataX, Show, C.ShowX, Eq, C.BitPack)
+  deriving stock (Eq, Show, C.Generic)
+  deriving anyclass (NFData, C.NFDataX, C.ShowX, C.BitPack)
 
 pattern
   Classic
