@@ -287,9 +287,11 @@ packetizerT3 toMetaOut _ st@LastForward3{..} (Just inPkt, bwdIn) =
   nextStOut = if _ready bwdIn then LoadHeader3 else st
 packetizerT3 _ _ s (Nothing, bwdIn) = (s, (bwdIn, Nothing))
 
-{- | Puts a portion of the metadata in front of the packet stream, and shifts the stream accordingly.
-  This portion is defined by the metadata to header transformer function. If this function is `id`,
-  the entire metadata is put in front of the packet stream.
+{- |
+Writes a portion of the metadata to the front of the packet stream, and shifts
+the stream accordingly. This portion is defined by the @(metaIn -> header)@
+input function. If this function is `id`, the entire metadata is put in front
+of the packet stream.
 -}
 packetizerC ::
   forall
@@ -299,18 +301,17 @@ packetizerC ::
     (metaOut :: Type)
     (header :: Type)
     (headerBytes :: Nat).
-  ( HiddenClockResetEnable dom
-  , NFDataX metaOut
-  , BitPack header
-  , BitSize header ~ headerBytes * 8
-  , KnownNat headerBytes
-  , 1 <= dataWidth
-  , 1 <= headerBytes
-  , KnownNat dataWidth
-  ) =>
-  -- | Metadata transformer function
+  (HiddenClockResetEnable dom) =>
+  (NFDataX metaOut) =>
+  (BitPack header) =>
+  (BitSize header ~ headerBytes * 8) =>
+  (KnownNat headerBytes) =>
+  (1 <= dataWidth) =>
+  (1 <= headerBytes) =>
+  (KnownNat dataWidth) =>
+  -- | Mapping from input `_meta` to output `_meta`
   (metaIn -> metaOut) ->
-  -- | metaData to header that will be packetized transformer function
+  -- | Mapping from input `_meta` to the header that will be packetized
   (metaIn -> header) ->
   Circuit (PacketStream dom dataWidth metaIn) (PacketStream dom dataWidth metaOut)
 packetizerC toMetaOut toHeader = fromSignals outCircuit
@@ -351,9 +352,9 @@ packetizeFromDfT ::
   (1 <= dataWidth) =>
   (1 <= headerBytes `DivRU` dataWidth) =>
   ((dataWidth + 1) <= headerBytes) =>
-  -- | function that transforms the Df input to the output metadata.
+  -- | Mapping from `Df` input to output `_meta`
   (a -> metaOut) ->
-  -- | function that transforms the Df input to the header that will be packetized.
+  -- | Mapping from `Df` input to the header that will be packetized
   (a -> header) ->
   DfPacketizerState metaOut headerBytes dataWidth ->
   (Df.Data a, PacketStreamS2M) ->
@@ -382,9 +383,10 @@ packetizeFromDfT toMetaOut _ st@DfInsert{..} (Df.Data dataIn, bwdIn) = (nextStOu
   nextStOut = if _ready bwdIn then nextSt else st
 packetizeFromDfT _ _ s (Df.NoData, bwdIn) = (s, (Ack (_ready bwdIn), Nothing))
 
-{- | Starts a packet stream upon receiving some data.
-  The bytes to be packetized and the output metadata
-  are specified by the input functions.
+{- |
+Starts a packet stream upon receiving some data over a `Df` channel.
+The bytes to be packetized and the output metadata are specified by the
+input functions.
 -}
 packetizeFromDfC ::
   forall
@@ -402,9 +404,9 @@ packetizeFromDfC ::
   (KnownNat dataWidth) =>
   (1 <= headerBytes) =>
   (1 <= dataWidth) =>
-  -- | Function that transforms the Df input to the output metadata.
+  -- | Mapping from `Df` input to output `_meta`
   (a -> metaOut) ->
-  -- | Function that transforms the Df input to the header that will be packetized.
+  -- | Mapping from `Df` input to the header that will be packetized
   (a -> header) ->
   Circuit (Df dom a) (PacketStream dom dataWidth metaOut)
 packetizeFromDfC toMetaOut toHeader = case strictlyPositiveDivRu @headerBytes @dataWidth of

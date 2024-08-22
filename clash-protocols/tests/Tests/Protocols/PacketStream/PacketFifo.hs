@@ -26,7 +26,7 @@ import Test.Tasty.TH (testGroupGenerator)
 import Protocols
 import Protocols.Hedgehog
 import Protocols.PacketStream.Base
-import Protocols.PacketStream.PacketFifo (overflowDropPacketFifoC, packetFifoC)
+import Protocols.PacketStream.PacketFifo
 
 -- tests
 import Tests.Protocols.PacketStream.Base as U
@@ -51,7 +51,7 @@ prop_packetFifo_id =
   ckt ::
     (HiddenClockResetEnable System) =>
     Circuit (PacketStream System 4 Int16) (PacketStream System 4 Int16)
-  ckt = packetFifoC d12 d12
+  ckt = packetFifoC d12 d12 Backpressure
 
 -- | test for id with a small buffer to ensure backpressure is tested
 prop_packetFifo_small_buffer_id :: Property
@@ -66,7 +66,7 @@ prop_packetFifo_small_buffer_id =
   ckt ::
     (HiddenClockResetEnable System) =>
     Circuit (PacketStream System 4 Int16) (PacketStream System 4 Int16)
-  ckt = packetFifoC d5 d5
+  ckt = packetFifoC d5 d5 Backpressure
 
 -- | test to check if there are no gaps inside of packets
 prop_packetFifo_no_gaps :: Property
@@ -75,7 +75,7 @@ prop_packetFifo_no_gaps = property $ do
       maxInputSize = 50
       ckt =
         exposeClockResetEnable
-          (packetFifoC packetFifoSize packetFifoSize)
+          (packetFifoC packetFifoSize packetFifoSize Backpressure)
           systemClockGen
           resetGen
           enableGen
@@ -107,7 +107,7 @@ prop_overFlowDrop_packetFifo_id =
   ckt ::
     (HiddenClockResetEnable System) =>
     Circuit (PacketStream System 4 Int16) (PacketStream System 4 Int16)
-  ckt = fromPacketStream |> overflowDropPacketFifoC d12 d12
+  ckt = packetFifoC d12 d12 Drop
 
 -- | test for proper dropping when full
 prop_overFlowDrop_packetFifo_drop :: Property
@@ -123,7 +123,7 @@ prop_overFlowDrop_packetFifo_drop =
   ckt ::
     (HiddenClockResetEnable System) =>
     Circuit (PacketStream System 4 Int16) (PacketStream System 4 Int16)
-  ckt = fromPacketStream |> overflowDropPacketFifoC d5 d5
+  ckt = packetFifoC d5 d5 Drop
 
   model :: [PacketStreamM2S 4 Int16] -> [PacketStreamM2S 4 Int16]
   model packets = Prelude.concat $ take 1 packetChunk ++ drop 2 packetChunk
@@ -146,7 +146,7 @@ prop_packetFifo_small_metaBuffer =
   ckt ::
     (HiddenClockResetEnable System) =>
     Circuit (PacketStream System 4 Int16) (PacketStream System 4 Int16)
-  ckt = packetFifoC d12 d2
+  ckt = packetFifoC d12 d2 Backpressure
 
 tests :: TestTree
 tests =

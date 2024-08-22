@@ -36,6 +36,7 @@ delayStream ::
   (1 <= n) =>
   (1 <= dataWidth) =>
   (NFDataX meta) =>
+  -- | The number of fragments to delay
   SNat n ->
   Circuit (PacketStream dom dataWidth meta) (PacketStream dom dataWidth meta)
 -- TODO this component is very unoptimized/ugly. The most important thing is

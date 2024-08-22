@@ -100,8 +100,12 @@ nextState st@(UpConverterState{..}) (Just PacketStreamM2S{..}) (PacketStreamS2M 
       }
   nextSt = if outReady then nextStRaw else st
 
-{- | Converts packet streams of single bytes to packet streams of a higher data widths.
-Has one cycle of latency, but optimal throughput.
+{- |
+Converts packet streams of arbitrary data width @dwIn@ to packet streams of
+a bigger data width @dwOut@, where @dwIn@ must divide @dwOut@. When @dwIn ~ dwOut@,
+this component is set to be `idC`.
+
+Has one cycle of latency, but full throughput.
 -}
 upConverterC ::
   forall (dwIn :: Nat) (dwOut :: Nat) (meta :: Type) (dom :: Domain) (n :: Nat).
@@ -114,6 +118,7 @@ upConverterC ::
   (KnownNat n) =>
   (dwOut ~ dwIn * n) =>
   (NFDataX meta) =>
+  -- | Upconverter circuit
   Circuit (PacketStream dom dwIn meta) (PacketStream dom dwOut meta)
 upConverterC = case sameNat (SNat @dwIn) (SNat @dwOut) of
   Just Refl -> idC
@@ -178,13 +183,13 @@ downConverterT st@DownConverterState{..} (Just inPkt, bwdIn) = (nextSt, (PacketS
     | otherwise = st
 
 {- | Converts packet streams of arbitrary data width @dwIn@ to packet streams of
-a smaller data width, @dwOut@, where @dwOut@ must divide @dwIn@.
+a smaller data width @dwOut@, where @dwOut@ must divide @dwIn@. When @dwIn ~ dwOut@,
+this component is set to be `idC`.
 
 If `_abort` is asserted on an input transfer, it will be asserted on all
 corresponding output transfers as well.
 
-Provides zero latency and optimal throughput, i.e. a packet of n bytes is
-sent out in n clock cycles, even if `_last` is set.
+Provides zero latency and full throughput.
 -}
 downConverterC ::
   forall (dwIn :: Nat) (dwOut :: Nat) (meta :: Type) (dom :: Domain) (n :: Nat).
@@ -195,6 +200,7 @@ downConverterC ::
   (KnownNat dwIn) =>
   (KnownNat dwOut) =>
   (dwIn ~ dwOut * n) =>
+  -- | Downconverter circuit
   Circuit (PacketStream dom dwIn meta) (PacketStream dom dwOut meta)
 downConverterC = case sameNat (SNat @dwIn) (SNat @dwOut) of
   Just Refl -> idC

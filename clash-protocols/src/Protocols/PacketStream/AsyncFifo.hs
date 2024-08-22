@@ -23,14 +23,14 @@ asyncFifoC ::
     (rDom :: Domain)
     (depth :: Nat)
     (dataWidth :: Nat)
-    (metaType :: Type).
+    (meta :: Type).
   (KnownDomain wDom) =>
   (KnownDomain rDom) =>
   (KnownNat depth) =>
   (KnownNat dataWidth) =>
   (2 <= depth) =>
   (1 <= dataWidth) =>
-  (NFDataX metaType) =>
+  (NFDataX meta) =>
   -- | 2^depth is the number of elements this component can store
   SNat depth ->
   -- | Clock signal in the write domain
@@ -45,7 +45,7 @@ asyncFifoC ::
   Reset rDom ->
   -- | Enable signal in the read domain
   Enable rDom ->
-  Circuit (PacketStream wDom dataWidth metaType) (PacketStream rDom dataWidth metaType)
+  Circuit (PacketStream wDom dataWidth meta) (PacketStream rDom dataWidth meta)
 asyncFifoC depth wClk wRst wEn rClk rRst rEn =
   exposeClockResetEnable forceResetSanity wClk wRst wEn |> fromSignals ckt
  where

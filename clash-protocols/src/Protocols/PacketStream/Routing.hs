@@ -16,7 +16,6 @@ import Clash.Prelude
 import Protocols
 import Protocols.PacketStream.Base
 
-import Data.Bifunctor (Bifunctor (second))
 import qualified Data.Bifunctor as B
 import Data.Maybe
 
@@ -28,22 +27,17 @@ data ArbiterMode
     -- biased towards the last source and also slightly more expensive.
     Parallel
 
--- | Collects packets from all sources, respecting packet boundaries.
+-- | Merges multiple packet streams into one, respecting packet boundaries.
 packetArbiterC ::
-  forall dom p n a.
-  ( HiddenClockResetEnable dom
-  , KnownNat p
-  , 1 <= p
-  ) =>
+  forall dom p dataWidth meta.
+  (HiddenClockResetEnable dom) =>
+  (KnownNat p) =>
+  (1 <= p) =>
   -- | See `ArbiterMode`
   ArbiterMode ->
-  Circuit (Vec p (PacketStream dom n a)) (PacketStream dom n a)
+  Circuit (Vec p (PacketStream dom dataWidth meta)) (PacketStream dom dataWidth meta)
 packetArbiterC mode = Circuit (B.first unbundle . mealyB go (maxBound, True) . B.first bundle)
  where
-  go ::
-    (Index p, Bool) ->
-    (Vec p (Maybe (PacketStreamM2S n a)), PacketStreamS2M) ->
-    ((Index p, Bool), (Vec p PacketStreamS2M, Maybe (PacketStreamM2S n a)))
   go (i, first) (fwds, bwd@(PacketStreamS2M ack)) = ((i', continue), (bwds, fwd))
    where
     bwds = replace i bwd (repeat (PacketStreamS2M False))
@@ -57,37 +51,39 @@ packetArbiterC mode = Circuit (B.first unbundle . mealyB go (maxBound, True) . B
       (RoundRobin, _) -> satSucc SatWrap i -- next index
       (Parallel, _) -> fromMaybe maxBound $ fold @(p - 1) (<|>) (zipWith (<$) indicesI fwds) -- index of last sink with data
 
-{- | Routes packets depending on their metadata, using given routing functions.
+{- |
+Routes packets depending on their metadata, using given routing functions.
 
-Data is sent to at most one element of the output vector, for which the
-dispatch function evaluates to true on the metadata of the input. If none of
-the functions evaluate to true, the input is dropped. If more than one of the
-predicates are true, the first one is picked.
+Data is sent to at most one sink, for which the dispatch function evaluates to
+@True@ when applied to the input metadata. If none of the predicates hold, the
+input packet is dropped. If more than one of the predicates hold, the sink
+that occcurs first in the vector is picked.
 
-Sends out packets in the same clock cycle as they are received.
+Sends out packets in the same clock cycle as they are received, this
+component has zero latency and runs at full throughput.
 -}
 packetDispatcherC ::
-  forall (dom :: Domain) (p :: Nat) (n :: Nat) (a :: Type).
-  ( HiddenClockResetEnable dom
-  , KnownNat p
-  ) =>
-  -- | Dispatch function. If function at index i returns true for the metaData it
-  -- dispatches the current packet to that sink.
-  Vec p (a -> Bool) ->
-  Circuit (PacketStream dom n a) (Vec p (PacketStream dom n a))
-packetDispatcherC fs = Circuit (second unbundle . unbundle . fmap go . bundle . second bundle)
+  forall (dom :: Domain) (p :: Nat) (dataWidth :: Nat) (meta :: Type).
+  (HiddenClockResetEnable dom) =>
+  (KnownNat p) =>
+  -- | Dispatch function
+  Vec p (meta -> Bool) ->
+  Circuit (PacketStream dom dataWidth meta) (Vec p (PacketStream dom dataWidth meta))
+packetDispatcherC predicates = Circuit (B.second unbundle . unbundle . fmap go . bundle . B.second bundle)
  where
-  go (Just x, bwds) = case findIndex id $ zipWith ($) fs (pure $ _meta x) of
-    Just i -> (bwds !! i, replace i (Just x) (repeat Nothing))
-    _ -> (PacketStreamS2M True, repeat Nothing)
-  go _ = (PacketStreamS2M False, repeat Nothing)
+  idleOtp = repeat Nothing
+  go (Nothing, _) = (PacketStreamS2M False, idleOtp)
+  go (Just x, bwds) = case findIndex id (zipWith ($) predicates (pure $ _meta x)) of
+    Just i -> (bwds !! i, replace i (Just x) idleOtp)
+    Nothing -> (PacketStreamS2M True, idleOtp)
 
-{- | Routing function for `packetDispatcherC` that matches against values with
+{- |
+Routing function for `packetDispatcherC` that matches against values with
 an `Eq` instance. Useful to route according to a record field.
 -}
 routeBy ::
-  (Eq b) =>
-  (a -> b) ->
-  Vec p b ->
-  Vec p (a -> Bool)
-routeBy f = fmap $ \x -> (== x) . f
+  (Eq a) =>
+  (meta -> a) ->
+  Vec p a ->
+  Vec p (meta -> Bool)
+routeBy f = map $ \x -> (== x) . f

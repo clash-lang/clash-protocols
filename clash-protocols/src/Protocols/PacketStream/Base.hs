@@ -9,6 +9,7 @@ module Protocols.PacketStream.Base (
   PacketStreamM2S (..),
   PacketStreamS2M (..),
   PacketStream,
+  abortOnBackPressureC,
   unsafeToPacketStream,
   fromPacketStream,
   forceResetSanity,
@@ -32,7 +33,8 @@ import Data.Coerce (coerce)
 import qualified Data.Maybe as Maybe
 import Data.Proxy
 
-{- | Data sent from manager to subordinate.
+{- |
+Data sent from manager to subordinate.
 
 Heavily inspired by the M2S data of AMBA AXI4-Stream, but simplified:
 
@@ -45,7 +47,7 @@ Heavily inspired by the M2S data of AMBA AXI4-Stream, but simplified:
 - @_tuser@ is moved into `_meta`.
 - @_tvalid@ is modeled by wrapping this type into a @Maybe@.
 -}
-data PacketStreamM2S (dataWidth :: Nat) (metaType :: Type) = PacketStreamM2S
+data PacketStreamM2S (dataWidth :: Nat) (meta :: Type) = PacketStreamM2S
   { _data :: Vec dataWidth (BitVector 8)
   -- ^ The bytes to be transmitted.
   , _last :: Maybe (Index dataWidth)
@@ -54,7 +56,7 @@ data PacketStreamM2S (dataWidth :: Nat) (metaType :: Type) = PacketStreamM2S
   --   If it is @Nothing@ then this transfer is not yet the end of a packet and all
   --   bytes are valid. This implies that no null bytes are allowed in the middle of
   --   a packet, only after a packet.
-  , _meta :: metaType
+  , _meta :: meta
   -- ^ Metadata of a packet. Must be constant during a packet.
   , _abort :: Bool
   -- ^ Iff true, the packet corresponding to this transfer is invalid. The subordinate
@@ -62,7 +64,8 @@ data PacketStreamM2S (dataWidth :: Nat) (metaType :: Type) = PacketStreamM2S
   }
   deriving (Eq, Generic, ShowX, Show, NFData, Bundle, Functor)
 
-{- | Data sent from the subordinate to manager.
+{- |
+Data sent from the subordinate to manager.
 
 The only information transmitted is whether the subordinate is ready to receive data.
 -}
@@ -72,7 +75,8 @@ newtype PacketStreamS2M = PacketStreamS2M
   }
   deriving (Eq, Generic, ShowX, Show, NFData, Bundle, NFDataX)
 
-{- | Simple valid-ready streaming protocol for transferring packets between components.
+{- |
+Simple valid-ready streaming protocol for transferring packets between components.
 
 Invariants:
 
@@ -83,28 +87,28 @@ Invariants:
 5. A packet may not be interrupted by another packet.
 6. All bytes in `_data` which are not enabled must be 0x00.
 -}
-data PacketStream (dom :: Domain) (dataWidth :: Nat) (metaType :: Type)
+data PacketStream (dom :: Domain) (dataWidth :: Nat) (meta :: Type)
 
 deriving instance
-  (KnownNat dataWidth, NFDataX metaType) =>
-  NFDataX (PacketStreamM2S dataWidth metaType)
+  (KnownNat dataWidth, NFDataX meta) =>
+  NFDataX (PacketStreamM2S dataWidth meta)
 
-instance Protocol (PacketStream dom dataWidth metaType) where
+instance Protocol (PacketStream dom dataWidth meta) where
   type
-    Fwd (PacketStream dom dataWidth metaType) =
-      Signal dom (Maybe (PacketStreamM2S dataWidth metaType))
-  type Bwd (PacketStream dom dataWidth metaType) = Signal dom PacketStreamS2M
+    Fwd (PacketStream dom dataWidth meta) =
+      Signal dom (Maybe (PacketStreamM2S dataWidth meta))
+  type Bwd (PacketStream dom dataWidth meta) = Signal dom PacketStreamS2M
 
-instance IdleCircuit (PacketStream dom dataWidth metaType) where
+instance IdleCircuit (PacketStream dom dataWidth meta) where
   idleBwd _ = pure (PacketStreamS2M False)
   idleFwd _ = pure Nothing
 
-instance Backpressure (PacketStream dom dataWidth metaType) where
+instance Backpressure (PacketStream dom dataWidth meta) where
   boolsToBwd _ = fromList_lazy . fmap PacketStreamS2M
 
-instance DfConv.DfConv (PacketStream dom dataWidth metaType) where
-  type Dom (PacketStream dom dataWidth metaType) = dom
-  type FwdPayload (PacketStream dom dataWidth metaType) = PacketStreamM2S dataWidth metaType
+instance DfConv.DfConv (PacketStream dom dataWidth meta) where
+  type Dom (PacketStream dom dataWidth meta) = dom
+  type FwdPayload (PacketStream dom dataWidth meta) = PacketStreamM2S dataWidth meta
 
   toDfCircuit _ = fromSignals go
    where
@@ -122,13 +126,13 @@ instance DfConv.DfConv (PacketStream dom dataWidth metaType) where
 
 instance
   (KnownDomain dom) =>
-  Simulate (PacketStream dom dataWidth metaType)
+  Simulate (PacketStream dom dataWidth meta)
   where
   type
-    SimulateFwdType (PacketStream dom dataWidth metaType) =
-      [Maybe (PacketStreamM2S dataWidth metaType)]
-  type SimulateBwdType (PacketStream dom dataWidth metaType) = [PacketStreamS2M]
-  type SimulateChannels (PacketStream dom dataWidth metaType) = 1
+    SimulateFwdType (PacketStream dom dataWidth meta) =
+      [Maybe (PacketStreamM2S dataWidth meta)]
+  type SimulateBwdType (PacketStream dom dataWidth meta) = [PacketStreamS2M]
+  type SimulateChannels (PacketStream dom dataWidth meta) = 1
 
   simToSigFwd _ = fromList_lazy
   simToSigBwd _ = fromList_lazy
@@ -141,11 +145,11 @@ instance
 
 instance
   (KnownDomain dom) =>
-  Drivable (PacketStream dom dataWidth metaType)
+  Drivable (PacketStream dom dataWidth meta)
   where
   type
-    ExpectType (PacketStream dom dataWidth metaType) =
-      [PacketStreamM2S dataWidth metaType]
+    ExpectType (PacketStream dom dataWidth meta) =
+      [PacketStreamM2S dataWidth meta]
 
   toSimulateType Proxy = fmap Just
   fromSimulateType Proxy = Maybe.catMaybes
@@ -159,14 +163,14 @@ instance
 
 instance
   ( KnownNat dataWidth
-  , NFDataX metaType
-  , NFData metaType
-  , ShowX metaType
-  , Show metaType
-  , Eq metaType
+  , NFDataX meta
+  , NFData meta
+  , ShowX meta
+  , Show meta
+  , Eq meta
   , KnownDomain dom
   ) =>
-  Test (PacketStream dom dataWidth metaType)
+  Test (PacketStream dom dataWidth meta)
   where
   expectN Proxy options sampled =
     expectN (Proxy @(Df.Df dom _)) options
@@ -175,27 +179,47 @@ instance
 
 -- | Circuit to convert a CSignal into a PacketStream. This is unsafe, because it drops backpressure.
 unsafeToPacketStream ::
-  Circuit (CSignal dom (Maybe (PacketStreamM2S n a))) (PacketStream dom n a)
+  forall dom dataWidth meta.
+  Circuit
+    (CSignal dom (Maybe (PacketStreamM2S dataWidth meta)))
+    (PacketStream dom dataWidth meta)
 unsafeToPacketStream = Circuit (\(fwdInS, _) -> (pure (), fwdInS))
 
 -- | Converts a PacketStream into a CSignal.
 fromPacketStream ::
-  forall dom n meta.
+  forall dom dataWidth meta.
   (HiddenClockResetEnable dom) =>
-  Circuit (PacketStream dom n meta) (CSignal dom (Maybe (PacketStreamM2S n meta)))
-fromPacketStream = forceResetSanity |> Circuit (\(inFwd, _) -> (pure (PacketStreamS2M True), inFwd))
+  Circuit
+    (PacketStream dom dataWidth meta)
+    (CSignal dom (Maybe (PacketStreamM2S dataWidth meta)))
+fromPacketStream = forceResetSanity |> Circuit (\(fwdIn, _) -> (pure (PacketStreamS2M True), fwdIn))
 
-{- | Force a /nack/ on the backward channel and /Nothing/ on the forward
+-- | A circuit that sets `_abort` upon backpressure from the forward circuit.
+abortOnBackPressureC ::
+  forall (dom :: Domain) (dataWidth :: Nat) (meta :: Type).
+  (HiddenClockResetEnable dom) =>
+  (KnownNat dataWidth) =>
+  (NFDataX meta) =>
+  Circuit
+    (CSignal dom (Maybe (PacketStreamM2S dataWidth meta)))
+    (PacketStream dom dataWidth meta)
+abortOnBackPressureC = Circuit $ \(fwdInS, bwdInS) -> (pure (), go <$> bundle (fwdInS, bwdInS))
+ where
+  go (fwdIn, bwdIn) = fmap (\pkt -> pkt{_abort = _abort pkt || not (_ready bwdIn)}) fwdIn
+
+{- |
+Force a /nack/ on the backward channel and /Nothing/ on the forward
 channel if reset is asserted.
 -}
 forceResetSanity ::
-  forall dom n meta.
+  forall dom dataWidth meta.
   (HiddenClockResetEnable dom) =>
-  Circuit (PacketStream dom n meta) (PacketStream dom n meta)
+  Circuit (PacketStream dom dataWidth meta) (PacketStream dom dataWidth meta)
 forceResetSanity = forceResetSanityGeneric
 
-{- | Filter a packet stream based on its metadata,
-  with the predicate wrapped in a @Signal@.
+{- |
+Filter a packet stream based on its metadata,
+with the predicate wrapped in a @Signal@.
 -}
 filterMetaS ::
   -- | Predicate which specifies whether to keep a fragment based on its metadata,
@@ -216,13 +240,14 @@ filterMeta ::
   Circuit (PacketStream dom dataWidth meta) (PacketStream dom dataWidth meta)
 filterMeta p = filterMetaS (pure p)
 
-{- | Map a function on the metadata of a packet stream,
-  with the function wrapped in a @Signal@.
+{- |
+Map a function on the metadata of a packet stream,
+with the function wrapped in a @Signal@.
 -}
 mapMetaS ::
   -- | Function to apply on the metadata, wrapped in a @Signal@
-  Signal dom (a -> b) ->
-  Circuit (PacketStream dom dataWidth a) (PacketStream dom dataWidth b)
+  Signal dom (metaIn -> metaOut) ->
+  Circuit (PacketStream dom dataWidth metaIn) (PacketStream dom dataWidth metaOut)
 mapMetaS fS = Circuit $ \(fwdIn, bwdIn) -> (bwdIn, go <$> bundle (fwdIn, fS))
  where
   go (inp, f) = (\inPkt -> inPkt{_meta = f (_meta inPkt)}) <$> inp
@@ -230,13 +255,11 @@ mapMetaS fS = Circuit $ \(fwdIn, bwdIn) -> (bwdIn, go <$> bundle (fwdIn, fS))
 -- | Map a function on the metadata of a packet stream.
 mapMeta ::
   -- | Function to apply on the metadata
-  (a -> b) ->
-  Circuit (PacketStream dom dataWidth a) (PacketStream dom dataWidth b)
+  (metaIn -> metaOut) ->
+  Circuit (PacketStream dom dataWidth metaIn) (PacketStream dom dataWidth metaOut)
 mapMeta f = mapMetaS (pure f)
 
-{- |
-Sets data bytes that are not enabled in a @PacketStream@ to @0x00@.
--}
+-- | Sets data bytes that are not enabled in a @PacketStream@ to @0x00@.
 zeroOutInvalidBytesC ::
   forall (dom :: Domain) (dataWidth :: Nat) (meta :: Type).
   (KnownNat dataWidth) =>
