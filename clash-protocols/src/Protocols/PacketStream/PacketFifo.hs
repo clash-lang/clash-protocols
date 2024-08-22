@@ -7,51 +7,51 @@ Optimized Store and forward FIFO circuit for packet streams.
 -}
 module Protocols.PacketStream.PacketFifo (
   packetFifoC,
-  overflowDropPacketFifoC,
+  FullMode (..),
 ) where
 
 import Clash.Prelude
 
-import Protocols (CSignal, Circuit (..), fromSignals, (|>))
+import Protocols
 import Protocols.PacketStream.Base
 
 import Data.Maybe
 import Data.Maybe.Extra
 
-type PacketStreamContent (dataWidth :: Nat) (metaType :: Type) =
+type PacketStreamContent (dataWidth :: Nat) (meta :: Type) =
   (Vec dataWidth (BitVector 8), Maybe (Index dataWidth))
 
 toPacketStreamContent ::
-  PacketStreamM2S dataWidth metaType -> PacketStreamContent dataWidth metaType
+  PacketStreamM2S dataWidth meta -> PacketStreamContent dataWidth meta
 toPacketStreamContent PacketStreamM2S{_data = d, _last = l, _meta = _, _abort = _} = (d, l)
 
 toPacketStreamM2S ::
-  PacketStreamContent dataWidth metaType -> metaType -> PacketStreamM2S dataWidth metaType
+  PacketStreamContent dataWidth meta -> meta -> PacketStreamM2S dataWidth meta
 toPacketStreamM2S (d, l) m = PacketStreamM2S d l m False
 
 packetFifoImpl ::
   forall
     (dom :: Domain)
     (dataWidth :: Nat)
-    (metaType :: Type)
+    (meta :: Type)
     (contentSizeBits :: Nat)
     (metaSizeBits :: Nat).
   (HiddenClockResetEnable dom) =>
   (KnownNat dataWidth) =>
   (1 <= contentSizeBits) =>
   (1 <= metaSizeBits) =>
-  (NFDataX metaType) =>
+  (NFDataX meta) =>
   -- | Depth of the content of the packet buffer, this is equal to 2^contentSizeBits
   SNat contentSizeBits ->
   -- | Depth of the content of the meta buffer, this is equal to 2^metaSizeBits
   SNat metaSizeBits ->
   -- | Input packetStream
-  ( Signal dom (Maybe (PacketStreamM2S dataWidth metaType))
+  ( Signal dom (Maybe (PacketStreamM2S dataWidth meta))
   , Signal dom PacketStreamS2M
   ) ->
   -- | Output CSignal s
   ( Signal dom PacketStreamS2M
-  , Signal dom (Maybe (PacketStreamM2S dataWidth metaType))
+  , Signal dom (Maybe (PacketStreamM2S dataWidth meta))
   )
 packetFifoImpl SNat SNat (fwdIn, bwdIn) = (PacketStreamS2M . not <$> fullBuffer, fwdOut)
  where
@@ -118,70 +118,47 @@ packetFifoImpl SNat SNat (fwdIn, bwdIn) = (PacketStreamS2M . not <$> fullBuffer,
   abortIn = maybe False _abort <$> fwdIn
   nextPacketIn = lastWordIn .&&. writeEnable
 
--- | A circuit that sends an abort forward if there is backpressure from the forward circuit
-abortOnBackPressure ::
-  forall (dom :: Domain) (dataWidth :: Nat) (metaType :: Type).
-  (HiddenClockResetEnable dom) =>
-  (KnownNat dataWidth) =>
-  (NFDataX metaType) =>
-  ( Signal dom (Maybe (PacketStreamM2S dataWidth metaType))
-  , Signal dom PacketStreamS2M
-  ) ->
-  -- | Does not give backpressure, sends an abort forward instead
-  ( Signal dom ()
-  , Signal dom (Maybe (PacketStreamM2S dataWidth metaType))
-  )
-abortOnBackPressure (fwdInS, bwdInS) = (pure (), go <$> bundle (fwdInS, bwdInS))
- where
-  go (fwdIn, bwdIn) = fmap (\pkt -> pkt{_abort = _abort pkt || not (_ready bwdIn)}) fwdIn
+{- |
+Packet buffer, a circuit which stores words in a buffer until the packet is complete.
+Once a packet is complete it will send the entire packet out at once without stalls.
+If a transfer in a packet has `_abort` set to true, the packetBuffer will drop the entire packet.
 
-{- | Packet buffer, a circuit which stores words in a buffer until the packet is complete
-once a packet is complete it will send the entire packet out at once without stalls.
-If a word in a packet has `_abort` set to true, the packetBuffer will drop the entire packet.
-If a packet is equal to or larger than 2^sizeBits-1, the packetBuffer will have a deadlock, this should be avoided!
+__UNSAFE__: if `FullMode` is set to @Backpressure@ and a packet containing
+@>= 2^contentSizeBits-1@ transfers is loaded into the FIFO, it will deadlock.
 -}
 packetFifoC ::
   forall
     (dom :: Domain)
     (dataWidth :: Nat)
-    (metaType :: Type)
+    (meta :: Type)
     (contentSizeBits :: Nat)
     (metaSizeBits :: Nat).
   (HiddenClockResetEnable dom) =>
   (KnownNat dataWidth) =>
   (1 <= contentSizeBits) =>
   (1 <= metaSizeBits) =>
-  (NFDataX metaType) =>
-  -- | Depth of the content of the packet buffer, this is equal to 2^contentSizeBits
+  (NFDataX meta) =>
+  -- | The FIFO can store @2^contentSizeBits@ transfers
   SNat contentSizeBits ->
-  -- | Depth for the meta of the packet buffer, this is equal to 2^metaSizeBits.
-  -- This can usually be smaller than contentSizeBits as for every packet we only need a single meta entry, while we usually have many words.
+  -- | The FIFO can store @2^metaSizeBits@ packets
   SNat metaSizeBits ->
-  Circuit (PacketStream dom dataWidth metaType) (PacketStream dom dataWidth metaType)
-packetFifoC cSizeBits mSizeBits = forceResetSanity |> fromSignals (packetFifoImpl cSizeBits mSizeBits)
+  -- | Specifies the behaviour of the FIFO when it is full
+  FullMode ->
+  Circuit (PacketStream dom dataWidth meta) (PacketStream dom dataWidth meta)
+packetFifoC cSizeBits mSizeBits mode = case mode of
+  Backpressure ->
+    forceResetSanity
+      |> fromSignals (packetFifoImpl cSizeBits mSizeBits)
+  Drop ->
+    fromPacketStream
+      |> abortOnBackPressureC
+      |> forceResetSanity
+      |> fromSignals (packetFifoImpl cSizeBits mSizeBits)
 
--- | A packet buffer that drops packets when it is full, instead of giving backpressure, see packetBufferC for more detailed explanation
-overflowDropPacketFifoC ::
-  forall
-    (dom :: Domain)
-    (dataWidth :: Nat)
-    (metaType :: Type)
-    (contentSizeBits :: Nat)
-    (metaSizeBits :: Nat).
-  (HiddenClockResetEnable dom) =>
-  (KnownNat dataWidth) =>
-  (1 <= contentSizeBits) =>
-  (1 <= metaSizeBits) =>
-  (NFDataX metaType) =>
-  SNat contentSizeBits ->
-  SNat metaSizeBits ->
-  Circuit
-    (CSignal dom (Maybe (PacketStreamM2S dataWidth metaType)))
-    (PacketStream dom dataWidth metaType)
-overflowDropPacketFifoC cSizeBits mSizeBits = backPressureC |> packetFifoC cSizeBits mSizeBits
- where
-  backPressureC ::
-    Circuit
-      (CSignal dom (Maybe (PacketStreamM2S dataWidth metaType)))
-      (PacketStream dom dataWidth metaType)
-  backPressureC = fromSignals abortOnBackPressure
+-- | Specifies the behaviour of `packetFifoC` when it is full.
+data FullMode
+  = -- | Assert backpressure when the FIFO is full.
+    Backpressure
+  | -- | Drop new packets when the FIFO is full.
+    --   The FIFO never asserts backpressure.
+    Drop
