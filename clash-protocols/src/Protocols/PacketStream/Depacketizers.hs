@@ -191,8 +191,8 @@ depacketizerT toMetaOut st@Forward{..} (Just pkt@PacketStreamM2S{..}, bwdIn) = (
 depacketizerT _ st (Nothing, bwdIn) = (st, (bwdIn, Nothing))
 
 {- |
-Reads bytes at the start of each packet into @_meta@. If a packet contains
-less valid bytes than @headerBytes + 1@, it does not send out anything.
+Reads bytes at the start of each packet into `_meta`. If a packet contains
+less valid bytes than @headerBytes + 1@, it will silently drop that packet.
 
 If @dataWidth@ divides @headerBytes@, this component runs at full throughput.
 Otherwise, it gives backpressure for one clock cycle per packet larger than
@@ -214,7 +214,7 @@ depacketizerC ::
   (KnownNat dataWidth) =>
   (1 <= headerBytes) =>
   (1 <= dataWidth) =>
-  -- | Used to compute final metadata of outgoing packets from header and incoming metadata
+  -- |  Mapping from the parsed header and input `_meta` to the output `_meta`
   (header -> metaIn -> metaOut) ->
   Circuit (PacketStream dom dataWidth metaIn) (PacketStream dom dataWidth metaOut)
 depacketizerC toMetaOut = forceResetSanity |> fromSignals ckt
@@ -345,7 +345,7 @@ depacketizeToDfC ::
   (1 <= headerBytes) =>
   (1 <= dataWidth) =>
   (BitSize header ~ headerBytes * 8) =>
-  -- | function that transforms the given meta + parsed header to the output Df
+  -- | Mapping from the parsed header and input `_meta` to the `Df` output
   (header -> meta -> a) ->
   Circuit (PacketStream dom dataWidth meta) (Df dom a)
 depacketizeToDfC toOut = forceResetSanity |> fromSignals ckt
