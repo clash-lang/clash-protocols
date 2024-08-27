@@ -1,32 +1,21 @@
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NumericUnderscores #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Tests.Protocols.PacketStream.AsyncFifo where
 
--- base
-import Prelude
+import Clash.Prelude
 
--- clash-prelude
-import Clash.Prelude as C
-
--- hedgehog
-import Hedgehog
+import Hedgehog (Property)
 import qualified Hedgehog.Range as Range
 
--- tasty
-import Test.Tasty
+import Test.Tasty (TestTree, localOption, mkTimeout)
 import Test.Tasty.Hedgehog (HedgehogTestLimit (HedgehogTestLimit))
 import Test.Tasty.Hedgehog.Extra (testProperty)
 import Test.Tasty.TH (testGroupGenerator)
 
--- clash-protocols
 import Protocols.Hedgehog
-import Protocols.PacketStream.AsyncFifo
-
--- tests
-import Tests.Protocols.PacketStream.Base
+import Protocols.PacketStream.AsyncFifo (asyncFifoC)
+import Protocols.PacketStream.Hedgehog
 
 createDomain
   vSystem
@@ -57,10 +46,10 @@ clk125 = clockGen
 -- Assert the reset for a different amount of cycles in each domain
 -- to properly test the async fifo.
 rst50 :: Reset TestDom50
-rst50 = resetGenN d50
+rst50 = resetGenN d30
 
 rst125 :: Reset TestDom125
-rst125 = resetGenN d60
+rst125 = resetGenN d40
 
 en50 :: Enable TestDom50
 en50 = enableGen

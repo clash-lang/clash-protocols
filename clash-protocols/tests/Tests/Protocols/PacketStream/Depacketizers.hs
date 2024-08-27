@@ -2,108 +2,25 @@
 {-# LANGUAGE NumericUnderscores #-}
 
 module Tests.Protocols.PacketStream.Depacketizers (
-  depacketizerModel,
-  depacketizeToDfModel,
   tests,
 ) where
 
--- base
-import qualified Data.List as L
-import Prelude
-
--- clash
 import Clash.Prelude
-import Clash.Sized.Vector (unsafeFromList)
 
--- hedgehog
 import Hedgehog
 import qualified Hedgehog.Range as Range
 
--- tasty
 import Test.Tasty
 import Test.Tasty.Hedgehog (HedgehogTestLimit (HedgehogTestLimit))
 
 import Test.Tasty.Hedgehog.Extra (testProperty)
 import Test.Tasty.TH (testGroupGenerator)
 
--- clash-protocols
-import Protocols.Hedgehog
-import Protocols.PacketStream.Base
-
--- tests
 import Protocols
+import Protocols.Hedgehog
 import Protocols.PacketStream (depacketizeToDfC, depacketizerC)
-import Tests.Protocols.PacketStream.Base
-
--- | Model of the generic `depacketizerC`.
-depacketizerModel ::
-  forall
-    (dataWidth :: Nat)
-    (headerBytes :: Nat)
-    (metaIn :: Type)
-    (metaOut :: Type)
-    (header :: Type).
-  ( KnownNat dataWidth
-  , KnownNat headerBytes
-  , 1 <= dataWidth
-  , 1 <= headerBytes
-  , BitPack header
-  , BitSize header ~ headerBytes * 8
-  ) =>
-  (header -> metaIn -> metaOut) ->
-  [PacketStreamM2S dataWidth metaIn] ->
-  [PacketStreamM2S dataWidth metaOut]
-depacketizerModel toMetaOut ps = L.concat dataWidthPackets
- where
-  hdrbytes = natToNum @headerBytes
-
-  parseHdr ::
-    ([PacketStreamM2S 1 metaIn], [PacketStreamM2S 1 metaIn]) -> [PacketStreamM2S 1 metaOut]
-  parseHdr (hdrF, fwdF) = fmap (\f -> f{_meta = metaOut}) fwdF
-   where
-    hdr = bitCoerce $ unsafeFromList @headerBytes $ _data <$> hdrF
-    metaOut = toMetaOut hdr (_meta $ L.head fwdF)
-
-  bytePackets :: [[PacketStreamM2S 1 metaIn]]
-  bytePackets =
-    L.filter (\fs -> L.length fs > hdrbytes) $
-      L.concatMap chopPacket . smearAbort <$> chunkByPacket ps
-
-  parsedPackets :: [[PacketStreamM2S 1 metaOut]]
-  parsedPackets = parseHdr . L.splitAt hdrbytes <$> bytePackets
-
-  dataWidthPackets :: [[PacketStreamM2S dataWidth metaOut]]
-  dataWidthPackets = fmap chunkToPacket . chopBy (natToNum @dataWidth) <$> parsedPackets
-
--- | Model of the generic `depacketizeToDfC`.
-depacketizeToDfModel ::
-  forall
-    (dataWidth :: Nat)
-    (headerBytes :: Nat)
-    (meta :: Type)
-    (a :: Type)
-    (header :: Type).
-  ( KnownNat dataWidth
-  , KnownNat headerBytes
-  , 1 <= dataWidth
-  , 1 <= headerBytes
-  , BitPack header
-  , BitSize header ~ headerBytes * 8
-  ) =>
-  (header -> meta -> a) ->
-  [PacketStreamM2S dataWidth meta] ->
-  [a]
-depacketizeToDfModel toOut ps = parseHdr <$> bytePackets
- where
-  hdrbytes = natToNum @headerBytes
-
-  parseHdr :: [PacketStreamM2S 1 meta] -> a
-  parseHdr hdrF = toOut (bitCoerce $ unsafeFromList @headerBytes $ _data <$> hdrF) (_meta $ L.head hdrF)
-
-  bytePackets :: [[PacketStreamM2S 1 meta]]
-  bytePackets =
-    L.filter (\fs -> L.length fs >= hdrbytes) $
-      L.concatMap chopPacket <$> chunkByPacket (dropAbortedPackets ps)
+import Protocols.PacketStream.Base
+import Protocols.PacketStream.Hedgehog
 
 {- | Test the depacketizer with varying datawidth and number of bytes in the header,
   with metaIn = () and toMetaOut = const.

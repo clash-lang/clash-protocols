@@ -2,97 +2,27 @@
 {-# LANGUAGE NumericUnderscores #-}
 
 module Tests.Protocols.PacketStream.Packetizers (
-  packetizerModel,
-  packetizeFromDfModel,
   tests,
 ) where
 
--- base
-import qualified Data.List as L
-import Prelude
-
--- clash
+import Clash.Hedgehog.Sized.Vector (genVec)
 import Clash.Prelude
 
--- hedgehog
 import Hedgehog
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
--- tasty
 import Test.Tasty
 import Test.Tasty.Hedgehog (HedgehogTestLimit (HedgehogTestLimit))
-
 import Test.Tasty.Hedgehog.Extra (testProperty)
 import Test.Tasty.TH (testGroupGenerator)
 
--- clash-protocols
 import Protocols
 import qualified Protocols.Df as Df
 import Protocols.Hedgehog
-import Protocols.PacketStream.Base
-
--- tests
 import Protocols.PacketStream (packetizeFromDfC, packetizerC)
-import Tests.Protocols.PacketStream.Base
-
--- | Model of the generic `packetizerC`.
-packetizerModel ::
-  forall
-    (dataWidth :: Nat)
-    (headerBytes :: Nat)
-    (metaIn :: Type)
-    (header :: Type)
-    (metaOut :: Type).
-  (KnownNat dataWidth) =>
-  (KnownNat headerBytes) =>
-  (1 <= dataWidth) =>
-  (1 <= headerBytes) =>
-  (BitPack header) =>
-  (BitSize header ~ headerBytes * 8) =>
-  (metaIn -> metaOut) ->
-  (metaIn -> header) ->
-  [PacketStreamM2S dataWidth metaIn] ->
-  [PacketStreamM2S dataWidth metaOut]
-packetizerModel toMetaOut toHeader ps = L.concatMap (upConvert . prependHdr) bytePackets
- where
-  prependHdr :: [PacketStreamM2S 1 metaIn] -> [PacketStreamM2S 1 metaOut]
-  prependHdr fragments = hdr L.++ L.map (\f -> f{_meta = metaOut}) fragments
-   where
-    h = L.head fragments
-    metaOut = toMetaOut (_meta h)
-    hdr = L.map go (toList $ bitCoerce (toHeader (_meta h)))
-    go byte = PacketStreamM2S (singleton byte) Nothing metaOut (_abort h)
-
-  bytePackets :: [[PacketStreamM2S 1 metaIn]]
-  bytePackets = downConvert . smearAbort <$> chunkByPacket ps
-
--- | Model of the generic `packetizeFromDfC`.
-packetizeFromDfModel ::
-  forall
-    (dataWidth :: Nat)
-    (headerBytes :: Nat)
-    (a :: Type)
-    (header :: Type)
-    (metaOut :: Type).
-  (KnownNat dataWidth) =>
-  (KnownNat headerBytes) =>
-  (1 <= dataWidth) =>
-  (1 <= headerBytes) =>
-  (BitPack header) =>
-  (BitSize header ~ headerBytes * 8) =>
-  (a -> metaOut) ->
-  (a -> header) ->
-  [a] ->
-  [PacketStreamM2S dataWidth metaOut]
-packetizeFromDfModel toMetaOut toHeader = L.concatMap (upConvert . packetize)
- where
-  packetize :: a -> [PacketStreamM2S 1 metaOut]
-  packetize d =
-    fullPackets $
-      L.map
-        (\byte -> PacketStreamM2S (byte :> Nil) Nothing (toMetaOut d) False)
-        (toList $ bitCoerce (toHeader d))
+import Protocols.PacketStream.Base
+import Protocols.PacketStream.Hedgehog
 
 {- | Test the packetizer with varying datawidth and number of bytes in the header,
   with metaOut = ().
@@ -114,7 +44,7 @@ packetizerPropertyGenerator SNat SNat =
     (exposeClockResetEnable model)
     (exposeClockResetEnable ckt)
  where
-  model = packetizerModel (const ()) id
+  model = packetize (const ()) id
   ckt ::
     (HiddenClockResetEnable System) =>
     Circuit
@@ -158,7 +88,7 @@ packetizeFromDfPropertyGenerator SNat SNat =
     (exposeClockResetEnable model)
     (exposeClockResetEnable ckt)
  where
-  model = packetizeFromDfModel (const ()) id
+  model = packetizeFromDf (const ()) id
   ckt ::
     (HiddenClockResetEnable System) =>
     Circuit (Df.Df System (Vec headerBytes (BitVector 8))) (PacketStream System dataWidth ())
