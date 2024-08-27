@@ -1211,7 +1211,7 @@ fanout ::
   , FwdPayload dfA ~ FwdPayload dfB
   , NFDataX (FwdPayload dfA)
   , KnownNat numB
-  , numB ~ (decNumB + 1)
+  , 1 <= numB
   ) =>
   Proxy dfA ->
   Proxy dfB ->
