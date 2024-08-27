@@ -22,8 +22,8 @@ module Protocols.PacketStream.Hedgehog (
   upConvert,
   depacketizerModel,
   depacketizeToDfModel,
-  packetize,
-  packetizeFromDf,
+  packetizerModel,
+  packetizeFromDfModel,
 
   -- * Hedgehog generators
   AbortMode (..),
@@ -244,7 +244,7 @@ depacketizeToDfModel toOut ps = L.map parseHdr bytePackets
       (chunkByPacket $ downConvert (dropAbortedPackets ps))
 
 -- | Model of the generic `Protocols.PacketStream.packetizerC`.
-packetize ::
+packetizerModel ::
   forall
     (dataWidth :: C.Nat)
     (headerBytes :: C.Nat)
@@ -261,7 +261,7 @@ packetize ::
   (metaIn -> header) ->
   [PacketStreamM2S dataWidth metaIn] ->
   [PacketStreamM2S dataWidth metaOut]
-packetize toMetaOut toHeader ps = L.concatMap (upConvert . prependHdr) bytePackets
+packetizerModel toMetaOut toHeader ps = L.concatMap (upConvert . prependHdr) bytePackets
  where
   prependHdr :: [PacketStreamM2S 1 metaIn] -> [PacketStreamM2S 1 metaOut]
   prependHdr fragments = hdr L.++ L.map (\f -> f{_meta = metaOut}) fragments
@@ -275,7 +275,7 @@ packetize toMetaOut toHeader ps = L.concatMap (upConvert . prependHdr) bytePacke
   bytePackets = downConvert . smearAbort <$> chunkByPacket ps
 
 -- | Model of the generic `Protocols.PacketStream.packetizeFromDfC`.
-packetizeFromDf ::
+packetizeFromDfModel ::
   forall
     (dataWidth :: C.Nat)
     (headerBytes :: C.Nat)
@@ -292,7 +292,7 @@ packetizeFromDf ::
   (a -> header) ->
   [a] ->
   [PacketStreamM2S dataWidth metaOut]
-packetizeFromDf toMetaOut toHeader = L.concatMap (upConvert . dfToPacket)
+packetizeFromDfModel toMetaOut toHeader = L.concatMap (upConvert . dfToPacket)
  where
   dfToPacket :: a -> [PacketStreamM2S 1 metaOut]
   dfToPacket d =
