@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# OPTIONS_HADDOCK hide #-}
 
@@ -6,18 +7,29 @@
 Definitions and instances of the PacketStream protocol
 -}
 module Protocols.PacketStream.Base (
+  -- * Protocol definition
   PacketStreamM2S (..),
   PacketStreamS2M (..),
   PacketStream,
-  abortOnBackPressureC,
+
+  -- * CSignal conversion
   unsafeToPacketStream,
   fromPacketStream,
+
+  -- * Basic operations on the PacketStream protocol
+  abortOnBackPressureC,
+  fanout,
   forceResetSanity,
+  registerBwd,
+  registerFwd,
+  void,
+  zeroOutInvalidBytesC,
+
+  -- * Operations on metadata
   filterMetaS,
   filterMeta,
   mapMetaS,
   mapMeta,
-  zeroOutInvalidBytesC,
 ) where
 
 import Clash.Prelude hiding (sample)
@@ -64,6 +76,10 @@ data PacketStreamM2S (dataWidth :: Nat) (meta :: Type) = PacketStreamM2S
   }
   deriving (Eq, Generic, ShowX, Show, NFData, Bundle, Functor)
 
+-- | Used by circuit-notation to create an empty stream
+instance Default (Maybe (PacketStreamM2S dataWidth meta)) where
+  def = Nothing
+
 {- |
 Data sent from the subordinate to manager.
 
@@ -74,6 +90,10 @@ newtype PacketStreamS2M = PacketStreamS2M
   -- ^ Iff True, the subordinate is ready to receive data.
   }
   deriving (Eq, Generic, ShowX, Show, NFData, Bundle, NFDataX)
+
+-- | Used by circuit-notation to create a sink that always acknowledges
+instance Default PacketStreamS2M where
+  def = PacketStreamS2M True
 
 {- |
 Simple valid-ready streaming protocol for transferring packets between components.
@@ -278,3 +298,50 @@ zeroOutInvalidBytesC = Circuit $ \(fwdIn, bwdIn) -> (bwdIn, fmap (go <$>) fwdIn)
         -- The first byte is always valid, so we only map over the rest.
         (a, b') = splitAt d1 (_data transferIn)
         b = imap (\(j :: Index (dataWidth - 1)) byte -> if resize j < i then byte else 0x00) b'
+
+{- |
+Copy data of a single `PacketStream` to multiple. LHS will only receive
+an acknowledgement when all RHS receivers have acknowledged data.
+-}
+fanout ::
+  forall n dataWidth meta dom.
+  (HiddenClockResetEnable dom) =>
+  (KnownNat n) =>
+  (KnownNat dataWidth) =>
+  (1 <= n) =>
+  (NFDataX meta) =>
+  Circuit
+    (PacketStream dom dataWidth meta)
+    (Vec n (PacketStream dom dataWidth meta))
+fanout = DfConv.fanout Proxy Proxy
+
+{- |
+Place register on /forward/ part of a circuit.
+This adds combinational delay on the /backward/ path.
+-}
+registerFwd ::
+  forall dataWidth meta dom.
+  (HiddenClockResetEnable dom) =>
+  (KnownNat dataWidth) =>
+  (NFDataX meta) =>
+  Circuit (PacketStream dom dataWidth meta) (PacketStream dom dataWidth meta)
+registerFwd = DfConv.registerFwd Proxy Proxy
+
+{- |
+Place register on /backward/ part of a circuit.
+This adds combinational delay on the /forward/ path.
+-}
+registerBwd ::
+  forall dataWidth meta dom.
+  (HiddenClockResetEnable dom) =>
+  (KnownNat dataWidth) =>
+  (NFDataX meta) =>
+  Circuit (PacketStream dom dataWidth meta) (PacketStream dom dataWidth meta)
+registerBwd = DfConv.registerBwd Proxy Proxy
+
+-- | Ignore incoming data.
+void ::
+  forall dataWidth meta dom.
+  (HiddenClockResetEnable dom) =>
+  Circuit (PacketStream dom dataWidth meta) ()
+void = DfConv.void Proxy

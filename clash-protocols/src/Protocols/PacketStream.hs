@@ -16,12 +16,24 @@ Apart from the protocol definition, some components, all of which are generic in
 -}
 module Protocols.PacketStream (
   module Protocols.PacketStream.Base,
+
+  -- * Fifos
   module Protocols.PacketStream.PacketFifo,
   module Protocols.PacketStream.AsyncFifo,
+
+  -- * Converters
   module Protocols.PacketStream.Converters,
+
+  -- * Delay components
   module Protocols.PacketStream.Delay,
+
+  -- * Depacketizers
   module Protocols.PacketStream.Depacketizers,
+
+  -- * Packetizers
   module Protocols.PacketStream.Packetizers,
+
+  -- * Routing components
   module Protocols.PacketStream.Routing,
 )
 where
