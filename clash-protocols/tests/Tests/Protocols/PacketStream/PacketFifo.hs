@@ -1,52 +1,38 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NumericUnderscores #-}
-{-# LANGUAGE RecordWildCards #-}
 
-module Tests.Protocols.PacketStream.PacketFifo where
+module Tests.Protocols.PacketStream.PacketFifo (
+  tests,
+) where
 
--- base
+import Clash.Prelude
+
 import Data.Int (Int16)
-import Prelude
+import qualified Data.List as L
 
--- clash-prelude
-import Clash.Prelude hiding (drop, take, undefined, (++))
-import qualified Clash.Prelude as C
-
--- hedgehog
 import Hedgehog as H
 import qualified Hedgehog.Range as Range
 
--- tasty
 import Test.Tasty
 import Test.Tasty.Hedgehog (HedgehogTestLimit (HedgehogTestLimit))
 import Test.Tasty.Hedgehog.Extra (testProperty)
 import Test.Tasty.TH (testGroupGenerator)
 
--- clash-protocols
 import Protocols
 import Protocols.Hedgehog
 import Protocols.PacketStream.Base
+import Protocols.PacketStream.Hedgehog
 import Protocols.PacketStream.PacketFifo
-
--- tests
-import Tests.Protocols.PacketStream.Base as U
-
-isSubsequenceOf :: (Eq a) => [a] -> [a] -> Bool
-isSubsequenceOf [] _ = True
-isSubsequenceOf _ [] = False
-isSubsequenceOf (x : xs) (y : ys)
-  | x == y = isSubsequenceOf xs ys
-  | otherwise = isSubsequenceOf xs (y : ys)
 
 -- | test for id and proper dropping of aborted packets
 prop_packetFifo_id :: Property
 prop_packetFifo_id =
   idWithModelSingleDomain
-    @C.System
+    @System
     defExpectOptions{eoSampleMax = 1000, eoStopAfterEmpty = 1000}
     (genValidPackets (Range.linear 1 30) (Range.linear 1 10) Abort)
-    (C.exposeClockResetEnable dropAbortedPackets)
-    (C.exposeClockResetEnable ckt)
+    (exposeClockResetEnable dropAbortedPackets)
+    (exposeClockResetEnable ckt)
  where
   ckt ::
     (HiddenClockResetEnable System) =>
@@ -57,11 +43,11 @@ prop_packetFifo_id =
 prop_packetFifo_small_buffer_id :: Property
 prop_packetFifo_small_buffer_id =
   idWithModelSingleDomain
-    @C.System
+    @System
     defExpectOptions{eoSampleMax = 1000, eoStopAfterEmpty = 1000}
     (genValidPackets (Range.linear 1 10) (Range.linear 1 30) NoAbort)
-    (C.exposeClockResetEnable dropAbortedPackets)
-    (C.exposeClockResetEnable ckt)
+    (exposeClockResetEnable dropAbortedPackets)
+    (exposeClockResetEnable ckt)
  where
   ckt ::
     (HiddenClockResetEnable System) =>
@@ -87,7 +73,7 @@ prop_packetFifo_no_gaps = property $ do
       cfg = SimulationConfig 1 (2 * packetSize) False
       cktResult = simulateC ckt cfg (Just <$> packets)
 
-  assert $ noGaps $ take (5 * maxInputSize) cktResult
+  assert $ noGaps $ L.take (5 * maxInputSize) cktResult
  where
   noGaps :: [Maybe (PacketStreamM2S 4 Int16)] -> Bool
   noGaps (Just (PacketStreamM2S{_last = Nothing}) : Nothing : _) = False
@@ -98,11 +84,11 @@ prop_packetFifo_no_gaps = property $ do
 prop_overFlowDrop_packetFifo_id :: Property
 prop_overFlowDrop_packetFifo_id =
   idWithModelSingleDomain
-    @C.System
+    @System
     defExpectOptions{eoSampleMax = 2000, eoStopAfterEmpty = 1000}
     (genValidPackets (Range.linear 1 30) (Range.linear 1 10) Abort)
-    (C.exposeClockResetEnable dropAbortedPackets)
-    (C.exposeClockResetEnable ckt)
+    (exposeClockResetEnable dropAbortedPackets)
+    (exposeClockResetEnable ckt)
  where
   ckt ::
     (HiddenClockResetEnable System) =>
@@ -113,12 +99,12 @@ prop_overFlowDrop_packetFifo_id =
 prop_overFlowDrop_packetFifo_drop :: Property
 prop_overFlowDrop_packetFifo_drop =
   idWithModelSingleDomain
-    @C.System
+    @System
     defExpectOptions{eoSampleMax = 1000, eoStopAfterEmpty = 1000}
     -- make sure the timeout is long as the packetFifo can be quiet for a while while dropping
-    (liftA3 (\a b c -> a ++ b ++ c) genSmall genBig genSmall)
-    (C.exposeClockResetEnable model)
-    (C.exposeClockResetEnable ckt)
+    (liftA3 (\a b c -> a L.++ b L.++ c) genSmall genBig genSmall)
+    (exposeClockResetEnable model)
+    (exposeClockResetEnable ckt)
  where
   ckt ::
     (HiddenClockResetEnable System) =>
@@ -126,7 +112,7 @@ prop_overFlowDrop_packetFifo_drop =
   ckt = packetFifoC d5 d5 Drop
 
   model :: [PacketStreamM2S 4 Int16] -> [PacketStreamM2S 4 Int16]
-  model packets = Prelude.concat $ take 1 packetChunk ++ drop 2 packetChunk
+  model packets = Prelude.concat $ L.take 1 packetChunk L.++ L.drop 2 packetChunk
    where
     packetChunk = chunkByPacket packets
 
@@ -137,11 +123,11 @@ prop_overFlowDrop_packetFifo_drop =
 prop_packetFifo_small_metaBuffer :: Property
 prop_packetFifo_small_metaBuffer =
   idWithModelSingleDomain
-    @C.System
+    @System
     defExpectOptions
     (genValidPackets (Range.linear 1 30) (Range.linear 1 4) Abort)
-    (C.exposeClockResetEnable dropAbortedPackets)
-    (C.exposeClockResetEnable ckt)
+    (exposeClockResetEnable dropAbortedPackets)
+    (exposeClockResetEnable ckt)
  where
   ckt ::
     (HiddenClockResetEnable System) =>
