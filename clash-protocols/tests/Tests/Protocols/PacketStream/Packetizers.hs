@@ -44,7 +44,7 @@ packetizerPropertyGenerator SNat SNat =
     (exposeClockResetEnable model)
     (exposeClockResetEnable ckt)
  where
-  model = packetize (const ()) id
+  model = packetizerModel (const ()) id
   ckt ::
     (HiddenClockResetEnable System) =>
     Circuit
@@ -88,7 +88,7 @@ packetizeFromDfPropertyGenerator SNat SNat =
     (exposeClockResetEnable model)
     (exposeClockResetEnable ckt)
  where
-  model = packetizeFromDf (const ()) id
+  model = packetizeFromDfModel (const ()) id
   ckt ::
     (HiddenClockResetEnable System) =>
     Circuit (Df.Df System (Vec headerBytes (BitVector 8))) (PacketStream System dataWidth ())
