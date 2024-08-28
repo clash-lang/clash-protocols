@@ -10,6 +10,7 @@ Provides Hedgehog generators, models and utility functions for testing
 -}
 module Protocols.PacketStream.Hedgehog (
   -- * Utility functions
+  chopBy,
   chopPacket,
   chunkByPacket,
   chunkToPacket,
