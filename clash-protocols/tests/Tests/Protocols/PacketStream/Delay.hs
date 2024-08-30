@@ -8,6 +8,7 @@ module Tests.Protocols.PacketStream.Delay (
 import Clash.Prelude
 
 import Hedgehog
+import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
 import Test.Tasty
@@ -25,14 +26,14 @@ prop_delaystream_id =
   idWithModelSingleDomain
     @System
     defExpectOptions
-    (genValidPackets (Range.linear 1 10) (Range.linear 1 6) Abort)
+    (genPackets (Range.linear 1 10) Abort (genValidPacket Gen.enumBounded (Range.linear 1 6)))
     (exposeClockResetEnable id)
     (exposeClockResetEnable ckt)
  where
   ckt ::
     (HiddenClockResetEnable System) =>
-    Circuit (PacketStream System 2 ()) (PacketStream System 2 ())
-  ckt = delayStream @System @2 @() @4 d4
+    Circuit (PacketStream System 2 Int) (PacketStream System 2 Int)
+  ckt = delayStream @System @2 @Int @4 d4
 
 tests :: TestTree
 tests =

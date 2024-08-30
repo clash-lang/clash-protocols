@@ -10,7 +10,8 @@ import Clash.Prelude
 import Data.Int (Int16)
 import qualified Data.List as L
 
-import Hedgehog as H
+import Hedgehog
+import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
 import Test.Tasty
@@ -30,7 +31,8 @@ prop_packetFifo_id =
   idWithModelSingleDomain
     @System
     defExpectOptions{eoSampleMax = 1000, eoStopAfterEmpty = 1000}
-    (genValidPackets (Range.linear 1 30) (Range.linear 1 10) Abort)
+    ( genPackets (Range.linear 1 30) Abort (genValidPacket Gen.enumBounded (Range.linear 1 10))
+    )
     (exposeClockResetEnable dropAbortedPackets)
     (exposeClockResetEnable ckt)
  where
@@ -45,7 +47,8 @@ prop_packetFifo_small_buffer_id =
   idWithModelSingleDomain
     @System
     defExpectOptions{eoSampleMax = 1000, eoStopAfterEmpty = 1000}
-    (genValidPackets (Range.linear 1 10) (Range.linear 1 30) NoAbort)
+    ( genPackets (Range.linear 1 10) Abort (genValidPacket Gen.enumBounded (Range.linear 1 30))
+    )
     (exposeClockResetEnable dropAbortedPackets)
     (exposeClockResetEnable ckt)
  where
@@ -65,9 +68,13 @@ prop_packetFifo_no_gaps = property $ do
           systemClockGen
           resetGen
           enableGen
-      gen = genValidPackets (Range.linear 1 10) (Range.linear 1 10) NoAbort
+      gen =
+        genPackets
+          (Range.linear 1 10)
+          NoAbort
+          (genValidPacket Gen.enumBounded (Range.linear 1 10))
 
-  packets :: [PacketStreamM2S 4 Int16] <- H.forAll gen
+  packets :: [PacketStreamM2S 4 Int16] <- forAll gen
 
   let packetSize = 2 Prelude.^ snatToInteger packetFifoSize
       cfg = SimulationConfig 1 (2 * packetSize) False
@@ -86,7 +93,8 @@ prop_overFlowDrop_packetFifo_id =
   idWithModelSingleDomain
     @System
     defExpectOptions{eoSampleMax = 2000, eoStopAfterEmpty = 1000}
-    (genValidPackets (Range.linear 1 30) (Range.linear 1 10) Abort)
+    ( genPackets (Range.linear 1 30) Abort (genValidPacket Gen.enumBounded (Range.linear 1 10))
+    )
     (exposeClockResetEnable dropAbortedPackets)
     (exposeClockResetEnable ckt)
  where
@@ -116,8 +124,8 @@ prop_overFlowDrop_packetFifo_drop =
    where
     packetChunk = chunkByPacket packets
 
-  genSmall = genValidPacket (Range.linear 1 5) NoAbort
-  genBig = genValidPacket (Range.linear 33 33) NoAbort
+  genSmall = genValidPacket Gen.enumBounded (Range.linear 1 5) NoAbort
+  genBig = genValidPacket Gen.enumBounded (Range.linear 33 33) NoAbort
 
 -- | test for id using a small metabuffer to ensure backpressure using the metabuffer is tested
 prop_packetFifo_small_metaBuffer :: Property
@@ -125,7 +133,7 @@ prop_packetFifo_small_metaBuffer =
   idWithModelSingleDomain
     @System
     defExpectOptions
-    (genValidPackets (Range.linear 1 30) (Range.linear 1 4) Abort)
+    (genPackets (Range.linear 1 30) Abort (genValidPacket Gen.enumBounded (Range.linear 1 4)))
     (exposeClockResetEnable dropAbortedPackets)
     (exposeClockResetEnable ckt)
  where
