@@ -8,6 +8,7 @@ import Clash.Prelude
 import qualified Clash.Prelude as C
 
 import Hedgehog hiding (Parallel)
+import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
 import Test.Tasty
@@ -64,7 +65,8 @@ makePropPacketArbiter _ _ mode =
  where
   genSources = mapM setMeta (indicesI @p)
   setMeta j = do
-    pkts <- genValidPackets @n @() (Range.linear 1 10) (Range.linear 1 10) Abort
+    pkts <-
+      genPackets @n (Range.linear 1 10) Abort (genValidPacket (pure ()) (Range.linear 1 10))
     pure $ L.map (\pkt -> pkt{_meta = j}) pkts
 
   partitionPackets packets =
@@ -106,6 +108,7 @@ makePropPacketDispatcher ::
   , 1 <= dataWidth
   , TestType a
   , Bounded a
+  , Enum a
   , BitPack a
   ) =>
   SNat dataWidth ->
@@ -114,7 +117,7 @@ makePropPacketDispatcher ::
 makePropPacketDispatcher _ fs =
   idWithModelSingleDomain @System
     defExpectOptions{eoSampleMax = 2000, eoStopAfterEmpty = 1000}
-    (genValidPackets (Range.linear 1 10) (Range.linear 1 6) Abort)
+    (genPackets (Range.linear 1 10) Abort (genValidPacket Gen.enumBounded (Range.linear 1 6)))
     (exposeClockResetEnable (model 0))
     (exposeClockResetEnable (packetDispatcherC fs))
  where
