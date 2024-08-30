@@ -6,6 +6,7 @@ module Tests.Protocols.PacketStream.AsyncFifo where
 import Clash.Prelude
 
 import Hedgehog (Property)
+import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
 import Test.Tasty (TestTree, localOption, mkTimeout)
@@ -70,7 +71,8 @@ generateAsyncFifoIdProp ::
 generateAsyncFifoIdProp wClk wRst wEn rClk rRst rEn =
   idWithModel
     defExpectOptions
-    (genValidPackets (Range.linear 1 10) (Range.linear 1 30) Abort)
+    ( genPackets (Range.linear 1 10) Abort (genValidPacket Gen.enumBounded (Range.linear 1 30))
+    )
     id
     (asyncFifoC @wDom @rDom @4 @1 @Int d4 wClk wRst wEn rClk rRst rEn)
 
