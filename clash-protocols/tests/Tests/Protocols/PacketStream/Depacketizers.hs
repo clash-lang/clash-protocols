@@ -38,7 +38,7 @@ depacketizerPropertyGenerator SNat SNat =
   idWithModelSingleDomain
     @System
     defExpectOptions{eoSampleMax = 1000, eoStopAfterEmpty = 1000}
-    (genValidPackets (Range.linear 1 4) (Range.linear 1 30) Abort)
+    (genPackets (Range.linear 1 4) Abort (genValidPacket (pure ()) (Range.linear 1 30)))
     (exposeClockResetEnable model)
     (exposeClockResetEnable ckt)
  where
@@ -82,7 +82,7 @@ depacketizeToDfPropertyGenerator SNat SNat =
   idWithModelSingleDomain
     @System
     defExpectOptions{eoSampleMax = 1000, eoStopAfterEmpty = 1000}
-    (genValidPackets (Range.linear 1 4) (Range.linear 1 30) NoAbort)
+    (genPackets (Range.linear 1 10) Abort (genValidPacket (pure ()) (Range.linear 1 20)))
     (exposeClockResetEnable model)
     (exposeClockResetEnable ckt)
  where

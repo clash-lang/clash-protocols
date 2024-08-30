@@ -29,7 +29,7 @@ module Protocols.PacketStream.Hedgehog (
   -- * Hedgehog generators
   AbortMode (..),
   genValidPacket,
-  genValidPackets,
+  genPackets,
 ) where
 
 import Prelude
@@ -159,7 +159,7 @@ downConvert ::
 downConvert = concatMap chopPacket
 
 {- |
-Merges a list of `PacketStream` transfers with data width @dataWidth into
+Merges a list of `PacketStream` transfers with data width @dataWidth@ into
 a list of `PacketStream` transfers with data width @1@
 -}
 upConvert ::
@@ -309,75 +309,78 @@ Otherwise, transfers of roughly 50% of the packets will randomly have _abort set
 data AbortMode = Abort | NoAbort
 
 {- |
-Generate valid packets, i.e. packets of which all transfers carry the same
-`_meta` and with all unenabled bytes in `_data` set to 0x00.
+Generate packets with a user-supplied generator.
 -}
-genValidPackets ::
-  forall (dataWidth :: C.Nat) (metaType :: C.Type).
+genPackets ::
+  forall (dataWidth :: C.Nat) (meta :: C.Type).
   (1 C.<= dataWidth) =>
   (C.KnownNat dataWidth) =>
-  (C.BitPack metaType) =>
   -- | The amount of packets to generate.
   Range Int ->
-  -- | The amount of transfers with @_last = Nothing@ to generate per packet.
-  --   This function will always generate an extra transfer per packet
-  --   with @_last = Just i@.
-  Range Int ->
-  -- | If set to @NoAbort@, no generated packets will have `_abort` set in
-  --   any of their transfers. Else, roughly 50% of packets will contain
-  --   fragments with their `_abort` randomly set.
+  -- | If set to @NoAbort@, always pass @NoAbort@ to the packet generator.
+  --   Else, pass @Abort@ to roughly 50% of the packet generators.
   AbortMode ->
-  Gen [PacketStreamM2S dataWidth metaType]
-genValidPackets pkts size Abort = concat <$> Gen.list pkts gen
- where
-  gen = do
-    abortPacket <- Gen.bool
-    genValidPacket size (if abortPacket then Abort else NoAbort)
-genValidPackets pkts size NoAbort =
-  concat <$> Gen.list pkts (genValidPacket size NoAbort)
+  -- | Packet generator.
+  (AbortMode -> Gen [PacketStreamM2S dataWidth meta]) ->
+  Gen [PacketStreamM2S dataWidth meta]
+genPackets pkts Abort pktGen =
+  concat
+    <$> Gen.list
+      pkts
+      (Gen.choice [pktGen Abort, pktGen NoAbort])
+genPackets pkts NoAbort pktGen =
+  concat
+    <$> Gen.list
+      pkts
+      (pktGen NoAbort)
 
 {- |
 Generate a valid packet, i.e. a packet of which all transfers carry the same
 `_meta` and with all unenabled bytes in `_data` set to 0x00.
 -}
 genValidPacket ::
-  forall (dataWidth :: C.Nat) (metaType :: C.Type).
+  forall (dataWidth :: C.Nat) (meta :: C.Type).
   (1 C.<= dataWidth) =>
   (C.KnownNat dataWidth) =>
-  (C.BitPack metaType) =>
+  -- | Generator for the metadata.
+  Gen meta ->
   -- | The amount of transfers with @_last = Nothing@ to generate.
   --   This function will always generate an extra transfer with @_last = Just i@.
   Range Int ->
   -- | If set to @NoAbort@, no transfers in the packet will have @_abort@ set.
-  --   Else, they will randomly have @_abort@ set.
+  --   Else, each transfer has a 10% chance to have @_abort@ set.
   AbortMode ->
-  Gen [PacketStreamM2S dataWidth metaType]
-genValidPacket size abortMode = do
-  meta <- C.unpack <$> Gen.enumBounded
+  Gen [PacketStreamM2S dataWidth meta]
+genValidPacket metaGen size abortMode = do
+  meta <- metaGen
   transfers <- Gen.list size (genTransfer @dataWidth meta abortMode)
   lastTransfer <- genLastTransfer @dataWidth meta abortMode
   pure (transfers ++ [lastTransfer])
 
 -- | Generate a single transfer which is not yet the end of a packet.
 genTransfer ::
-  forall (dataWidth :: C.Nat) (metaType :: C.Type).
+  forall (dataWidth :: C.Nat) (meta :: C.Type).
   (1 C.<= dataWidth) =>
   (C.KnownNat dataWidth) =>
   -- | We need to use the same metadata
   --   for every transfer in a packet to satisfy the protocol
   --   invariant that metadata is constant for an entire packet.
-  metaType ->
+  meta ->
   -- | If set to @NoAbort@, hardcode @_abort@ to @False@. Else,
-  --   randomly generate it.
+  --   there is a 10% chance for it to be set.
   AbortMode ->
-  Gen (PacketStreamM2S dataWidth metaType)
+  Gen (PacketStreamM2S dataWidth meta)
 genTransfer meta abortMode =
   PacketStreamM2S
     <$> genVec Gen.enumBounded
     <*> Gen.constant Nothing
     <*> Gen.constant meta
     <*> case abortMode of
-      Abort -> Gen.enumBounded
+      Abort ->
+        Gen.frequency
+          [ (90, Gen.constant False)
+          , (10, Gen.constant True)
+          ]
       NoAbort -> Gen.constant False
 
 {- |
@@ -385,17 +388,17 @@ Generate the last transfer of a packet, i.e. a transfer with @_last@ set as @Jus
 All bytes which are not enabled are set to 0x00.
 -}
 genLastTransfer ::
-  forall (dataWidth :: C.Nat) (metaType :: C.Type).
+  forall (dataWidth :: C.Nat) (meta :: C.Type).
   (1 C.<= dataWidth) =>
   (C.KnownNat dataWidth) =>
   -- | We need to use the same metadata
   --   for every transfer in a packet to satisfy the protocol
   --   invariant that metadata is constant for an entire packet.
-  metaType ->
+  meta ->
   -- | If set to @NoAbort@, hardcode @_abort@ to @False@. Else,
   --   randomly generate it.
   AbortMode ->
-  Gen (PacketStreamM2S dataWidth metaType)
+  Gen (PacketStreamM2S dataWidth meta)
 genLastTransfer meta abortMode =
   setNull
     <$> ( PacketStreamM2S

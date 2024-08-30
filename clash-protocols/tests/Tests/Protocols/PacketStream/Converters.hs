@@ -5,6 +5,7 @@ module Tests.Protocols.PacketStream.Converters where
 import Clash.Prelude
 
 import Hedgehog (Property)
+import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
 import Test.Tasty
@@ -29,7 +30,8 @@ generateUpConverterProperty ::
 generateUpConverterProperty SNat SNat =
   idWithModelSingleDomain
     defExpectOptions
-    (genValidPackets (Range.linear 1 10) (Range.linear 1 20) Abort)
+    ( genPackets (Range.linear 1 10) Abort (genValidPacket Gen.enumBounded (Range.linear 1 20))
+    )
     (exposeClockResetEnable (upConvert . downConvert))
     (exposeClockResetEnable @System (upConverterC @dwIn @dwOut @Int))
 
@@ -64,7 +66,7 @@ generateDownConverterProperty ::
 generateDownConverterProperty SNat SNat =
   idWithModelSingleDomain
     defExpectOptions{eoSampleMax = 1000}
-    (genValidPackets (Range.linear 1 8) (Range.linear 1 10) Abort)
+    (genPackets (Range.linear 1 8) Abort (genValidPacket Gen.enumBounded (Range.linear 1 10)))
     (exposeClockResetEnable (upConvert . downConvert))
     (exposeClockResetEnable @System (downConverterC @dwIn @dwOut @Int))
 
