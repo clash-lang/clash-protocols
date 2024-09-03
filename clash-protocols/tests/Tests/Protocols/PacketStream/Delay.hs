@@ -1,4 +1,3 @@
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NumericUnderscores #-}
 
 module Tests.Protocols.PacketStream.Delay (
@@ -16,7 +15,6 @@ import Test.Tasty.Hedgehog (HedgehogTestLimit (HedgehogTestLimit))
 import Test.Tasty.Hedgehog.Extra (testProperty)
 import Test.Tasty.TH (testGroupGenerator)
 
-import Protocols
 import Protocols.Hedgehog
 import Protocols.PacketStream
 import Protocols.PacketStream.Hedgehog
@@ -26,14 +24,10 @@ prop_delaystream_id =
   idWithModelSingleDomain
     @System
     defExpectOptions
-    (genPackets (Range.linear 1 10) Abort (genValidPacket Gen.enumBounded (Range.linear 1 6)))
+    ( genPackets (Range.linear 1 10) Abort (genValidPacket Gen.enumBounded (Range.linear 4 20))
+    )
     (exposeClockResetEnable id)
-    (exposeClockResetEnable ckt)
- where
-  ckt ::
-    (HiddenClockResetEnable System) =>
-    Circuit (PacketStream System 2 Int) (PacketStream System 2 Int)
-  ckt = delayStream @System @2 @Int @4 d4
+    (exposeClockResetEnable (delayStreamC @2 @Int d4))
 
 tests :: TestTree
 tests =

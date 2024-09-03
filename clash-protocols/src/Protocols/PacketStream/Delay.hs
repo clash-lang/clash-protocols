@@ -42,7 +42,7 @@ data DelayState n = DelayState
   }
   deriving (Generic, NFDataX, Show, ShowX)
 
--- | State transition function of 'delayStream'.
+-- | State transition function of 'delayStreamC'.
 delayStreamT ::
   forall
     (n :: Nat)
