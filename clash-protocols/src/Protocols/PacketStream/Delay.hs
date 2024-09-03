@@ -6,7 +6,7 @@
 Provides a circuit that delays a stream by a configurable amount of transfers.
 -}
 module Protocols.PacketStream.Delay (
-  delayStream,
+  delayStreamC,
 ) where
 
 import Clash.Prelude
@@ -14,79 +14,148 @@ import Clash.Prelude
 import Protocols
 import Protocols.PacketStream.Base
 
+import Data.Constraint.Deferrable ((:~:) (Refl))
 import Data.Maybe
 
--- TODO Optimization: _meta only needs to be buffered once because it is constant per packet
--- Holds for _abort and _last too
-data DelayState n dataWidth meta = DelayState
-  { _buf :: Vec n (PacketStreamM2S dataWidth meta)
-  -- ^ Transfer buffer
-  , _size :: Index (n + 1)
-  , _flush :: Bool
+type M2SNoMeta dataWidth =
+  (Vec dataWidth (BitVector 8), Maybe (Index dataWidth), Bool)
+
+toPacketstreamM2S :: M2SNoMeta dataWidth -> meta -> PacketStreamM2S dataWidth meta
+toPacketstreamM2S (a, b, c) d = PacketStreamM2S a b d c
+
+dropMeta :: PacketStreamM2S dataWidth meta -> M2SNoMeta dataWidth
+dropMeta PacketStreamM2S{..} = (_data, _last, _abort)
+
+-- | State of 'delayStreamT'.
+data DelayState n = DelayState
+  { _size :: Index (n + 1)
+  -- ^ The number of valid transactions in the buffer.
   , _readPtr :: Index n
+  -- ^ Current block RAM read address.
   , _writePtr :: Index n
+  -- ^ Current block RAM write address.
+  , _flush :: Bool
+  -- ^ Iff true, transmit all remaining transactions of the current packet,
+  --   regardless of whether the buffer is full or not.
+  , _metaWriteEn :: Bool
+  -- ^ If true, write to the meta buffer. We need this in case of LHS stalls.
   }
   deriving (Generic, NFDataX, Show, ShowX)
 
--- | Forwards incoming packets with @n@ fragments latency.
-delayStream ::
-  forall (dom :: Domain) (dataWidth :: Nat) (meta :: Type) (n :: Nat).
+-- | State transition function of 'delayStream'.
+delayStreamT ::
+  forall
+    (n :: Nat)
+    (dataWidth :: Nat)
+    (meta :: Type).
+  (KnownNat n) =>
+  (KnownNat dataWidth) =>
+  (1 <= n) =>
+  (1 <= dataWidth) =>
+  (NFDataX meta) =>
+  DelayState n ->
+  ( Maybe (PacketStreamM2S dataWidth meta)
+  , PacketStreamS2M
+  , M2SNoMeta dataWidth
+  , meta
+  ) ->
+  ( DelayState n
+  , ( PacketStreamS2M
+    , Maybe (PacketStreamM2S dataWidth meta)
+    , Index n
+    , Maybe (Index n, M2SNoMeta dataWidth)
+    , Maybe meta
+    )
+  )
+delayStreamT st (fwdIn, bwdIn, buff@(_, b, _), metaBuf) =
+  (nextStOut, (bwdOut, fwdOut, _readPtr nextStOut, writeCmd, mWriteCmd))
+ where
+  emptyBuf = _size st == 0
+  fullBuf = _size st == maxBound
+
+  readEn = case fwdIn of
+    Nothing -> not emptyBuf && _flush st
+    Just _ -> fullBuf || _flush st
+
+  bwdOut = PacketStreamS2M (isNothing fwdIn || not readEn || _ready bwdIn)
+
+  (readPtr', fwdOut) =
+    if readEn
+      then (satSucc SatWrap (_readPtr st), Just (toPacketstreamM2S buff metaBuf))
+      else (_readPtr st, Nothing)
+
+  (writeCmd, mWriteCmd, writePtr') = case fwdIn of
+    Nothing -> (Nothing, Nothing, _writePtr st)
+    Just inPkt ->
+      ( if readEn && not (_ready bwdIn)
+          then Nothing
+          else Just (_writePtr st, dropMeta inPkt)
+      , if _metaWriteEn st || (emptyBuf || readEn && isJust b && _ready bwdIn)
+          then Just (_meta inPkt)
+          else Nothing
+      , satSucc SatWrap (_writePtr st)
+      )
+
+  metaWriteEn' = isNothing fwdIn && (_metaWriteEn st || isJust b)
+
+  (size', flush') = case fwdIn of
+    Nothing -> (_size st - 1, isNothing b && _flush st)
+    Just inPkt
+      | _flush st ->
+          (_size st, not (readEn && isJust b) && _flush st)
+      | otherwise ->
+          (satSucc SatBound (_size st), isJust (_last inPkt))
+
+  nextSt = DelayState size' readPtr' writePtr' flush' metaWriteEn'
+  nextStOut =
+    if isJust fwdIn
+      && (isNothing fwdOut || _ready bwdIn)
+      || isNothing fwdIn
+      && (readEn && _ready bwdIn)
+      then nextSt
+      else st
+
+{- |
+Forwards incoming packets with @n@ transactions latency. Because of potential
+stalls this is not the same as @n@ clock cycles. Assumes that all packets
+passing through this component are bigger than @n@ transactions. If not, this
+component has __UNDEFINED BEHAVIOUR__ and things will break.
+-}
+delayStreamC ::
+  forall
+    (dataWidth :: Nat)
+    (meta :: Type)
+    (dom :: Domain)
+    (n :: Nat).
   (HiddenClockResetEnable dom) =>
   (KnownNat dataWidth) =>
   (1 <= n) =>
   (1 <= dataWidth) =>
   (NFDataX meta) =>
-  -- | The number of fragments to delay
+  -- | The number of transactions to delay
   SNat n ->
   Circuit (PacketStream dom dataWidth meta) (PacketStream dom dataWidth meta)
--- TODO this component is very unoptimized/ugly. The most important thing is
--- that it works now, but it should be improved in the future by removing.
--- dynamic indexing and perhaps using blockram.
-delayStream SNat =
-  forceResetSanity
-    |> fromSignals
-      (mealyB go (DelayState @n (repeat (errorX "undefined initial contents")) 0 False 0 0))
+delayStreamC SNat = forceResetSanity |> fromSignals ckt
  where
-  go st@DelayState{..} (Nothing, bwdIn) = (nextStOut, (bwdOut, fwdOut))
+  ckt (fwdInS, bwdInS) = (bwdOutS, fwdOutS)
    where
-    out = _buf !! _readPtr
+    noRstFunc = deepErrorX "delayStream: undefined reset function"
 
-    readEn = _size > 0 && _flush
+    -- Store the contents of transactions without metadata.
+    -- We only need write before read semantics in case n ~ 1.
+    bram :: Signal dom (M2SNoMeta dataWidth)
+    bram = case sameNat d1 (SNat @n) of
+      Nothing -> blockRamU NoClearOnReset (SNat @n) noRstFunc readAddr writeCmd
+      Just Refl -> readNew (blockRamU NoClearOnReset (SNat @n) noRstFunc) readAddr writeCmd
 
-    fwdOut =
-      if readEn
-        then Just out
-        else Nothing
+    -- There are at most two packets in the blockram, but they are required
+    -- to be bigger than @n@ transactions. Thus, we only need to store the
+    -- metadata once.
+    metaBuffer :: Signal dom meta
+    metaBuffer = regMaybe (deepErrorX "delayStream: undefined initial meta") mWriteCmd
 
-    bwdOut = PacketStreamS2M True
+    (bwdOutS, fwdOutS, readAddr, writeCmd, mWriteCmd) =
+      unbundle
+        $ mealy delayStreamT (DelayState @n 0 0 0 False True) input
 
-    nextSt =
-      st
-        { _size = _size - 1
-        , _flush = _size - 1 > 0
-        , _readPtr = satSucc SatWrap _readPtr
-        }
-    nextStOut = if readEn && _ready bwdIn then nextSt else st
-  go st@DelayState{..} (Just inPkt, bwdIn) = (nextStOut, (bwdOut, fwdOut))
-   where
-    readEn = _flush || _size == maxBound
-
-    out = _buf !! _readPtr
-    newBuf = replace _writePtr inPkt _buf
-
-    fwdOut =
-      if readEn
-        then Just out
-        else Nothing
-
-    bwdOut = PacketStreamS2M $ not _flush && (not readEn || _ready bwdIn)
-
-    nextReadPtr = if readEn then satSucc SatWrap _readPtr else _readPtr
-
-    (nextBuf, nextSize, nextFlush, nextWritePtr)
-      | _flush = (_buf, satPred SatBound _size, satPred SatBound _size > 0, _writePtr)
-      | otherwise =
-          (newBuf, satSucc SatBound _size, isJust (_last inPkt), satSucc SatWrap _writePtr)
-
-    nextSt = DelayState nextBuf nextSize nextFlush nextReadPtr nextWritePtr
-    nextStOut = if isNothing fwdOut || _ready bwdIn then nextSt else st
+    input = bundle (fwdInS, bwdInS, bram, metaBuffer)
