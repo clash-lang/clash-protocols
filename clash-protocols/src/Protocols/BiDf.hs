@@ -13,6 +13,8 @@ module Protocols.BiDf (
   loopback,
     -- * Mapping
   dimap,
+  -- * Fan-in
+  fanin
 ) where
 
 import Prelude ()
@@ -100,3 +102,38 @@ dimap f g = circuit $ \biDf -> do
   resp' <- Df.map g -< resp
   (biDf', resp) <- fromDfs -< req'
   idC -< biDf'
+
+-- | Merge a number of 'BiDf's, preferring requests from the last channel.
+fanin
+  :: forall n dom req resp.
+     ( KnownNat n
+     , 1 <= n
+     , NFDataX req
+     , NFDataX resp
+     , HiddenClockResetEnable dom
+     )
+  => Circuit (Vec n (BiDf dom req resp)) (BiDf dom req resp)
+fanin = fromSignals $ \(upFwds, (reqAck, respData)) ->
+  let reqDatas :: Vec n (Signal dom (Df.Data req))
+      reqDatas = map fst upFwds
+      respAcks :: Vec n (Signal dom Ack)
+      respAcks = map snd upFwds
+
+      ((reqAcks, respAck), (respDatas, reqData)) =
+           toSignals fanin' ((reqDatas, respData), (respAcks, reqAck))
+  in (zip reqAcks respDatas, (reqData, respAck))
+ where
+  fanin'
+      :: Circuit (Vec n (Df dom req), Df dom resp)
+                 (Vec n (Df dom resp), Df dom req)
+  fanin' = circuit $ \(reqs, resp) -> do
+    [fwd0, fwd1]
+        <- Df.fanout
+        <| Df.roundrobinCollect @n Df.Parallel
+        <| repeatWithIndexC (\i -> Df.map (\x -> (i,x)))
+        -< reqs
+
+    activeN <- Df.map fst -< fwd1
+    resps <- Df.route <| Df.zip -< (activeN, resp)
+    req <- Df.map snd -< fwd0
+    idC -< (resps, req)
