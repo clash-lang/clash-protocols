@@ -24,6 +24,7 @@ module Protocols.Df (
   -- * Operations on Df protocol
   empty,
   const,
+  consume,
   void,
   pure,
   map,
@@ -369,6 +370,10 @@ empty = Circuit (P.const ((), P.pure NoData))
 -- | Drive a constant value composed of /a/.
 pure :: a -> Circuit () (Df dom a)
 pure a = Circuit (P.const ((), P.pure (Data a)))
+
+-- | Always acknowledge and ignore values.
+consume :: (C.HiddenReset dom) => Circuit (Df dom a) ()
+consume = Circuit (P.const (P.pure (Ack True), ()))
 
 -- | Never acknowledge values.
 void :: (C.HiddenReset dom) => Circuit (Df dom a) ()
