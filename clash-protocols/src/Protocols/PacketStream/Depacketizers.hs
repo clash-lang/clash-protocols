@@ -2,14 +2,16 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# OPTIONS_GHC -fconstraint-solver-iterations=10 #-}
+{-# OPTIONS_GHC -fplugin Protocols.Plugin #-}
 {-# OPTIONS_HADDOCK hide #-}
 
 {- |
-Utility circuits for stripping headers from the beginning of packets.
+Utility circuits for reading from a packet stream.
 -}
 module Protocols.PacketStream.Depacketizers (
   depacketizerC,
   depacketizeToDfC,
+  dropTailC,
 ) where
 
 import Clash.Prelude
@@ -18,7 +20,9 @@ import Clash.Sized.Vector.Extra
 import Protocols
 import qualified Protocols.Df as Df
 import Protocols.PacketStream.Base
+import Protocols.PacketStream.Delay
 
+import qualified Data.Bifunctor as B
 import Data.Constraint (Dict (Dict))
 import Data.Constraint.Nat.Extra
 import Data.Data ((:~:) (Refl))
@@ -352,3 +356,136 @@ depacketizeToDfC toOut = forceResetSanity |> fromSignals ckt
  where
   ckt = case leTimesDivRu @dataWidth @headerBytes of
     Dict -> mealyB (depacketizeToDfT toOut) def
+
+-- | Information about the tail of a packet, for dropping purposes.
+data DropTailInfo dataWidth delay = DropTailInfo
+  { _dtAborted :: Bool
+  -- ^ Whether any fragment of the packet was aborted
+  , _newIdx :: Index dataWidth
+  -- ^ The adjusted byte enable
+  , _drops :: Index (delay + 1)
+  -- ^ The amount of transfers to drop from the tail
+  , _wait :: Bool
+  -- ^ Iff true, apply changes to transfer the next clock cycle instead
+  }
+
+{- |
+Transmits information about a single packet upon seeing its last transfer.
+-}
+transmitDropInfoC ::
+  forall (dataWidth :: Nat) (delay :: Nat) (meta :: Type) (dom :: Domain) (n :: Nat).
+  (KnownNat dataWidth) =>
+  (KnownNat delay) =>
+  (1 <= dataWidth) =>
+  (1 <= n) =>
+  (HiddenClockResetEnable dom) =>
+  SNat n ->
+  Circuit
+    (PacketStream dom dataWidth meta)
+    (Df dom (DropTailInfo dataWidth delay))
+transmitDropInfoC SNat = forceResetSanity |> fromSignals (mealyB go False)
+ where
+  go aborted (Nothing, _) = (aborted, (PacketStreamS2M True, Df.NoData))
+  go aborted (Just PacketStreamM2S{..}, Ack readyIn) = (nextAborted, (PacketStreamS2M readyIn, fwdOut))
+   where
+    (nextAborted, fwdOut) = case _last of
+      Nothing -> (aborted || _abort, Df.NoData)
+      Just i -> (not readyIn && (aborted || _abort), Df.Data (toDropTailInfo i))
+
+    toDropTailInfo i =
+      DropTailInfo
+        { _dtAborted = aborted || _abort
+        , _newIdx = satSub SatWrap i (natToNum @(n `Mod` dataWidth))
+        , _drops = drops
+        , _wait = wait
+        }
+     where
+      (drops, wait) = case ( compareSNat (SNat @dataWidth) (SNat @n)
+                           , sameNat d0 (SNat @(n `Mod` dataWidth))
+                           ) of
+        (SNatLE, Nothing) ->
+          let smaller = (resize i :: Index n) < natToNum @(n - dataWidth)
+           in ( if smaller
+                  then natToNum @(n `DivRU` dataWidth)
+                  else natToNum @(n `Div` dataWidth)
+              , not smaller
+              )
+        (SNatLE, Just Refl) ->
+          (natToNum @(n `Div` dataWidth), False)
+        (SNatGT, _) ->
+          if i >= natToNum @n
+            then (0, True)
+            else (1, False)
+
+{- |
+Gets a delayed packet stream as input together with non-delayed
+'DropTailInfo', so that dropping can be done while correctly preserving
+'_abort' and adjusting '_last'.
+-}
+dropTailC' ::
+  forall (dataWidth :: Nat) (delay :: Nat) (meta :: Type) (dom :: Domain).
+  (KnownDomain dom) =>
+  (KnownNat dataWidth) =>
+  (KnownNat delay) =>
+  (HiddenClockResetEnable dom) =>
+  Circuit
+    (PacketStream dom dataWidth meta, Df dom (DropTailInfo dataWidth delay))
+    (PacketStream dom dataWidth meta)
+dropTailC' = fromSignals (B.first unbundle . mealyB go (0, Nothing) . B.first bundle)
+ where
+  go (0, cache) ((fwdIn, infoIn), bwdIn) = (nextStOut, ((bwdOut1, bwdOut2), fwdOut))
+   where
+    (bwdOut1, bwdOut2)
+      | isNothing fwdOut = (PacketStreamS2M True, Ack True)
+      | otherwise = (bwdIn, Ack (_ready bwdIn))
+
+    (nextSt, fwdOut) = case (fwdIn, infoIn) of
+      (Nothing, _) ->
+        ((0, cache), Nothing)
+      (Just pkt, Df.NoData) ->
+        case cache of
+          Nothing ->
+            ((0, Nothing), Just pkt)
+          Just (aborted, newIdx, delayy) ->
+            ((delayy, Nothing), Just pkt{_abort = aborted, _last = Just newIdx})
+      (Just pkt, Df.Data inf) ->
+        if _wait inf
+          then ((0, Just (_dtAborted inf, _newIdx inf, _drops inf)), Just pkt)
+          else
+            ( (_drops inf, Nothing)
+            , Just pkt{_last = Just (_newIdx inf), _abort = _dtAborted inf}
+            )
+
+    nextStOut = if isNothing fwdOut || _ready bwdIn then nextSt else (0, cache)
+  go (cycles, cache) _ = ((cycles - 1, cache), ((PacketStreamS2M True, Ack True), Nothing))
+
+{- |
+Removes the last @n@ bytes from each packet in the packet stream.
+If any dropped transfers had '_abort' set, this will be preserved by
+setting the '_abort' of an earlier transfer that is not dropped.
+
+__NB__: assumes that packets are longer than @ceil(n / dataWidth)@ transfers.
+If this is not the case, the behaviour of this component is undefined.
+-}
+dropTailC ::
+  forall (dataWidth :: Nat) (meta :: Type) (dom :: Domain) (n :: Nat).
+  (HiddenClockResetEnable dom) =>
+  (KnownNat dataWidth) =>
+  (1 <= dataWidth) =>
+  (1 <= n) =>
+  (NFDataX meta) =>
+  SNat n ->
+  Circuit
+    (PacketStream dom dataWidth meta)
+    (PacketStream dom dataWidth meta)
+dropTailC SNat = case strictlyPositiveDivRu @n @dataWidth of
+  Dict ->
+    forceResetSanity
+      |> circuit
+        ( \stream -> do
+            [s1, s2] <- fanout -< stream
+            delayed <- delayStreamC (SNat @(n `DivRU` dataWidth)) -< s1
+            info <- transmitDropInfoC @dataWidth @(n `DivRU` dataWidth) (SNat @n) -< s2
+            dropped <- dropTailC' @dataWidth @(n `DivRU` dataWidth) -< (delayed, info)
+            zeroOutInvalidBytesC -< dropped
+        )
