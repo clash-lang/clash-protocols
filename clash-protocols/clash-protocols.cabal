@@ -144,6 +144,7 @@ library
     Protocols.Axi4.WriteAddress
     Protocols.Axi4.WriteData
     Protocols.Axi4.WriteResponse
+    Protocols.BiDf
     Protocols.Df
     Protocols.DfConv
     Protocols.Hedgehog
@@ -175,6 +176,7 @@ test-suite unittests
   main-is: unittests.hs
   other-modules:
     Tests.Protocols
+    Tests.Protocols.BiDf
     Tests.Protocols.Df
     Tests.Protocols.DfConv
     Tests.Protocols.Avalon
