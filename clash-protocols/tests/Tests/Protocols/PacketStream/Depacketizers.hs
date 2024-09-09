@@ -143,22 +143,22 @@ prop_droptail_7_bytes_d1 = dropTailTest d7 d1
 prop_droptail_4_bytes_d3 :: Property
 prop_droptail_4_bytes_d3 = dropTailTest d4 d3
 
-prop_droptail_7_bytes_d3 :: Property
-prop_droptail_7_bytes_d3 = dropTailTest d7 d4
+prop_droptail_7_bytes_d4 :: Property
+prop_droptail_7_bytes_d4 = dropTailTest d7 d4
 
 -- | dataWidth ~ n
 prop_droptail_4_bytes_d4 :: Property
 prop_droptail_4_bytes_d4 = dropTailTest d4 d4
 
-prop_droptail_7_bytes_d4 :: Property
-prop_droptail_7_bytes_d4 = dropTailTest d7 d7
+prop_droptail_7_bytes_d7 :: Property
+prop_droptail_7_bytes_d7 = dropTailTest d7 d7
 
 -- | dataWidth > n
 prop_droptail_4_bytes_d7 :: Property
 prop_droptail_4_bytes_d7 = dropTailTest d4 d7
 
-prop_droptail_7_bytes_d7 :: Property
-prop_droptail_7_bytes_d7 = dropTailTest d7 d12
+prop_droptail_7_bytes_d12 :: Property
+prop_droptail_7_bytes_d12 = dropTailTest d7 d12
 
 tests :: TestTree
 tests =
