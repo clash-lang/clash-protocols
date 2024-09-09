@@ -22,6 +22,7 @@ module Protocols.Df (
   Data (..),
 
   -- * Operations on Df protocol
+  empty,
   const,
   void,
   pure,
@@ -360,6 +361,10 @@ const b =
         , P.pure (Data b)
         )
     )
+
+-- | Never produce a value.
+empty :: Circuit () (Df dom a)
+empty = Circuit (P.const ((), P.pure NoData))
 
 -- | Drive a constant value composed of /a/.
 pure :: a -> Circuit () (Df dom a)
