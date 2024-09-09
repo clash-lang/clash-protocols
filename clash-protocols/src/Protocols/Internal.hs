@@ -169,6 +169,19 @@ repeatC ::
 repeatC (Circuit f) =
   Circuit (C.unzip . C.map f . uncurry C.zip)
 
+{- | Copy a circuit /n/ times, providing access to the index of each replica.
+If looking for a circuit that turns a single channel into multiple, check out
+'Protocols.Df.fanout'.
+-}
+repeatWithIndexC
+  :: forall n a b. (C.KnownNat n) =>
+  (C.Index n -> Circuit a b) ->
+  Circuit (C.Vec n a) (C.Vec n b)
+repeatWithIndexC f =
+  Circuit (C.unzip . C.zipWith g C.indicesI . uncurry C.zip)
+  where
+    g i = case f i of Circuit f' -> f'
+
 {- | Combine two separate circuits into one. If you are looking to combine
 multiple streams into a single stream, checkout 'Protocols.Df.fanin'.
 -}
