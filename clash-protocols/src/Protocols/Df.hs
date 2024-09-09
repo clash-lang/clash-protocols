@@ -365,7 +365,7 @@ const b =
 pure :: a -> Circuit () (Df dom a)
 pure a = Circuit (P.const ((), P.pure (Data a)))
 
--- | Drive a constant value composed of /a/.
+-- | Never acknowledge values.
 void :: (C.HiddenReset dom) => Circuit (Df dom a) ()
 void =
   Circuit
