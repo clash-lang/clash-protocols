@@ -23,6 +23,7 @@ module Protocols.PacketStream.Hedgehog (
   upConvert,
   depacketizerModel,
   depacketizeToDfModel,
+  dropTailModel,
   packetizerModel,
   packetizeFromDfModel,
 
@@ -243,6 +244,26 @@ depacketizeToDfModel toOut ps = L.map parseHdr bytePackets
     L.filter
       (\pkt -> L.length pkt >= C.natToNum @headerBytes)
       (chunkByPacket $ downConvert (dropAbortedPackets ps))
+
+-- | Model of 'Protocols.PacketStream.dropTailC'.
+dropTailModel ::
+  forall dataWidth meta n.
+  (C.KnownNat dataWidth) =>
+  (1 C.<= dataWidth) =>
+  (1 C.<= n) =>
+  C.SNat n ->
+  [PacketStreamM2S dataWidth meta] ->
+  [PacketStreamM2S dataWidth meta]
+dropTailModel C.SNat packets = L.concatMap go (chunkByPacket packets)
+ where
+  go :: [PacketStreamM2S dataWidth meta] -> [PacketStreamM2S dataWidth meta]
+  go packet =
+    upConvert $
+      L.init trimmed L.++ [(L.last trimmed){_last = Just 0, _abort = aborted}]
+   where
+    aborted = L.any _abort packet
+    bytePkts = downConvert packet
+    trimmed = L.take (L.length bytePkts - C.natToNum @n) bytePkts
 
 -- | Model of the generic `Protocols.PacketStream.packetizerC`.
 packetizerModel ::
