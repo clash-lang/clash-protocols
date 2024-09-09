@@ -7,7 +7,8 @@ module Tests.Protocols.PacketStream.Depacketizers (
 
 import Clash.Prelude
 
-import Hedgehog
+import Hedgehog (Property)
+import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
 import Test.Tasty
@@ -18,8 +19,8 @@ import Test.Tasty.TH (testGroupGenerator)
 
 import Protocols
 import Protocols.Hedgehog
-import Protocols.PacketStream (depacketizeToDfC, depacketizerC)
 import Protocols.PacketStream.Base
+import Protocols.PacketStream.Depacketizers
 import Protocols.PacketStream.Hedgehog
 
 {- | Test the depacketizer with varying datawidth and number of bytes in the header,
@@ -39,16 +40,65 @@ depacketizerPropertyGenerator SNat SNat =
     @System
     defExpectOptions{eoSampleMax = 1000, eoStopAfterEmpty = 1000}
     (genPackets (Range.linear 1 4) Abort (genValidPacket (pure ()) (Range.linear 1 30)))
-    (exposeClockResetEnable model)
+    (exposeClockResetEnable (depacketizerModel const))
     (exposeClockResetEnable ckt)
  where
-  model = depacketizerModel const
   ckt ::
     (HiddenClockResetEnable System) =>
     Circuit
       (PacketStream System dataWidth ())
       (PacketStream System dataWidth (Vec headerBytes (BitVector 8)))
   ckt = depacketizerC const
+
+{- |
+Test depacketizeToDf with varying datawidth and number of bytes in the header,
+with metaIn = () and toMetaOut = const.
+-}
+depacketizeToDfPropertyGenerator ::
+  forall
+    (dataWidth :: Nat)
+    (headerBytes :: Nat).
+  (1 <= dataWidth) =>
+  (1 <= headerBytes) =>
+  SNat dataWidth ->
+  SNat headerBytes ->
+  Property
+depacketizeToDfPropertyGenerator SNat SNat =
+  idWithModelSingleDomain
+    @System
+    defExpectOptions{eoSampleMax = 1000, eoStopAfterEmpty = 1000}
+    (genPackets (Range.linear 1 10) Abort (genValidPacket (pure ()) (Range.linear 1 20)))
+    (exposeClockResetEnable (depacketizeToDfModel const))
+    (exposeClockResetEnable ckt)
+ where
+  ckt ::
+    (HiddenClockResetEnable System) =>
+    Circuit (PacketStream System dataWidth ()) (Df System (Vec headerBytes (BitVector 8)))
+  ckt = depacketizeToDfC const
+
+-- | Test 'dropTailC' with varying data width and bytes to drop.
+dropTailTest ::
+  forall dataWidth n.
+  (KnownNat n) =>
+  (1 <= dataWidth) =>
+  (1 <= n) =>
+  SNat dataWidth ->
+  SNat n ->
+  Property
+dropTailTest SNat n =
+  idWithModelSingleDomain
+    @System
+    defExpectOptions
+    ( genPackets
+        (Range.linear 1 4)
+        Abort
+        ( genValidPacket
+            (Gen.int8 Range.linearBounded)
+            (Range.linear (natToNum @(n `DivRU` dataWidth)) 20)
+        )
+    )
+    (exposeClockResetEnable (dropTailModel n))
+    (exposeClockResetEnable (dropTailC @dataWidth n))
 
 -- | headerBytes % dataWidth ~ 0
 prop_const_depacketizer_d1_d14 :: Property
@@ -66,32 +116,6 @@ prop_const_depacketizer_d7_d7 = depacketizerPropertyGenerator d7 d7
 prop_const_depacketizer_d5_d4 :: Property
 prop_const_depacketizer_d5_d4 = depacketizerPropertyGenerator d5 d4
 
-{- | Test depacketizeToDf with varying datawidth and number of bytes in the header,
-  with metaIn = () and toMetaOut = const.
--}
-depacketizeToDfPropertyGenerator ::
-  forall
-    (dataWidth :: Nat)
-    (headerBytes :: Nat).
-  (1 <= dataWidth) =>
-  (1 <= headerBytes) =>
-  SNat dataWidth ->
-  SNat headerBytes ->
-  Property
-depacketizeToDfPropertyGenerator SNat SNat =
-  idWithModelSingleDomain
-    @System
-    defExpectOptions{eoSampleMax = 1000, eoStopAfterEmpty = 1000}
-    (genPackets (Range.linear 1 10) Abort (genValidPacket (pure ()) (Range.linear 1 20)))
-    (exposeClockResetEnable model)
-    (exposeClockResetEnable ckt)
- where
-  model = depacketizeToDfModel const
-  ckt ::
-    (HiddenClockResetEnable System) =>
-    Circuit (PacketStream System dataWidth ()) (Df System (Vec headerBytes (BitVector 8)))
-  ckt = depacketizeToDfC const
-
 -- | headerBytes % dataWidth ~ 0
 prop_const_depacketize_to_df_d1_d14 :: Property
 prop_const_depacketize_to_df_d1_d14 = depacketizeToDfPropertyGenerator d1 d14
@@ -108,9 +132,37 @@ prop_const_depacketize_to_df_d7_d7 = depacketizeToDfPropertyGenerator d7 d7
 prop_const_depacketize_to_df_d5_d4 :: Property
 prop_const_depacketize_to_df_d5_d4 = depacketizeToDfPropertyGenerator d5 d4
 
+-- | dataWidth < n && dataWidth % n ~ 0
+prop_droptail_4_bytes_d1 :: Property
+prop_droptail_4_bytes_d1 = dropTailTest d4 d1
+
+prop_droptail_7_bytes_d1 :: Property
+prop_droptail_7_bytes_d1 = dropTailTest d7 d1
+
+-- | dataWidth < n && dataWidth % n > 0
+prop_droptail_4_bytes_d3 :: Property
+prop_droptail_4_bytes_d3 = dropTailTest d4 d3
+
+prop_droptail_7_bytes_d3 :: Property
+prop_droptail_7_bytes_d3 = dropTailTest d7 d4
+
+-- | dataWidth ~ n
+prop_droptail_4_bytes_d4 :: Property
+prop_droptail_4_bytes_d4 = dropTailTest d4 d4
+
+prop_droptail_7_bytes_d4 :: Property
+prop_droptail_7_bytes_d4 = dropTailTest d7 d7
+
+-- | dataWidth > n
+prop_droptail_4_bytes_d7 :: Property
+prop_droptail_4_bytes_d7 = dropTailTest d4 d7
+
+prop_droptail_7_bytes_d7 :: Property
+prop_droptail_7_bytes_d7 = dropTailTest d7 d12
+
 tests :: TestTree
 tests =
   localOption (mkTimeout 20_000_000 {- 20 seconds -}) $
     localOption
-      (HedgehogTestLimit (Just 100))
+      (HedgehogTestLimit (Just 500))
       $(testGroupGenerator)
