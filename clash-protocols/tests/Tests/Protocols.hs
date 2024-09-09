@@ -3,6 +3,7 @@ module Tests.Protocols (tests, main) where
 import Test.Tasty
 import Tests.Protocols.Avalon qualified
 import Tests.Protocols.Axi4 qualified
+import Tests.Protocols.BiDf qualified
 import Tests.Protocols.Df qualified
 import Tests.Protocols.DfConv qualified
 import Tests.Protocols.PacketStream qualified
@@ -13,7 +14,8 @@ tests :: TestTree
 tests =
   testGroup
     "Protocols"
-    [ Tests.Protocols.Df.tests
+    [ Tests.Protocols.BiDf.tests
+    , Tests.Protocols.Df.tests
     , Tests.Protocols.DfConv.tests
     , Tests.Protocols.Avalon.tests
     , Tests.Protocols.Axi4.tests

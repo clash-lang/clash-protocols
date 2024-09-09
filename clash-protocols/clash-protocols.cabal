@@ -135,6 +135,7 @@ library
     Protocols.PacketStream.Packetizers
     Protocols.PacketStream.Padding
     Protocols.PacketStream.Routing
+    Protocols.BiDf
     Protocols.Df
     Protocols.DfConv
     Protocols.Hedgehog
@@ -177,6 +178,7 @@ test-suite unittests
   other-modules:
     Tests.Haxioms
     Tests.Protocols
+    Tests.Protocols.BiDf
     Tests.Protocols.Df
     Tests.Protocols.DfConv
     Tests.Protocols.Avalon
