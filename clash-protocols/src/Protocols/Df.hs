@@ -30,6 +30,7 @@ module Protocols.Df (
   map,
   mapS,
   bimap,
+  bimapS,
   fst,
   snd,
   mapMaybe,
@@ -41,18 +42,27 @@ module Protocols.Df (
   filter,
   filterS,
   either,
+  eitherS,
   first {-firstT,-},
+  firstS,
   mapLeft,
+  mapLeftS,
   second {-secondT,-},
+  secondS,
   mapRight,
+  mapRightS,
   zipWith,
+  zipWithS,
   zip,
   partition,
+  partitionS,
   route,
   select,
   selectN,
   selectUntil,
+  selectUntilS,
   fanin,
+  faninS,
   mfanin,
   fanout,
   bundleVec,
@@ -333,8 +343,19 @@ mapS fS = Circuit (C.unbundle . liftA2 go fS . C.bundle)
 
 -- | Like 'P.map', but over payload (/a/) of a Df stream.
 bimap ::
-  (B.Bifunctor p) => (a -> b) -> (c -> d) -> Circuit (Df dom (p a c)) (Df dom (p b d))
-bimap f g = map (B.bimap f g)
+  (B.Bifunctor p) =>
+  (a -> b) ->
+  (c -> d) ->
+  Circuit (Df dom (p a c)) (Df dom (p b d))
+bimap f g = bimapS (C.pure f) (C.pure g)
+
+-- | Like 'bimap', but can reason over signals.
+bimapS ::
+  (B.Bifunctor p) =>
+  Signal dom (a -> b) ->
+  Signal dom (c -> d) ->
+  Circuit (Df dom (p a c)) (Df dom (p b d))
+bimapS fS gS = mapS (liftA2 B.bimap fS gS)
 
 -- | Like 'P.fst', but over payload of a Df stream.
 fst :: Circuit (Df dom (a, b)) (Df dom a)
@@ -346,11 +367,21 @@ snd = map P.snd
 
 -- | Like 'Data.Bifunctor.first', but over payload of a Df stream.
 first :: (B.Bifunctor p) => (a -> b) -> Circuit (Df dom (p a c)) (Df dom (p b c))
-first f = map (B.first f)
+first f = firstS (C.pure f)
+
+-- | Like 'first', but can reason over signals.
+firstS ::
+  (B.Bifunctor p) => Signal dom (a -> b) -> Circuit (Df dom (p a c)) (Df dom (p b c))
+firstS fS = mapS (B.first <$> fS)
 
 -- | Like 'Data.Bifunctor.second', but over payload of a Df stream.
 second :: (B.Bifunctor p) => (b -> c) -> Circuit (Df dom (p a b)) (Df dom (p a c))
-second f = map (B.second f)
+second f = secondS (C.pure f)
+
+-- | Like 'second', but can reason over signals.
+secondS ::
+  (B.Bifunctor p) => Signal dom (b -> c) -> Circuit (Df dom (p a b)) (Df dom (p a c))
+secondS fS = mapS (B.second <$> fS)
 
 -- | Acknowledge but ignore data from LHS protocol. Send a static value /b/.
 const :: (C.HiddenReset dom) => b -> Circuit (Df dom a) (Df dom b)
@@ -414,7 +445,7 @@ Example:
 filter :: forall dom a. (a -> Bool) -> Circuit (Df dom a) (Df dom a)
 filter f = filterS (C.pure f)
 
--- | Like `filter`, but can reason of signals.
+-- | Like `filter`, but can reason over signals.
 filterS :: forall dom a. Signal dom (a -> Bool) -> Circuit (Df dom a) (Df dom a)
 filterS fS = Circuit (C.unbundle . liftA2 go fS . C.bundle)
  where
@@ -425,15 +456,28 @@ filterS fS = Circuit (C.unbundle . liftA2 go fS . C.bundle)
 
 -- | Like 'Data.Either.Combinators.mapLeft', but over payload of a 'Df' stream.
 mapLeft :: (a -> b) -> Circuit (Df dom (Either a c)) (Df dom (Either b c))
-mapLeft = first
+mapLeft f = mapLeftS (C.pure f)
+
+-- | Like 'mapLeft', but can reason over signals.
+mapLeftS :: Signal dom (a -> b) -> Circuit (Df dom (Either a c)) (Df dom (Either b c))
+mapLeftS = firstS
 
 -- | Like 'Data.Either.Combinators.mapRight', but over payload of a 'Df' stream.
 mapRight :: (b -> c) -> Circuit (Df dom (Either a b)) (Df dom (Either a c))
 mapRight = second
 
+-- | Like 'mapRight', but can reason over signals.
+mapRightS :: Signal dom (b -> c) -> Circuit (Df dom (Either a b)) (Df dom (Either a c))
+mapRightS = secondS
+
 -- | Like 'Data.Either.either', but over a 'Df' stream.
 either :: (a -> c) -> (b -> c) -> Circuit (Df dom (Either a b)) (Df dom c)
-either f g = map (P.either f g)
+either f g = eitherS (C.pure f) (C.pure g)
+
+-- | Like 'either', but can reason over signals.
+eitherS ::
+  Signal dom (a -> c) -> Signal dom (b -> c) -> Circuit (Df dom (Either a b)) (Df dom c)
+eitherS fS gS = mapS (liftA2 P.either fS gS)
 
 {- | Like 'P.zipWith', but over two 'Df' streams.
 
@@ -448,11 +492,20 @@ zipWith ::
   Circuit
     (Df dom a, Df dom b)
     (Df dom c)
-zipWith f =
-  Circuit (B.first C.unbundle . C.unbundle . fmap go . C.bundle . B.first C.bundle)
+zipWith f = zipWithS (C.pure f)
+
+-- | Like 'zipWith', but can reason over signals.
+zipWithS ::
+  forall dom a b c.
+  Signal dom (a -> b -> c) ->
+  Circuit
+    (Df dom a, Df dom b)
+    (Df dom c)
+zipWithS fS =
+  Circuit (B.first C.unbundle . C.unbundle . liftA2 go fS . C.bundle . B.first C.bundle)
  where
-  go ((Data a, Data b), ack) = ((ack, ack), Data (f a b))
-  go _ = ((Ack False, Ack False), NoData)
+  go f ((Data a, Data b), ack) = ((ack, ack), Data (f a b))
+  go _ _ = ((Ack False, Ack False), NoData)
 
 -- | Like 'P.zip', but over two 'Df' streams.
 zip :: forall a b dom. Circuit (Df dom a, Df dom b) (Df dom (a, b))
@@ -468,13 +521,18 @@ Example:
 ([7,9,11],[1,3,5,2])
 -}
 partition :: forall dom a. (a -> Bool) -> Circuit (Df dom a) (Df dom a, Df dom a)
-partition f =
-  Circuit (B.second C.unbundle . C.unbundle . fmap go . C.bundle . B.second C.bundle)
+partition f = partitionS (C.pure f)
+
+-- | Like `partition`, but can reason over signals.
+partitionS ::
+  forall dom a. Signal dom (a -> Bool) -> Circuit (Df dom a) (Df dom a, Df dom a)
+partitionS fS =
+  Circuit (B.second C.unbundle . C.unbundle . liftA2 go fS . C.bundle . B.second C.bundle)
  where
-  go (Data a, (ackT, ackF))
+  go f (Data a, (ackT, ackF))
     | f a = (ackT, (Data a, NoData))
     | otherwise = (ackF, (NoData, Data a))
-  go _ = (Ack False, (NoData, NoData))
+  go _ _ = (Ack False, (NoData, NoData))
 
 {- | Route a 'Df' stream to another corresponding to the index
 
@@ -591,18 +649,28 @@ selectUntil ::
   Circuit
     (C.Vec n (Df dom a), Df dom (C.Index n))
     (Df dom a)
-selectUntil f =
+selectUntil f = selectUntilS (C.pure f)
+
+-- | Like 'selectUntil', but can reason over signals.
+selectUntilS ::
+  forall n dom a.
+  (C.KnownNat n) =>
+  Signal dom (a -> Bool) ->
+  Circuit
+    (C.Vec n (Df dom a), Df dom (C.Index n))
+    (Df dom a)
+selectUntilS fS =
   Circuit
     ( B.first (B.first C.unbundle . C.unbundle)
         . C.unbundle
-        . fmap go
+        . liftA2 go fS
         . C.bundle
         . B.first (C.bundle . B.first C.bundle)
     )
  where
   nacks = C.repeat (Ack False)
 
-  go ((dats, dat), Ack ack)
+  go f ((dats, dat), Ack ack)
     | Data i <- dat
     , Data d <- dats C.!! i =
         (
@@ -653,7 +721,15 @@ fanin ::
   (C.KnownNat n, 1 <= n) =>
   (a -> a -> a) ->
   Circuit (C.Vec n (Df dom a)) (Df dom a)
-fanin f = bundleVec |> map (C.fold @(n C.- 1) f)
+fanin f = faninS (C.pure f)
+
+-- | Like 'fanin', but can reason over signals.
+faninS ::
+  forall n dom a.
+  (C.KnownNat n, 1 <= n) =>
+  Signal dom (a -> a -> a) ->
+  Circuit (C.Vec n (Df dom a)) (Df dom a)
+faninS fS = bundleVec |> mapS (C.fold @(n C.- 1) <$> fS)
 
 -- | Merge data of multiple 'Df' streams using Monoid's '<>'.
 mfanin ::
