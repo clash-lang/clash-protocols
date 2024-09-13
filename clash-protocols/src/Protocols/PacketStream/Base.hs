@@ -13,27 +13,50 @@ module Protocols.PacketStream.Base (
   PacketStream,
 
   -- * CSignal conversion
-  unsafeToPacketStream,
-  fromPacketStream,
+  toCSignal,
+  unsafeFromCSignal,
+  unsafeDropBackpressure,
 
   -- * Basic operations on the PacketStream protocol
-  abortOnBackPressureC,
+  empty,
+  consume,
+  void,
   fanout,
   forceResetSanity,
+  zeroOutInvalidBytesC,
+  abortOnBackPressureC,
+
+  -- * Skid buffers
+  registerBoth,
   registerBwd,
   registerFwd,
-  void,
-  zeroOutInvalidBytesC,
 
   -- * Operations on metadata
-  filterMetaS,
-  filterMeta,
-  mapMetaS,
+  fstMeta,
+  sndMeta,
   mapMeta,
+  filterMeta,
+  firstMeta,
+  secondMeta,
+  bimapMeta,
+  eitherMeta,
+
+  -- * Operations on metadata (Signal versions)
+  mapMetaS,
+  filterMetaS,
+  firstMetaS,
+  secondMetaS,
+  bimapMetaS,
+  eitherMetaS,
 ) where
 
-import Clash.Prelude hiding (sample)
+import Clash.Prelude hiding (empty, sample)
 import qualified Prelude as P
+
+import qualified Data.Bifunctor as B
+import Data.Coerce (coerce)
+import qualified Data.Maybe as Maybe
+import Data.Proxy
 
 import qualified Protocols.Df as Df
 import qualified Protocols.DfConv as DfConv
@@ -41,9 +64,6 @@ import Protocols.Hedgehog.Internal
 import Protocols.Internal
 
 import Control.DeepSeq (NFData)
-import Data.Coerce (coerce)
-import qualified Data.Maybe as Maybe
-import Data.Proxy
 
 {- |
 Data sent from manager to subordinate.
@@ -197,22 +217,36 @@ instance
       $ Df.maybeToData
       <$> sampled
 
--- | Circuit to convert a CSignal into a PacketStream. This is unsafe, because it drops backpressure.
-unsafeToPacketStream ::
+{- |
+Circuit to convert a 'CSignal' into a 'PacketStream'.
+This is unsafe, because it ignores all incoming backpressure.
+-}
+unsafeFromCSignal ::
   forall dom dataWidth meta.
   Circuit
     (CSignal dom (Maybe (PacketStreamM2S dataWidth meta)))
     (PacketStream dom dataWidth meta)
-unsafeToPacketStream = Circuit (\(fwdInS, _) -> (pure (), fwdInS))
+unsafeFromCSignal = Circuit (\(fwdInS, _) -> (pure (), fwdInS))
 
--- | Converts a PacketStream into a CSignal.
-fromPacketStream ::
+-- | Converts a 'PacketStream' into a 'CSignal': always acknowledges.
+toCSignal ::
   forall dom dataWidth meta.
   (HiddenClockResetEnable dom) =>
   Circuit
     (PacketStream dom dataWidth meta)
     (CSignal dom (Maybe (PacketStreamM2S dataWidth meta)))
-fromPacketStream = forceResetSanity |> Circuit (\(fwdIn, _) -> (pure (PacketStreamS2M True), fwdIn))
+toCSignal = forceResetSanity |> Circuit (\(fwdIn, _) -> (pure (PacketStreamS2M True), fwdIn))
+
+-- | Drop all backpressure signals.
+unsafeDropBackpressure ::
+  (HiddenClockResetEnable dom) =>
+  Circuit
+    (PacketStream dom dataWidth meta)
+    (PacketStream dom dataWidth meta) ->
+  Circuit
+    (CSignal dom (Maybe (PacketStreamM2S dataWidth meta)))
+    (CSignal dom (Maybe (PacketStreamM2S dataWidth meta)))
+unsafeDropBackpressure ckt = unsafeFromCSignal |> ckt |> toCSignal
 
 -- | A circuit that sets `_abort` upon backpressure from the forward circuit.
 abortOnBackPressureC ::
@@ -236,48 +270,6 @@ forceResetSanity ::
   (HiddenClockResetEnable dom) =>
   Circuit (PacketStream dom dataWidth meta) (PacketStream dom dataWidth meta)
 forceResetSanity = forceResetSanityGeneric
-
-{- |
-Filter a packet stream based on its metadata,
-with the predicate wrapped in a @Signal@.
--}
-filterMetaS ::
-  -- | Predicate which specifies whether to keep a fragment based on its metadata,
-  --   wrapped in a @Signal@
-  Signal dom (meta -> Bool) ->
-  Circuit (PacketStream dom dataWidth meta) (PacketStream dom dataWidth meta)
-filterMetaS pS = Circuit $ \(fwdIn, bwdIn) -> unbundle (go <$> bundle (fwdIn, bwdIn, pS))
- where
-  go (Nothing, bwdIn, _) = (bwdIn, Nothing)
-  go (Just inPkt, bwdIn, predicate)
-    | predicate (_meta inPkt) = (bwdIn, Just inPkt)
-    | otherwise = (PacketStreamS2M True, Nothing)
-
--- | Filter a packet stream based on its metadata.
-filterMeta ::
-  -- | Predicate which specifies whether to keep a fragment based on its metadata
-  (meta -> Bool) ->
-  Circuit (PacketStream dom dataWidth meta) (PacketStream dom dataWidth meta)
-filterMeta p = filterMetaS (pure p)
-
-{- |
-Map a function on the metadata of a packet stream,
-with the function wrapped in a @Signal@.
--}
-mapMetaS ::
-  -- | Function to apply on the metadata, wrapped in a @Signal@
-  Signal dom (metaIn -> metaOut) ->
-  Circuit (PacketStream dom dataWidth metaIn) (PacketStream dom dataWidth metaOut)
-mapMetaS fS = Circuit $ \(fwdIn, bwdIn) -> (bwdIn, go <$> bundle (fwdIn, fS))
- where
-  go (inp, f) = (\inPkt -> inPkt{_meta = f (_meta inPkt)}) <$> inp
-
--- | Map a function on the metadata of a packet stream.
-mapMeta ::
-  -- | Function to apply on the metadata
-  (metaIn -> metaOut) ->
-  Circuit (PacketStream dom dataWidth metaIn) (PacketStream dom dataWidth metaOut)
-mapMeta f = mapMetaS (pure f)
 
 -- | Sets data bytes that are not enabled in a @PacketStream@ to @0x00@.
 zeroOutInvalidBytesC ::
@@ -316,7 +308,7 @@ fanout ::
 fanout = DfConv.fanout Proxy Proxy
 
 {- |
-Place register on /forward/ part of a circuit.
+Place a register on the /forward/ part of a circuit.
 This adds combinational delay on the /backward/ path.
 -}
 registerFwd ::
@@ -328,7 +320,7 @@ registerFwd ::
 registerFwd = DfConv.registerFwd Proxy Proxy
 
 {- |
-Place register on /backward/ part of a circuit.
+Place a register on the /backward/ part of a circuit.
 This adds combinational delay on the /forward/ path.
 -}
 registerBwd ::
@@ -339,9 +331,152 @@ registerBwd ::
   Circuit (PacketStream dom dataWidth meta) (PacketStream dom dataWidth meta)
 registerBwd = DfConv.registerBwd Proxy Proxy
 
--- | Ignore incoming data.
-void ::
+{- |
+A pipeline skid buffer: places registers on both the /backward/ and /forward/
+part of a circuit. This completely breaks up the combinatorial path between
+the left and right side of this component. In order to achieve this, it has to
+buffer @Fwd@ twice.
+
+Another benefit of this component is that the circuit on the left hand side
+may now use @Bwd@ in order to compute its @Fwd@, because this cannot
+introduce combinatorial loops anymore.
+
+Runs at full throughput, but causes 2 clock cycles of latency.
+-}
+registerBoth ::
   forall dataWidth meta dom.
   (HiddenClockResetEnable dom) =>
-  Circuit (PacketStream dom dataWidth meta) ()
+  (KnownNat dataWidth) =>
+  (NFDataX meta) =>
+  Circuit (PacketStream dom dataWidth meta) (PacketStream dom dataWidth meta)
+registerBoth = registerBwd |> registerFwd
+
+-- | Never produces a value.
+empty :: Circuit () (PacketStream dom dataWidth meta)
+empty = Circuit (const ((), pure Nothing))
+
+-- | Always acknowledges incoming data.
+consume :: (HiddenReset dom) => Circuit (PacketStream dom dataWidth meta) ()
+consume = Circuit (const (pure (PacketStreamS2M True), ()))
+
+-- | Never acknowledges incoming data.
+void :: (HiddenClockResetEnable dom) => Circuit (PacketStream dom dataWidth meta) ()
 void = DfConv.void Proxy
+
+-- | Like 'P.fst', but over the metadata of a 'PacketStream'.
+fstMeta :: Circuit (PacketStream dom dataWidth (a, b)) (PacketStream dom dataWidth a)
+fstMeta = mapMeta P.fst
+
+-- | Like 'P.snd', but over the metadata of a 'PacketStream'.
+sndMeta :: Circuit (PacketStream dom dataWidth (a, b)) (PacketStream dom dataWidth b)
+sndMeta = mapMeta P.snd
+
+-- | Like 'Data.List.map', but over the metadata of a 'PacketStream'.
+mapMeta ::
+  -- | Function to apply on the metadata
+  (metaIn -> metaOut) ->
+  Circuit (PacketStream dom dataWidth metaIn) (PacketStream dom dataWidth metaOut)
+mapMeta f = mapMetaS (pure f)
+
+-- | Like 'mapMeta', but can reason over signals.
+mapMetaS ::
+  -- | Function to apply on the metadata, wrapped in a @Signal@
+  Signal dom (metaIn -> metaOut) ->
+  Circuit (PacketStream dom dataWidth metaIn) (PacketStream dom dataWidth metaOut)
+mapMetaS fS = Circuit $ \(fwdIn, bwdIn) -> (bwdIn, go <$> bundle (fwdIn, fS))
+ where
+  go (inp, f) = (\inPkt -> inPkt{_meta = f (_meta inPkt)}) <$> inp
+
+-- | Like 'Data.List.filter', but over the metadata of a 'PacketStream'.
+filterMeta ::
+  -- | Predicate which specifies whether to keep a fragment based on its metadata
+  (meta -> Bool) ->
+  Circuit (PacketStream dom dataWidth meta) (PacketStream dom dataWidth meta)
+filterMeta p = filterMetaS (pure p)
+
+-- | Like 'filterMeta', but can reason over signals.
+filterMetaS ::
+  -- | Predicate which specifies whether to keep a fragment based on its metadata,
+  --   wrapped in a @Signal@
+  Signal dom (meta -> Bool) ->
+  Circuit (PacketStream dom dataWidth meta) (PacketStream dom dataWidth meta)
+filterMetaS pS = Circuit $ \(fwdIn, bwdIn) -> unbundle (go <$> bundle (fwdIn, bwdIn, pS))
+ where
+  go (Nothing, bwdIn, _) = (bwdIn, Nothing)
+  go (Just inPkt, bwdIn, predicate)
+    | predicate (_meta inPkt) = (bwdIn, Just inPkt)
+    | otherwise = (PacketStreamS2M True, Nothing)
+
+-- | Like 'Data.Either.either', but over the metadata of a 'PacketStream'.
+eitherMeta ::
+  (a -> c) ->
+  (b -> c) ->
+  Circuit
+    (PacketStream dom dataWidth (Either a b))
+    (PacketStream dom dataWidth c)
+eitherMeta f g = eitherMetaS (pure f) (pure g)
+
+-- | Like 'eitherMeta', but can reason over signals.
+eitherMetaS ::
+  Signal dom (a -> c) ->
+  Signal dom (b -> c) ->
+  Circuit
+    (PacketStream dom dataWidth (Either a b))
+    (PacketStream dom dataWidth c)
+eitherMetaS fS gS = mapMetaS (liftA2 P.either fS gS)
+
+-- | Like 'Data.Bifunctor.bimap', but over the metadata of a 'PacketStream'.
+bimapMeta ::
+  (B.Bifunctor p) =>
+  (a -> b) ->
+  (c -> d) ->
+  Circuit
+    (PacketStream dom dataWidth (p a c))
+    (PacketStream dom dataWidth (p b d))
+bimapMeta f g = bimapMetaS (pure f) (pure g)
+
+-- | Like 'bimapMeta', but can reason over signals.
+bimapMetaS ::
+  (B.Bifunctor p) =>
+  Signal dom (a -> b) ->
+  Signal dom (c -> d) ->
+  Circuit
+    (PacketStream dom dataWidth (p a c))
+    (PacketStream dom dataWidth (p b d))
+bimapMetaS fS gS = mapMetaS (liftA2 B.bimap fS gS)
+
+-- | Like 'Data.Bifunctor.first', but over the metadata of a 'PacketStream'.
+firstMeta ::
+  (B.Bifunctor p) =>
+  (a -> b) ->
+  Circuit
+    (PacketStream dom dataWidth (p a c))
+    (PacketStream dom dataWidth (p b c))
+firstMeta f = firstMetaS (pure f)
+
+-- | Like 'firstMeta', but can reason over signals.
+firstMetaS ::
+  (B.Bifunctor p) =>
+  Signal dom (a -> b) ->
+  Circuit
+    (PacketStream dom dataWidth (p a c))
+    (PacketStream dom dataWidth (p b c))
+firstMetaS fS = mapMetaS (B.first <$> fS)
+
+-- | Like 'Data.Bifunctor.second', but over the metadata of a 'PacketStream'.
+secondMeta ::
+  (B.Bifunctor p) =>
+  (b -> c) ->
+  Circuit
+    (PacketStream dom dataWidth (p a b))
+    (PacketStream dom dataWidth (p a c))
+secondMeta f = secondMetaS (pure f)
+
+-- | Like 'secondMeta', but can reason over signals.
+secondMetaS ::
+  (B.Bifunctor p) =>
+  Signal dom (b -> c) ->
+  Circuit
+    (PacketStream dom dataWidth (p a b))
+    (PacketStream dom dataWidth (p a c))
+secondMetaS fS = mapMetaS (B.second <$> fS)
