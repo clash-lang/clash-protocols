@@ -94,11 +94,17 @@ data PacketStreamM2S (dataWidth :: Nat) (meta :: Type) = PacketStreamM2S
   -- ^ Iff true, the packet corresponding to this transfer is invalid. The subordinate
   --   must either drop the packet or forward the `_abort`.
   }
-  deriving (Eq, Generic, ShowX, Show, NFData, Bundle, Functor)
+  deriving (Bundle, Eq, Functor, Generic, NFData, Show, ShowX)
+
+deriving instance
+  (KnownNat dataWidth, NFDataX meta) =>
+  NFDataX (PacketStreamM2S dataWidth meta)
 
 -- | Used by circuit-notation to create an empty stream
 instance Default (Maybe (PacketStreamM2S dataWidth meta)) where
   def = Nothing
+
+deriveAutoReg ''PacketStreamM2S
 
 {- |
 Data sent from the subordinate to manager.
@@ -109,11 +115,13 @@ newtype PacketStreamS2M = PacketStreamS2M
   { _ready :: Bool
   -- ^ Iff True, the subordinate is ready to receive data.
   }
-  deriving (Eq, Generic, ShowX, Show, NFData, Bundle, NFDataX)
+  deriving (Bundle, Eq, Generic, NFData, NFDataX, Show, ShowX)
 
 -- | Used by circuit-notation to create a sink that always acknowledges
 instance Default PacketStreamS2M where
   def = PacketStreamS2M True
+
+deriveAutoReg ''PacketStreamS2M
 
 {- |
 Simple valid-ready streaming protocol for transferring packets between components.
@@ -128,10 +136,6 @@ Invariants:
 6. All bytes in `_data` which are not enabled must be 0x00.
 -}
 data PacketStream (dom :: Domain) (dataWidth :: Nat) (meta :: Type)
-
-deriving instance
-  (KnownNat dataWidth, NFDataX meta) =>
-  NFDataX (PacketStreamM2S dataWidth meta)
 
 instance Protocol (PacketStream dom dataWidth meta) where
   type
