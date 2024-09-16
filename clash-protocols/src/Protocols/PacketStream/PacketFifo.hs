@@ -151,7 +151,7 @@ packetFifoC cSizeBits mSizeBits mode = case mode of
       |> fromSignals (packetFifoImpl cSizeBits mSizeBits)
   Drop ->
     toCSignal
-      |> abortOnBackPressureC
+      |> unsafeAbortOnBackpressureC
       |> forceResetSanity
       |> fromSignals (packetFifoImpl cSizeBits mSizeBits)
 
