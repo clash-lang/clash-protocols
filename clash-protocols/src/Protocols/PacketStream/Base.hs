@@ -24,7 +24,7 @@ module Protocols.PacketStream.Base (
   fanout,
   forceResetSanity,
   zeroOutInvalidBytesC,
-  abortOnBackPressureC,
+  unsafeAbortOnBackpressureC,
 
   -- * Skid buffers
   registerBoth,
@@ -252,16 +252,19 @@ unsafeDropBackpressure ::
     (CSignal dom (Maybe (PacketStreamM2S dataWidth meta)))
 unsafeDropBackpressure ckt = unsafeFromCSignal |> ckt |> toCSignal
 
--- | A circuit that sets `_abort` upon backpressure from the forward circuit.
-abortOnBackPressureC ::
-  forall (dom :: Domain) (dataWidth :: Nat) (meta :: Type).
+{- |
+Sets '_abort' upon receiving backpressure from the subordinate.
+
+__UNSAFE__: because @fwdOut@ depends on @bwdIn@, this may introduce
+combinatorial loops.
+-}
+unsafeAbortOnBackpressureC ::
+  forall (dataWidth :: Nat) (meta :: Type) (dom :: Domain).
   (HiddenClockResetEnable dom) =>
-  (KnownNat dataWidth) =>
-  (NFDataX meta) =>
   Circuit
     (CSignal dom (Maybe (PacketStreamM2S dataWidth meta)))
     (PacketStream dom dataWidth meta)
-abortOnBackPressureC = Circuit $ \(fwdInS, bwdInS) -> (pure (), go <$> bundle (fwdInS, bwdInS))
+unsafeAbortOnBackpressureC = Circuit $ \(fwdInS, bwdInS) -> (pure (), go <$> bundle (fwdInS, bwdInS))
  where
   go (fwdIn, bwdIn) = fmap (\pkt -> pkt{_abort = _abort pkt || not (_ready bwdIn)}) fwdIn
 
