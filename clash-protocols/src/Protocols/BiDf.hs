@@ -31,7 +31,9 @@ import qualified Protocols.Df as Df
 -- *Correctness conditions*
 --
 --  - The response channel must not produce a value before the request channel
---    has produced a value.
+--    has produced a value. The response may be produced in the same cycle the
+--    request is acknowledged (but see the law about a combinational path
+--    below).
 --
 --  - Each request must be paired with exactly one response.
 --
