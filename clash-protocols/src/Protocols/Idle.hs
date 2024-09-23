@@ -9,6 +9,7 @@ module Protocols.Idle (
   idleSink,
 ) where
 
+import qualified Clash.Prelude as C
 import Data.Proxy
 import Protocols.Cpp (maxTupleSize)
 import Protocols.Internal
@@ -17,6 +18,14 @@ import Protocols.Internal.TH (idleCircuitTupleInstances)
 instance (IdleCircuit a, IdleCircuit b) => IdleCircuit (a, b) where
   idleFwd _ = (idleFwd $ Proxy @a, idleFwd $ Proxy @b)
   idleBwd _ = (idleBwd $ Proxy @a, idleBwd $ Proxy @b)
+
+instance (IdleCircuit a, C.KnownNat n) => IdleCircuit (C.Vec n a) where
+  idleFwd _ = C.repeat $ idleFwd $ Proxy @a
+  idleBwd _ = C.repeat $ idleBwd $ Proxy @a
+
+instance IdleCircuit () where
+  idleFwd _ = ()
+  idleBwd _ = ()
 
 -- Derive instances for tuples up to maxTupleSize
 idleCircuitTupleInstances 3 maxTupleSize
