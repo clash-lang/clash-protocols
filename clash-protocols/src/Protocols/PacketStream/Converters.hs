@@ -6,13 +6,14 @@
 Provides an upconverter and downconverter for changing the data width of packet streams.
 -}
 module Protocols.PacketStream.Converters (
-  upConverterC,
   downConverterC,
+  upConverterC,
+  unsafeUpConverterC,
 ) where
 
 import Clash.Prelude
 
-import Protocols (Circuit (..), fromSignals, idC, (|>))
+import Protocols (CSignal, Circuit (..), fromSignals, idC, (|>))
 import Protocols.PacketStream.Base
 
 import Data.Data ((:~:) (Refl))
@@ -100,6 +101,31 @@ nextState st@(UpConverterState{..}) (Just PacketStreamM2S{..}) (PacketStreamS2M 
       }
   nextSt = if outReady then nextStRaw else st
 
+upConverter ::
+  forall (dwIn :: Nat) (dwOut :: Nat) (meta :: Type) (dom :: Domain) (n :: Nat).
+  (HiddenClockResetEnable dom) =>
+  (1 <= dwIn) =>
+  (1 <= dwOut) =>
+  (1 <= n) =>
+  (KnownNat dwIn) =>
+  (KnownNat dwOut) =>
+  (KnownNat n) =>
+  (dwOut ~ dwIn * n) =>
+  (NFDataX meta) =>
+  ( Signal dom (Maybe (PacketStreamM2S dwIn meta))
+  , Signal dom PacketStreamS2M
+  ) ->
+  ( Signal dom PacketStreamS2M
+  , Signal dom (Maybe (PacketStreamM2S dwOut meta))
+  )
+upConverter = mealyB go s0
+ where
+  s0 = UpConverterState (repeat undefined) 0 False True False Nothing undefined
+  go st@(UpConverterState{..}) (fwdIn, bwdIn) =
+    (nextState st fwdIn bwdIn, (PacketStreamS2M outReady, toPacketStream st))
+   where
+    outReady = not _ucFlush || _ready bwdIn
+
 {- |
 Converts packet streams of arbitrary data width @dwIn@ to packet streams of
 a bigger data width @dwOut@, where @dwIn@ must divide @dwOut@. When @dwIn ~ dwOut@,
@@ -122,13 +148,35 @@ upConverterC ::
   Circuit (PacketStream dom dwIn meta) (PacketStream dom dwOut meta)
 upConverterC = case sameNat (SNat @dwIn) (SNat @dwOut) of
   Just Refl -> idC
-  _ -> forceResetSanity |> fromSignals (mealyB go s0)
-   where
-    s0 = UpConverterState (repeat undefined) 0 False True False Nothing undefined
-    go st@(UpConverterState{..}) (fwdIn, bwdIn) =
-      (nextState st fwdIn bwdIn, (PacketStreamS2M outReady, toPacketStream st))
-     where
-      outReady = not _ucFlush || _ready bwdIn
+  _ -> forceResetSanity |> fromSignals upConverter
+
+{- |
+Unsafe version of 'upConverterC'.
+
+Because 'upConverterC' runs at full throughput, i.e. it only asserts backpressure
+if the subordinate asserts backpressure, we supply this variant which drops all
+backpressure signals. This can be used when the source circuit does not support
+backpressure. Using this variant in that case will improve timing and probably
+reduce resource usage.
+-}
+unsafeUpConverterC ::
+  forall (dwIn :: Nat) (dwOut :: Nat) (meta :: Type) (dom :: Domain) (n :: Nat).
+  (HiddenClockResetEnable dom) =>
+  (1 <= dwIn) =>
+  (1 <= dwOut) =>
+  (1 <= n) =>
+  (KnownNat dwIn) =>
+  (KnownNat dwOut) =>
+  (KnownNat n) =>
+  (dwOut ~ dwIn * n) =>
+  (NFDataX meta) =>
+  -- | Unsafe upconverter circuit
+  Circuit
+    (CSignal dom (Maybe (PacketStreamM2S dwIn meta)))
+    (CSignal dom (Maybe (PacketStreamM2S dwOut meta)))
+unsafeUpConverterC = case sameNat (SNat @dwIn) (SNat @dwOut) of
+  Just Refl -> idC
+  _ -> unsafeDropBackpressure (fromSignals upConverter)
 
 data DownConverterState (dwIn :: Nat) = DownConverterState
   { _dcBuf :: Vec dwIn (BitVector 8)

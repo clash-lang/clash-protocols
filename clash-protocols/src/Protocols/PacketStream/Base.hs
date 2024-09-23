@@ -245,11 +245,11 @@ toCSignal = forceResetSanity |> Circuit (\(fwdIn, _) -> (pure (PacketStreamS2M T
 unsafeDropBackpressure ::
   (HiddenClockResetEnable dom) =>
   Circuit
-    (PacketStream dom dataWidth meta)
-    (PacketStream dom dataWidth meta) ->
+    (PacketStream dom dwIn meta)
+    (PacketStream dom dwOut meta) ->
   Circuit
-    (CSignal dom (Maybe (PacketStreamM2S dataWidth meta)))
-    (CSignal dom (Maybe (PacketStreamM2S dataWidth meta)))
+    (CSignal dom (Maybe (PacketStreamM2S dwIn meta)))
+    (CSignal dom (Maybe (PacketStreamM2S dwOut meta)))
 unsafeDropBackpressure ckt = unsafeFromCSignal |> ckt |> toCSignal
 
 {- |
