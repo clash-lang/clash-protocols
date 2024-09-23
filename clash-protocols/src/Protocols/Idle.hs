@@ -9,8 +9,8 @@ module Protocols.Idle (
   idleSink,
 ) where
 
-import Data.Proxy
 import qualified Clash.Prelude as C
+import Data.Proxy
 import Protocols.Cpp (maxTupleSize)
 import Protocols.Internal
 import Protocols.Internal.TH (idleCircuitTupleInstances)
