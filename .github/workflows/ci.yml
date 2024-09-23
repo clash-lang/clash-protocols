@@ -117,9 +117,8 @@ jobs:
         with:
           version: "0.14.0.0"
           pattern: |
-            src/**/*.hs
-            tests/**/*.hs
-            !src/Protocols/Cpp.hs
+            **/*.hs
+            !clash-protocols-base/src/Protocols/Cpp.hs
 
   linting:
     name: Source code linting
