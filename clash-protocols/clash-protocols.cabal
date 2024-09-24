@@ -149,6 +149,7 @@ library
     Protocols.Hedgehog
     Protocols.Hedgehog.Internal
     Protocols.Idle
+    Protocols.Vec
     Protocols.Wishbone
     Protocols.Wishbone.Standard
     Protocols.Wishbone.Standard.Hedgehog
