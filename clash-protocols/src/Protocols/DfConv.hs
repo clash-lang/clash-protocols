@@ -103,6 +103,7 @@ import Data.Maybe (isJust)
 import Data.Proxy (Proxy (..))
 import Data.Tuple (swap)
 import GHC.Stack (HasCallStack)
+import qualified Protocols.Vec as Vec
 import qualified Prelude as P
 
 -- me
@@ -599,7 +600,7 @@ vecToDfConv ::
     (Vec n df)
 vecToDfConv proxy =
   mapCircuit (uncurry C.zip) unzip id id
-    $ vecCircuits
+    $ Vec.vecCircuits
     $ repeat
     $ toDfCircuit proxy
 
@@ -616,7 +617,7 @@ vecFromDfConv ::
     )
 vecFromDfConv proxy =
   mapCircuit id id unzip (uncurry C.zip)
-    $ vecCircuits
+    $ Vec.vecCircuits
     $ repeat
     $ fromDfCircuit proxy
 
