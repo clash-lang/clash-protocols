@@ -5,6 +5,7 @@
 {-# LANGUAGE RoleAnnotations #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -fconstraint-solver-iterations=20 #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 -- TODO: Hide internal documentation
@@ -31,7 +32,7 @@ import qualified Clash.Prelude as C
 
 import Protocols.Cpp (maxTupleSize)
 import Protocols.Internal.Classes
-import Protocols.Internal.TH (protocolTupleInstances)
+import Protocols.Internal.TH (protocolTupleInstances, simulateTupleInstances)
 
 import Control.Arrow ((***))
 import Data.Coerce (coerce)
@@ -262,6 +263,8 @@ instance (Simulate a, Simulate b) => Simulate (a, b) where
           (fwdR1, bwdR1) = stalledR (fwdR0, bwdR0)
          in
           ((fwdL1, fwdR1), (bwdL1, bwdR1))
+
+simulateTupleInstances 3 maxTupleSize
 
 instance (Drivable a, Drivable b) => Drivable (a, b) where
   type ExpectType (a, b) = (ExpectType a, ExpectType b)
