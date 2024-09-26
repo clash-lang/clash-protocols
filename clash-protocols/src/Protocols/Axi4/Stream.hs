@@ -26,7 +26,7 @@ import qualified Clash.Prelude as C
 
 import qualified Protocols.Df as Df
 import qualified Protocols.DfConv as DfConv
-import Protocols.Hedgehog.Internal
+import Protocols.Hedgehog
 import Protocols.Idle
 import Protocols.Internal
 
