@@ -149,6 +149,7 @@ library
     Protocols.DfConv
     Protocols.Hedgehog
     Protocols.Hedgehog.Internal
+    Protocols.Hedgehog.Types
     Protocols.Idle
     Protocols.Internal.TH
     Protocols.Wishbone
