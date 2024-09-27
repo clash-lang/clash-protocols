@@ -9,8 +9,8 @@ import Clash.Signal
 import Clash.Sized.Vector
 import GHC.TypeNats (KnownNat)
 import Protocols.Cpp (maxTupleSize)
-import Protocols.Internal.TH
 import Protocols.Internal.Types
+import Protocols.Protocol.TH
 
 instance Protocol () where
   type Fwd () = ()
