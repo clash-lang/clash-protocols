@@ -6,12 +6,12 @@
 -- For debugging TH:
 -- {-# OPTIONS_GHC -ddump-splices #-}
 
-module Protocols.Internal.TaggedBundle where
+module Protocols.Plugin.TaggedBundle where
 
 import Clash.Explicit.Prelude
 
-import Protocols.Cpp (maxTupleSize)
-import Protocols.Internal.TaggedBundle.TH (taggedBundleTupleInstances)
+import Protocols.Plugin.Cpp (maxTupleSize)
+import Protocols.Plugin.TaggedBundle.TH (taggedBundleTupleInstances)
 
 import Data.Tagged
 

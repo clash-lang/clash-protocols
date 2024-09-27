@@ -1,3 +1,5 @@
+{-# LANGUAGE RoleAnnotations #-}
+
 {- |
 These class definitions are needed to be able to write Template Haskell quotes
 for instances. They are defined separately to avoid import loops.
@@ -5,12 +7,10 @@ for instances. They are defined separately to avoid import loops.
 This module is not exported; the classes and their (orphan) instances are
 exported elsewhere.
 -}
-{-# LANGUAGE RoleAnnotations #-}
-module Protocols.Internal.Types where
+module Protocols.Plugin.Types where
 
 import Clash.Signal
 import Data.Kind (Type)
-import Data.Proxy
 
 -- | A protocol describes the in- and outputs of one side of a 'Circuit'.
 class Protocol a where
@@ -135,13 +135,6 @@ types:
 newtype Circuit a b
   = Circuit ((Fwd a, Bwd b) -> (Bwd a, Fwd b))
 
-{- | Idle state of a Circuit. Aims to provide no data for both the forward and
-backward direction. Transactions are not acknowledged.
--}
-class (Protocol p) => IdleCircuit p where
-  idleFwd :: Proxy p -> Fwd (p :: Type)
-  idleBwd :: Proxy p -> Bwd (p :: Type)
-
 {- | Circuit protocol with /Signal dom a/ in its forward direction, and
 /()/ in its backward direction. Convenient for exposing protocol
 internals, or simply for undirectional streams.
@@ -151,30 +144,3 @@ Note: 'CSignal' exists to work around [issue 760](https://github.com/clash-lang/
 data CSignal (dom :: Domain) (a :: Type)
 
 type role CSignal nominal representational
-
-{- | Force a /nack/ on the backward channel and /no data/ on the forward
-channel if reset is asserted.
--}
-forceResetSanityGeneric ::
-  forall dom a fwd bwd.
-  ( KnownDomain dom
-  , HiddenReset dom
-  , IdleCircuit a
-  , Fwd a ~ Signal dom fwd
-  , Bwd a ~ Signal dom bwd
-  ) =>
-  Circuit a a
-forceResetSanityGeneric = Circuit go
- where
-  go (fwd, bwd) =
-    unbundle $
-      mux
-        rstAsserted
-        (bundle (idleBwd $ Proxy @a, idleFwd $ Proxy @a))
-        (bundle (bwd, fwd))
-
-#if MIN_VERSION_clash_prelude(1,8,0)
-  rstAsserted = unsafeToActiveHigh hasReset
-#else
-  rstAsserted = unsafeToHighPolarity hasReset
-#endif

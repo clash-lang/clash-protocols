@@ -22,15 +22,14 @@ import Control.DeepSeq (NFData)
 import Data.Hashable (Hashable)
 import Data.Maybe (fromMaybe)
 import Data.Proxy
-import GHC.Base (Any)
 import Prelude hiding (const, map)
 
 import qualified Clash.Explicit.Prelude as CE
 import Clash.Prelude (type (*), type (+))
 import qualified Clash.Prelude as C
 
-import Protocols.Circuit
 import Protocols.Internal.Types
+import Protocols.Plugin
 
 import Control.Arrow ((***))
 import Data.Coerce (coerce)
@@ -572,20 +571,6 @@ simulateCircuit fwds bwds circ =
   (bwdSig, fwdSig) =
     toSignals circ $
       (simToSigFwd (Proxy @a) fwds, simToSigBwd (Proxy @b) bwds)
-
-{- | Picked up by "Protocols.Plugin" to process protocol DSL. See
-"Protocols.Plugin" for more information.
--}
-circuit :: Any
-circuit =
-  error "'protocol' called: did you forget to enable \"Protocols.Plugin\"?"
-
-{- | Picked up by "Protocols.Plugin" to tie circuits together. See
-"Protocols.Plugin" for more information.
--}
-(-<) :: Any
-(-<) =
-  error "(-<) called: did you forget to enable \"Protocols.Plugin\"?"
 
 {- | Allows for optional data.
 Depending on the value of @keep@, the data can either be included or left out.

@@ -106,6 +106,7 @@ import qualified Clash.Prelude as C
 import qualified Protocols.DfConv as DfConv
 import Protocols.Idle
 import Protocols.Internal
+import Protocols.Plugin
 
 {- | Config needed for both manager and subordinate interfaces.
 @Bool@ values represent whether to keep a boolean field or not.

@@ -129,7 +129,9 @@ import qualified Clash.Prelude as C
 import Clash.Signal.Internal (Signal (..))
 
 -- me
+import Protocols.Idle
 import Protocols.Internal
+import Protocols.Plugin
 
 {-# ANN module "HLint: ignore Use const" #-}
 

@@ -1,6 +1,7 @@
 {-# OPTIONS_HADDOCK hide #-}
 
-module Protocols.Protocol.TH where
+module Protocols.Plugin.TH where
+
 import Language.Haskell.TH
 
 appTs :: Q Type -> [Q Type] -> Q Type

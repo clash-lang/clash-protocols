@@ -24,7 +24,7 @@ if [[ "$#" -eq 0 || "$1" == "-h" || "$1" == "--help" ]]; then
 fi
 
 exclude_files=(
-  "clash-protocols-base/src/Protocols/Cpp.hs"
+  "clash-protocols-base/src/Protocols/Plugin/Cpp.hs"
   "dist-newstyle"
 )
 

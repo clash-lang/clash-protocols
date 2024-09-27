@@ -45,6 +45,7 @@ import qualified Clash.Prelude as C
 import Protocols.Axi4.Common
 import Protocols.Idle
 import Protocols.Internal
+import Protocols.Plugin
 
 -- | Configuration options for 'Axi4WriteData'.
 data Axi4WriteDataConfig = Axi4WriteDataConfig

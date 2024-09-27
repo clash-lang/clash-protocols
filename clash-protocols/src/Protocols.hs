@@ -59,12 +59,13 @@ module Protocols (
   -- * Circuit notation plugin
   circuit,
   (-<),
-  module Protocols.Internal.Units,
-  module Protocols.Internal.TaggedBundle,
+  module Protocols.Plugin.Units,
+  module Protocols.Plugin.TaggedBundle,
 ) where
 
 import Data.Default (def)
 import Protocols.Df (Df)
 import Protocols.Internal
-import Protocols.Internal.TaggedBundle
-import Protocols.Internal.Units
+import Protocols.Plugin
+import Protocols.Plugin.TaggedBundle
+import Protocols.Plugin.Units
