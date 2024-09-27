@@ -5,6 +5,7 @@ for instances. They are defined separately to avoid import loops.
 This module is not exported; the classes and their (orphan) instances are
 exported elsewhere.
 -}
+{-# LANGUAGE RoleAnnotations #-}
 module Protocols.Internal.Classes where
 
 import Clash.Signal
@@ -140,6 +141,16 @@ backward direction. Transactions are not acknowledged.
 class (Protocol p) => IdleCircuit p where
   idleFwd :: Proxy p -> Fwd (p :: Type)
   idleBwd :: Proxy p -> Bwd (p :: Type)
+
+{- | Circuit protocol with /Signal dom a/ in its forward direction, and
+/()/ in its backward direction. Convenient for exposing protocol
+internals, or simply for undirectional streams.
+Note: 'CSignal' exists to work around [issue 760](https://github.com/clash-lang/clash-compiler/issues/760)
+      in Clash, where type families with 'Signal' on the LHS are broken.
+-}
+data CSignal (dom :: Domain) (a :: Type)
+
+type role CSignal nominal representational
 
 {- | Force a /nack/ on the backward channel and /no data/ on the forward
 channel if reset is asserted.

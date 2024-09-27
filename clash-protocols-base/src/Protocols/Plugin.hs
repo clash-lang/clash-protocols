@@ -1,5 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PatternSynonyms #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 {- |
 A GHC source plugin providing a DSL for writing Circuit components. Credits to
@@ -15,7 +14,7 @@ module Protocols.Plugin (
 import Prelude
 
 -- clash-protocols
-import Protocols.Internal
+import Protocols.Internal.Classes
 import Protocols.Internal.TaggedBundle
 import Protocols.Internal.Units
 import Protocols.Plugin.Internal
