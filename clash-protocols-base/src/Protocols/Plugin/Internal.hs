@@ -8,7 +8,7 @@ import Clash.Explicit.Prelude
 
 import Data.Tagged
 import GHC.Base (Any)
-import Protocols.Internal.Classes
+import Protocols.Internal.Types
 
 {- | Picked up by "Protocols.Plugin" to process protocol DSL. See
 "Protocols.Plugin" for more information.

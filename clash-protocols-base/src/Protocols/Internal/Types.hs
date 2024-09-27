@@ -6,7 +6,7 @@ This module is not exported; the classes and their (orphan) instances are
 exported elsewhere.
 -}
 {-# LANGUAGE RoleAnnotations #-}
-module Protocols.Internal.Classes where
+module Protocols.Internal.Types where
 
 import Clash.Signal
 import Data.Kind (Type)
