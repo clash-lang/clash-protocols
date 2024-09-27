@@ -34,7 +34,11 @@ import qualified Clash.Explicit.Prelude as CE
 import Clash.Prelude (type (*), type (+))
 import qualified Clash.Prelude as C
 
-import Protocols.Internal.TH (simulateTupleInstances)
+import Protocols.Internal.TH (
+  backPressureTupleInstances,
+  drivableTupleInstances,
+  simulateTupleInstances,
+ )
 import Protocols.Internal.Types
 import Protocols.Plugin
 import Protocols.Plugin.Cpp (maxTupleSize)
@@ -97,12 +101,7 @@ instance Backpressure () where
 instance (Backpressure a, Backpressure b) => Backpressure (a, b) where
   boolsToBwd _ bs = (boolsToBwd (Proxy @a) bs, boolsToBwd (Proxy @b) bs)
 
-instance (Backpressure a, Backpressure b, Backpressure c) => Backpressure (a, b, c) where
-  boolsToBwd _ bs =
-    ( boolsToBwd (Proxy @a) bs
-    , boolsToBwd (Proxy @b) bs
-    , boolsToBwd (Proxy @c) bs
-    )
+backPressureTupleInstances 3 maxTupleSize
 
 instance (C.KnownNat n, Backpressure a) => Backpressure (C.Vec n a) where
   boolsToBwd _ bs = C.repeat (boolsToBwd (Proxy @a) bs)
@@ -265,10 +264,7 @@ instance (Drivable a, Drivable b) => Drivable (a, b) where
       , sampleC @b conf (Circuit $ \_ -> ((), fwd2))
       )
 
--- TODO TemplateHaskell?
--- instance SimulateType (a, b, c)
--- instance SimulateType (a, b, c, d)
-
+drivableTupleInstances 3 maxTupleSize
 instance (CE.KnownNat n, Simulate a) => Simulate (C.Vec n a) where
   type SimulateFwdType (C.Vec n a) = C.Vec n (SimulateFwdType a)
   type SimulateBwdType (C.Vec n a) = C.Vec n (SimulateBwdType a)
