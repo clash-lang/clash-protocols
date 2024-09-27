@@ -145,6 +145,7 @@ library
     Protocols.Axi4.WriteData
     Protocols.Axi4.WriteResponse
     Protocols.Df
+    Protocols.Internal
     Protocols.DfConv
     Protocols.Hedgehog
     Protocols.Hedgehog.Internal

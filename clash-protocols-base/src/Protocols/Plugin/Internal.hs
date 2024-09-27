@@ -7,7 +7,22 @@ module Protocols.Plugin.Internal where
 import Clash.Explicit.Prelude
 
 import Data.Tagged
-import Protocols.Internal
+import GHC.Base (Any)
+import Protocols.Internal.Classes
+
+{- | Picked up by "Protocols.Plugin" to process protocol DSL. See
+"Protocols.Plugin" for more information.
+-}
+circuit :: Any
+circuit =
+  error "'protocol' called: did you forget to enable \"Protocols.Plugin\"?"
+
+{- | Picked up by "Protocols.Plugin" to tie circuits together. See
+"Protocols.Plugin" for more information.
+-}
+(-<) :: Any
+(-<) =
+  error "(-<) called: did you forget to enable \"Protocols.Plugin\"?"
 
 {- | Convenience type alias. A circuit where all parts are decorated with a
 tag, referring to the @a@ and @b@ in its main signature. This is (indirectly)

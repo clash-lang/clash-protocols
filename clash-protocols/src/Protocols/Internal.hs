@@ -26,12 +26,11 @@ import GHC.Base (Any)
 import Prelude hiding (const, map)
 
 import qualified Clash.Explicit.Prelude as CE
-import Clash.Prelude (Signal, type (*), type (+))
+import Clash.Prelude (type (*), type (+))
 import qualified Clash.Prelude as C
 
-import Protocols.Cpp (maxTupleSize)
+import Protocols.Circuit
 import Protocols.Internal.Classes
-import Protocols.Internal.TH (protocolTupleInstances)
 
 import Control.Arrow ((***))
 import Data.Coerce (coerce)
@@ -52,42 +51,6 @@ newtype Ack = Ack Bool
 -- | Acknowledge. Used in circuit-notation plugin to drive ignore components.
 instance Default Ack where
   def = Ack True
-
-{- | Circuit protocol with /Signal dom a/ in its forward direction, and
-/()/ in its backward direction. Convenient for exposing protocol
-internals, or simply for undirectional streams.
-
-Note: 'CSignal' exists to work around [issue 760](https://github.com/clash-lang/clash-compiler/issues/760)
-      in Clash, where type families with 'Signal' on the LHS are broken.
--}
-data CSignal (dom :: CE.Domain) (a :: Type)
-
-type role CSignal nominal representational
-
-instance Protocol () where
-  type Fwd () = ()
-  type Bwd () = ()
-
-{- | __NB__: The documentation only shows instances up to /3/-tuples. By
-default, instances up to and including /12/-tuples will exist. If the flag
-@large-tuples@ is set instances up to the GHC imposed limit will exist. The
-GHC imposed limit is either 62 or 64 depending on the GHC version.
--}
-instance Protocol (a, b) where
-  type Fwd (a, b) = (Fwd a, Fwd b)
-  type Bwd (a, b) = (Bwd a, Bwd b)
-
--- Generate n-tuple instances, where n > 2
-protocolTupleInstances 3 maxTupleSize
-
-instance (C.KnownNat n) => Protocol (C.Vec n a) where
-  type Fwd (C.Vec n a) = C.Vec n (Fwd a)
-  type Bwd (C.Vec n a) = C.Vec n (Bwd a)
-
--- XXX: Type families with Signals on LHS are currently broken on Clash:
-instance Protocol (CSignal dom a) where
-  type Fwd (CSignal dom a) = Signal dom a
-  type Bwd (CSignal dom a) = Signal dom ()
 
 {- | Left-to-right circuit composition.
 
