@@ -49,6 +49,7 @@ import qualified Clash.Prelude as C
 
 -- me
 import Protocols.Axi4.Common
+import Protocols.Idle
 import Protocols.Internal
 
 -- | Configuration options for 'Axi4ReadAddress'.

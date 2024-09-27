@@ -5,12 +5,12 @@
 -- For debugging TH:
 -- {-# OPTIONS_GHC -ddump-splices #-}
 
-module Protocols.Internal.Units where
+module Protocols.Plugin.Units where
 
 import Clash.Explicit.Prelude
 
-import Protocols.Cpp (maxTupleSize)
-import Protocols.Internal.Units.TH (unitsTupleInstances)
+import Protocols.Plugin.Cpp (maxTupleSize)
+import Protocols.Plugin.Units.TH (unitsTupleInstances)
 
 {- | Utilities for zero-width types. Is used by "Protocols.Plugin" to drive \"trivial\"
 backwards channels.

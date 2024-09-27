@@ -19,6 +19,8 @@ module Protocols.Internal (
   module Protocols.Internal,
   module Protocols.Internal.Types,
   module Protocols.Plugin,
+  module Protocols.Plugin.Units,
+  module Protocols.Plugin.TaggedBundle,
 ) where
 
 import Control.DeepSeq (NFData)
@@ -31,9 +33,10 @@ import qualified Clash.Explicit.Prelude as CE
 import Clash.Prelude (type (*), type (+))
 import qualified Clash.Prelude as C
 
-import Protocols.Circuit
 import Protocols.Internal.Types
 import Protocols.Plugin
+import Protocols.Plugin.TaggedBundle
+import Protocols.Plugin.Units
 
 import Control.Arrow ((***))
 import Data.Coerce (coerce)
