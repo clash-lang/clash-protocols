@@ -111,15 +111,15 @@ library
     , template-haskell
 
   exposed-modules:
-    Protocols.Cpp
     Protocols.Circuit
-    Protocols.Internal.Types
+    Protocols.Cpp
     Protocols.Internal.TaggedBundle
     Protocols.Internal.TaggedBundle.TH
-    Protocols.Internal.TH
+    Protocols.Internal.Types
     Protocols.Internal.Units
     Protocols.Internal.Units.TH
     Protocols.Plugin
     Protocols.Plugin.Internal
+    Protocols.Protocol.TH
 
   default-language: Haskell2010
