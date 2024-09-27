@@ -2,15 +2,15 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Protocols.Circuit (
-  module Protocols.Internal.Classes,
-) where
+  module Protocols.Internal.Types
+  ) where
 
 import Clash.Signal
 import Clash.Sized.Vector
 import GHC.TypeNats (KnownNat)
 import Protocols.Cpp (maxTupleSize)
 import Protocols.Internal.TH
-import Protocols.Internal.Classes
+import Protocols.Internal.Types
 
 instance Protocol () where
   type Fwd () = ()

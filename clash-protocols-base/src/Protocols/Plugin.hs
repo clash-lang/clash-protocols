@@ -14,7 +14,7 @@ module Protocols.Plugin (
 import Prelude
 
 -- clash-protocols
-import Protocols.Internal.Classes
+import Protocols.Internal.Types
 import Protocols.Internal.TaggedBundle
 import Protocols.Internal.Units
 import Protocols.Plugin.Internal

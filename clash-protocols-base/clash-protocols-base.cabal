@@ -113,7 +113,7 @@ library
   exposed-modules:
     Protocols.Cpp
     Protocols.Circuit
-    Protocols.Internal.Classes
+    Protocols.Internal.Types
     Protocols.Internal.TaggedBundle
     Protocols.Internal.TaggedBundle.TH
     Protocols.Internal.TH

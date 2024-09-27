@@ -17,7 +17,7 @@ Internal module to prevent hs-boot files (breaks Haddock)
 -}
 module Protocols.Internal (
   module Protocols.Internal,
-  module Protocols.Internal.Classes,
+  module Protocols.Internal.Types,
   module Protocols.Plugin,
 ) where
 
@@ -32,7 +32,7 @@ import Clash.Prelude (type (*), type (+))
 import qualified Clash.Prelude as C
 
 import Protocols.Circuit
-import Protocols.Internal.Classes
+import Protocols.Internal.Types
 import Protocols.Plugin
 
 import Control.Arrow ((***))

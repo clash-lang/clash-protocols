@@ -5,7 +5,7 @@ module Protocols.Internal.TH where
 import Control.Monad.Extra (concatMapM)
 import Language.Haskell.TH
 
-import Protocols.Internal.Classes
+import Protocols.Internal.Types
 
 appTs :: Q Type -> [Q Type] -> Q Type
 appTs = foldl appT
