@@ -1,4 +1,5 @@
 {-# LANGUAGE RoleAnnotations #-}
+{-# OPTIONS_HADDOCK hide #-}
 
 {- |
 These class definitions are needed to be able to write Template Haskell quotes

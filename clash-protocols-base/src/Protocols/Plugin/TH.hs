@@ -7,6 +7,7 @@ import Language.Haskell.TH
 appTs :: Q Type -> [Q Type] -> Q Type
 appTs = foldl appT
 
+-- | Generate @Protocol@ instances for n-tuples
 protocolTupleInstances :: Int -> Int -> Q [Dec]
 protocolTupleInstances n m = mapM protocolTupleInstance [n .. m]
 
