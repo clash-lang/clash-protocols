@@ -306,9 +306,9 @@ class (C.KnownNat (SimulateChannels a), Backpressure a, Simulate a) => Drivable 
 kind of simulation requires a lists for both the forward and the backward direction.
 
 This class requires the definition of the types that the test supplies and returns. Its
-functions are converters from these /simulation types/ to types on the 'Signal' level.
+functions are converters from these /simulation types/ to types on the 'Clash.Signal.Signal' level.
 The 'simulateCircuit' function can thus receive the necessary simulation types, convert
-them to types on the 'Signal' level, pass those signals to the circuit, and convert the
+them to types on the 'Clash.Signal.Signal' level, pass those signals to the circuit, and convert the
 result of the circuit back to the simulation types giving the final result.
 -}
 class (C.KnownNat (SimulateChannels a), Protocol a) => Simulate a where

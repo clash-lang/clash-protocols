@@ -5,9 +5,14 @@ A GHC source plugin providing a DSL for writing Circuit components. Credits to
 @circuit-notation@ at <https://github.com/cchalmers/circuit-notation>.
 -}
 module Protocols.Plugin (
+  -- * Circuit types
   Circuit (..),
   Protocol (..),
+
+  -- * clash-prelude related types
   CSignal,
+
+  -- * plugin functions
   plugin,
   circuit,
   (-<),
