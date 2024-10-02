@@ -32,7 +32,6 @@ import qualified Protocols.DfConv as DfConv
 import Protocols.Hedgehog.Internal
 import Protocols.Idle
 import Protocols.Internal
-import Protocols.Plugin
 
 instance Hashable (C.Unsigned n)
 

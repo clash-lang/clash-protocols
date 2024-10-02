@@ -48,7 +48,6 @@ import qualified Clash.Prelude as C
 import Protocols.Axi4.Common
 import Protocols.Idle
 import Protocols.Internal
-import Protocols.Plugin
 
 -- | Configuration options for 'Axi4ReadData'.
 data Axi4ReadDataConfig = Axi4ReadDataConfig

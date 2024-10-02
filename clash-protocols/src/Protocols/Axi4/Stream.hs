@@ -29,7 +29,6 @@ import qualified Protocols.DfConv as DfConv
 import Protocols.Hedgehog.Internal
 import Protocols.Idle
 import Protocols.Internal
-import Protocols.Plugin
 
 instance (KnownNat n) => Hashable (Unsigned n)
 instance (KnownNat n, Hashable a) => Hashable (Vec n a) where

@@ -115,7 +115,6 @@ import Protocols.Axi4.WriteResponse
 import Protocols.Df (Data (..), Df)
 import qualified Protocols.Df as Df
 import Protocols.Internal
-import Protocols.Plugin
 
 {- | Class for protocols that are "similar" to 'Df', i.e. they can be converted
 to and from a pair of 'Df' ports (one going 'Fwd', one going 'Bwd'), using
