@@ -15,7 +15,7 @@ import Protocols.Plugin.Types
 -}
 circuit :: Any
 circuit =
-  error "'protocol' called: did you forget to enable \"Protocols.Plugin\"?"
+  error "'circuit' called: did you forget to enable \"Protocols.Plugin\"?"
 
 {- | Picked up by "Protocols.Plugin" to tie circuits together. See
 "Protocols.Plugin" for more information.
