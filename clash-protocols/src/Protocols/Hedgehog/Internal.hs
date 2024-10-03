@@ -3,6 +3,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# OPTIONS_HADDOCK hide #-}
 
 {- |
@@ -20,37 +21,15 @@ import Protocols
 import qualified Protocols.Df as Df
 
 -- clash-prelude
-
 import Clash.Prelude (type (*), type (+), type (<=))
 import qualified Clash.Prelude as C
-
--- deepseq
-import Control.DeepSeq
 
 -- hedgehog
 import qualified Hedgehog as H
 import qualified Hedgehog.Internal.Property as H
 
--- | Options for 'expectN' function. See individual fields for more information.
-data ExpectOptions = ExpectOptions
-  { eoStopAfterEmpty :: Int
-  -- ^ Stop sampling after seeing /n/ consecutive empty samples
-  , eoSampleMax :: Int
-  -- ^ Produce an error if the circuit produces more than /n/ valid samples. This
-  -- is used to terminate (potentially) infinitely running circuits.
-  --
-  -- This number is used to generate stall information, so setting it to
-  -- unreasonable values will result in long runtimes.
-  , eoResetCycles :: Int
-  -- ^ Ignore first /n/ cycles
-  , eoDriveEarly :: Bool
-  -- ^ Start driving the circuit with its reset asserted. Circuits should
-  -- never acknowledge data while this is happening.
-  , eoTimeoutMs :: Maybe Int
-  -- ^ Terminate the test after /n/ milliseconds.
-  , eoTrace :: Bool
-  -- ^ Trace data generation for debugging purposes
-  }
+-- me
+import Protocols.Hedgehog.Types
 
 {- | Resets for 30 cycles, checks for superfluous data for 50 cycles after
 seeing last valid data cycle, and times out after seeing 1000 consecutive
@@ -71,45 +50,6 @@ defExpectOptions =
     , eoTimeoutMs = Nothing
     , eoTrace = False
     }
-
--- | Superclass class to reduce syntactical noise.
-class (NFData a, C.NFDataX a, C.ShowX a, C.Show a, Eq a) => TestType a
-
-instance (NFData a, C.NFDataX a, C.ShowX a, C.Show a, Eq a) => TestType a
-
-{- | Provides a way of comparing expected data with data produced by a
-protocol component.
--}
-class
-  ( Drivable a
-  , TestType (SimulateFwdType a)
-  , TestType (ExpectType a)
-  , -- Foldable requirement on Vec :(
-    1 <= SimulateChannels a
-  ) =>
-  Test a
-  where
-  -- | Trim each channel to the lengths given as the third argument. See
-  -- result documentation for failure modes.
-  expectN ::
-    (HasCallStack, H.MonadTest m) =>
-    Proxy a ->
-    -- | Options, see 'ExpectOptions'
-    ExpectOptions ->
-    -- | Raw sampled data
-    SimulateFwdType a ->
-    -- | Depending on "ExpectOptions", fails the test if:
-    --
-    --   * Circuit produced less data than expected
-    --   * Circuit produced more data than expected
-    --
-    -- If it does not fail, /SimulateFwdType a/ will contain exactly the number
-    -- of expected data packets.
-    --
-    -- TODO:
-    --   Should probably return a 'Vec (SimulateChannels) Failures'
-    --   in order to produce pretty reports.
-    m (ExpectType a)
 
 instance (TestType a, C.KnownDomain dom) => Test (Df dom a) where
   expectN ::

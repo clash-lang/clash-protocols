@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RoleAnnotations #-}
 {-# OPTIONS_HADDOCK hide #-}
 
