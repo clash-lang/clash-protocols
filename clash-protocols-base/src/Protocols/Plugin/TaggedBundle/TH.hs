@@ -1,6 +1,6 @@
 {-# OPTIONS_HADDOCK hide #-}
 
-module Protocols.Internal.TaggedBundle.TH where
+module Protocols.Plugin.TaggedBundle.TH where
 
 import Data.Tagged
 import Language.Haskell.TH

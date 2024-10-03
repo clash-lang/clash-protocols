@@ -12,7 +12,7 @@ Compile-time dependent constants. Inspired by @clash-prelude@'s @Clash.CPP@.
 
 {-# OPTIONS_HADDOCK hide #-}
 
-module Protocols.Cpp
+module Protocols.Plugin.Cpp
  ( maxTupleSize
  , haddockOnly
  ) where

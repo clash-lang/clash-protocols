@@ -145,10 +145,12 @@ library
     Protocols.Axi4.WriteData
     Protocols.Axi4.WriteResponse
     Protocols.Df
+    Protocols.Internal
     Protocols.DfConv
     Protocols.Hedgehog
     Protocols.Hedgehog.Internal
     Protocols.Idle
+    Protocols.Internal.TH
     Protocols.Wishbone
     Protocols.Wishbone.Standard
     Protocols.Wishbone.Standard.Hedgehog
@@ -163,6 +165,7 @@ library
   autogen-modules:    Paths_clash_protocols
 
   other-modules:
+    Protocols.Internal.Types
     Paths_clash_protocols
 
   default-language: Haskell2010

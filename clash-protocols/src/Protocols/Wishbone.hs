@@ -15,7 +15,7 @@ import Prelude hiding (head, not, (&&))
 import Clash.Signal.Internal (Signal (..))
 import Control.DeepSeq (NFData)
 import Protocols
-import Protocols.Internal.Classes
+import Protocols.Idle
 
 import qualified Clash.Prelude as C
 
