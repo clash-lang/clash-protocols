@@ -82,9 +82,11 @@ Heavily inspired by the M2S data of AMBA AXI4-Stream, but simplified:
 data PacketStreamM2S (dataWidth :: Nat) (meta :: Type) = PacketStreamM2S
   { _data :: Vec dataWidth (BitVector 8)
   -- ^ The bytes to be transmitted.
-  , _last :: Maybe (Index dataWidth)
-  -- ^ If this is @Just@ then it signals that this transfer
-  --   is the end of a packet and contains the index of the last valid byte in `_data`.
+  , _last :: Maybe (Index (dataWidth + 1))
+  -- ^ If this is @Just@ then it signals that this transfer is the end of a
+  --   packet and contains the number of valid bytes in '_data', starting from
+  --   index @0@.
+  --
   --   If it is @Nothing@ then this transfer is not yet the end of a packet and all
   --   bytes are valid. This implies that no null bytes are allowed in the middle of
   --   a packet, only after a packet.
@@ -94,7 +96,7 @@ data PacketStreamM2S (dataWidth :: Nat) (meta :: Type) = PacketStreamM2S
   -- ^ Iff true, the packet corresponding to this transfer is invalid. The subordinate
   --   must either drop the packet or forward the `_abort`.
   }
-  deriving (Bundle, Eq, Functor, Generic, NFData, Show, ShowX)
+  deriving (Eq, Generic, ShowX, Show, NFData, Bundle, Functor)
 
 deriving instance
   (KnownNat dataWidth, NFDataX meta) =>
@@ -292,11 +294,10 @@ zeroOutInvalidBytesC = Circuit $ \(fwdIn, bwdIn) -> (bwdIn, fmap (go <$>) fwdIn)
    where
     dataOut = case _last transferIn of
       Nothing -> _data transferIn
-      Just i -> a ++ b
-       where
-        -- The first byte is always valid, so we only map over the rest.
-        (a, b') = splitAt d1 (_data transferIn)
-        b = imap (\(j :: Index (dataWidth - 1)) byte -> if resize j < i then byte else 0x00) b'
+      Just i ->
+        imap
+          (\(j :: Index dataWidth) byte -> if resize j < i then byte else 0x00)
+          (_data transferIn)
 
 {- |
 Copy data of a single `PacketStream` to multiple. LHS will only receive

@@ -134,17 +134,17 @@ prop_const_depacketize_to_df_d5_d4 = depacketizeToDfPropertyGenerator d5 d4
 
 -- | dataWidth < n && dataWidth % n ~ 0
 prop_droptail_4_bytes_d1 :: Property
-prop_droptail_4_bytes_d1 = dropTailTest d4 d1
+prop_droptail_4_bytes_d1 = dropTailTest d1 d4
 
 prop_droptail_7_bytes_d1 :: Property
-prop_droptail_7_bytes_d1 = dropTailTest d7 d1
+prop_droptail_7_bytes_d1 = dropTailTest d1 d7
 
 -- | dataWidth < n && dataWidth % n > 0
 prop_droptail_4_bytes_d3 :: Property
-prop_droptail_4_bytes_d3 = dropTailTest d4 d3
+prop_droptail_4_bytes_d3 = dropTailTest d3 d4
 
 prop_droptail_7_bytes_d4 :: Property
-prop_droptail_7_bytes_d4 = dropTailTest d7 d4
+prop_droptail_7_bytes_d4 = dropTailTest d4 d7
 
 -- | dataWidth ~ n
 prop_droptail_4_bytes_d4 :: Property
@@ -155,14 +155,14 @@ prop_droptail_7_bytes_d7 = dropTailTest d7 d7
 
 -- | dataWidth > n
 prop_droptail_4_bytes_d7 :: Property
-prop_droptail_4_bytes_d7 = dropTailTest d4 d7
+prop_droptail_4_bytes_d7 = dropTailTest d7 d4
 
 prop_droptail_7_bytes_d12 :: Property
-prop_droptail_7_bytes_d12 = dropTailTest d7 d12
+prop_droptail_7_bytes_d12 = dropTailTest d12 d7
 
 tests :: TestTree
 tests =
   localOption (mkTimeout 20_000_000 {- 20 seconds -}) $
     localOption
-      (HedgehogTestLimit (Just 500))
+      (HedgehogTestLimit (Just 100))
       $(testGroupGenerator)

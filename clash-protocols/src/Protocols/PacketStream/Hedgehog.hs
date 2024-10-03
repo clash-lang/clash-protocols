@@ -92,18 +92,17 @@ chunkToPacket ::
   (C.KnownNat dataWidth) =>
   [PacketStreamM2S 1 meta] ->
   PacketStreamM2S dataWidth meta
-chunkToPacket l =
+chunkToPacket xs =
   PacketStreamM2S
     { _last =
-        if isJust (_last lastTransfer)
-          then Just (fromIntegral $ L.length l - 1)
-          else Nothing
-    , _abort = any _abort l
+        (\i -> let l = fromIntegral (L.length xs) in if i == 0 then l - 1 else l)
+          <$> _last lastTransfer
+    , _abort = any _abort xs
     , _meta = _meta lastTransfer
-    , _data = foldr ((C.+>>) . C.head . _data) (C.repeat 0) l
+    , _data = foldr ((C.+>>) . C.head . _data) (C.repeat 0x00) xs
     }
  where
-  lastTransfer = L.last l
+  lastTransfer = L.last xs
 
 {- |
 Split a single `PacketStream` transfer with data width @dataWidth@ to
@@ -119,26 +118,29 @@ chopPacket PacketStreamM2S{..} = packets
  where
   lasts = case _last of
     Nothing -> repeat Nothing
-    Just in' -> replicate (fromIntegral in') Nothing ++ [Just (0 :: C.Index 1)]
+    Just size ->
+      if size == 0
+        then [Just 0]
+        else replicate (fromIntegral size - 1) Nothing ++ [Just (1 :: C.Index 2)]
 
   datas = case _last of
     Nothing -> C.toList _data
-    Just in' -> take (fromIntegral in' + 1) $ C.toList _data
+    Just size -> take (max 1 (fromIntegral size)) $ C.toList _data
 
   packets =
-    ( \(idx, dat) ->
-        PacketStreamM2S (pure dat) idx _meta _abort
+    ( \(size, dat) ->
+        PacketStreamM2S (pure dat) size _meta _abort
     )
       <$> zip lasts datas
 
--- | Set `_last` of the last transfer in the list to @Just 0@
+-- | Set `_last` of the last transfer in the list to @Just 1@
 fullPackets ::
   (C.KnownNat dataWidth) =>
   [PacketStreamM2S dataWidth meta] ->
   [PacketStreamM2S dataWidth meta]
 fullPackets [] = []
 fullPackets fragments =
-  let lastFragment = (last fragments){_last = Just 0}
+  let lastFragment = (last fragments){_last = Just 1}
    in init fragments ++ [lastFragment]
 
 -- | Drops packets if one of the transfers in the packet has `_abort` set.
@@ -198,18 +200,28 @@ depacketizerModel toMetaOut ps = L.concat dataWidthPackets
   parseHdr ::
     ([PacketStreamM2S 1 metaIn], [PacketStreamM2S 1 metaIn]) ->
     [PacketStreamM2S 1 metaOut]
-  parseHdr (hdrF, fwdF) = fmap (\f -> f{_meta = metaOut}) fwdF
+  parseHdr (hdrF, fwdF) = fmap (\f -> f{_meta = metaOut}) fwdF'
    where
+    fwdF' = case fwdF of
+      [] -> [PacketStreamM2S (Vec.singleton 0x00) (Just 0) (C.errorX "u") (_abort (last hdrF))]
+      _ -> fwdF
+
     hdr = C.bitCoerce $ Vec.unsafeFromList @headerBytes $ _data <$> hdrF
     metaOut = toMetaOut hdr (_meta $ L.head fwdF)
 
   bytePackets :: [[PacketStreamM2S 1 metaIn]]
   bytePackets =
-    L.filter (\fs -> L.length fs > hdrbytes) $
-      L.concatMap chopPacket . smearAbort <$> chunkByPacket ps
+    L.filter
+      ( \fs ->
+          let len' = L.length fs
+           in len' > hdrbytes || len' == hdrbytes && _last (last fs) == Just 1
+      )
+      $ downConvert . smearAbort <$> chunkByPacket ps
 
   parsedPackets :: [[PacketStreamM2S 1 metaOut]]
-  parsedPackets = parseHdr . L.splitAt hdrbytes <$> bytePackets
+  parsedPackets = L.map go bytePackets
+
+  go = parseHdr . L.splitAt hdrbytes
 
   dataWidthPackets :: [[PacketStreamM2S dataWidth metaOut]]
   dataWidthPackets = L.map upConvert parsedPackets
@@ -242,7 +254,10 @@ depacketizeToDfModel toOut ps = L.map parseHdr bytePackets
   bytePackets :: [[PacketStreamM2S 1 metaIn]]
   bytePackets =
     L.filter
-      (\pkt -> L.length pkt >= C.natToNum @headerBytes)
+      ( \pkt ->
+          L.length pkt > C.natToNum @headerBytes
+            || L.length pkt == C.natToNum @headerBytes && _last (last pkt) == Just 1
+      )
       (chunkByPacket $ downConvert (dropAbortedPackets ps))
 
 -- | Model of 'Protocols.PacketStream.dropTailC'.
@@ -259,7 +274,7 @@ dropTailModel C.SNat packets = L.concatMap go (chunkByPacket packets)
   go :: [PacketStreamM2S dataWidth meta] -> [PacketStreamM2S dataWidth meta]
   go packet =
     upConvert $
-      L.init trimmed L.++ [(L.last trimmed){_last = Just 0, _abort = aborted}]
+      L.init trimmed L.++ [(L.last trimmed){_last = Just 1, _abort = aborted}]
    where
     aborted = L.any _abort packet
     bytePkts = downConvert packet
@@ -437,7 +452,7 @@ genLastTransfer meta abortMode =
           { _data =
               fromJust
                 ( Vec.fromList $
-                    take (1 + fromIntegral i) (C.toList (_data transfer))
-                      ++ replicate ((C.natToNum @dataWidth) - 1 - fromIntegral i) 0x00
+                    take (fromIntegral i) (C.toList (_data transfer))
+                      ++ replicate ((C.natToNum @dataWidth) - fromIntegral i) 0x00
                 )
           }

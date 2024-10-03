@@ -24,8 +24,9 @@ import Protocols.PacketStream (packetizeFromDfC, packetizerC)
 import Protocols.PacketStream.Base
 import Protocols.PacketStream.Hedgehog
 
-{- | Test the packetizer with varying datawidth and number of bytes in the header,
-  with metaOut = ().
+{- |
+Test the packetizer with varying datawidth and number of bytes in the header,
+with metaOut = ().
 -}
 packetizerPropertyGenerator ::
   forall
@@ -56,24 +57,9 @@ packetizerPropertyGenerator SNat SNat =
       (PacketStream System dataWidth ())
   ckt = packetizerC (const ()) id
 
--- | headerBytes % dataWidth ~ 0
-prop_const_packetizer_d1_d14 :: Property
-prop_const_packetizer_d1_d14 = packetizerPropertyGenerator d1 d14
-
--- | dataWidth < headerBytes
-prop_const_packetizer_d3_d11 :: Property
-prop_const_packetizer_d3_d11 = packetizerPropertyGenerator d3 d11
-
--- | dataWidth ~ header byte size
-prop_const_packetizer_d7_d7 :: Property
-prop_const_packetizer_d7_d7 = packetizerPropertyGenerator d7 d7
-
--- | dataWidth > header byte size
-prop_const_packetizer_d5_d4 :: Property
-prop_const_packetizer_d5_d4 = packetizerPropertyGenerator d5 d4
-
-{- | Test packetizeFromDf with varying datawidth and number of bytes in the header
-  , with metaOut = ().
+{- |
+Test packetizeFromDf with varying datawidth and number of bytes in the header,
+with metaOut = ().
 -}
 packetizeFromDfPropertyGenerator ::
   forall
@@ -97,6 +83,22 @@ packetizeFromDfPropertyGenerator SNat SNat =
     (HiddenClockResetEnable System) =>
     Circuit (Df.Df System (Vec headerBytes (BitVector 8))) (PacketStream System dataWidth ())
   ckt = packetizeFromDfC (const ()) id
+
+-- | headerBytes % dataWidth ~ 0
+prop_const_packetizer_d1_d14 :: Property
+prop_const_packetizer_d1_d14 = packetizerPropertyGenerator d1 d14
+
+-- | dataWidth < headerBytes
+prop_const_packetizer_d3_d11 :: Property
+prop_const_packetizer_d3_d11 = packetizerPropertyGenerator d3 d11
+
+-- | dataWidth ~ header byte size
+prop_const_packetizer_d7_d7 :: Property
+prop_const_packetizer_d7_d7 = packetizerPropertyGenerator d7 d7
+
+-- | dataWidth > header byte size
+prop_const_packetizer_d5_d4 :: Property
+prop_const_packetizer_d5_d4 = packetizerPropertyGenerator d5 d4
 
 -- | headerBytes % dataWidth ~ 0
 prop_const_packetizeFromDf_d1_d14 :: Property

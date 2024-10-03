@@ -121,7 +121,7 @@ depacketizerT _ Parse{..} (Just PacketStreamM2S{..}, _) = (nextStOut, (PacketStr
   nextParseBuf = fst (shiftInAtN _buf _data)
 
   prematureEnd idx = case sameNat d0 (SNat @(headerBytes `Mod` dataWidth)) of
-    Just Refl -> True
+    Just Refl -> idx == 0
     _ -> idx < natToNum @(headerBytes `Mod` dataWidth)
 
   -- Upon seeing _last being set, move back to the initial state if the
@@ -150,8 +150,10 @@ depacketizerT toMetaOut st@Forward{..} (Just pkt@PacketStreamM2S{..}, bwdIn) = (
   (dataOut, nextFwdBytes) = splitAt (SNat @dataWidth) (fwdBytes ++ _data)
 
   -- Only use if headerBytes `Mod` dataWidth > 0.
-  adjustLast :: Index dataWidth -> Either (Index dataWidth) (Index dataWidth)
-  adjustLast idx = if idx < x then Left (idx + y) else Right (idx - x)
+  adjustLast ::
+    Index (dataWidth + 1) -> Either (Index (dataWidth + 1)) (Index (dataWidth + 1))
+  adjustLast idx =
+    if _lastFwd then Right (idx - x) else if idx <= x then Left (idx + y) else Right (idx - x)
    where
     x = natToNum @(headerBytes `Mod` dataWidth)
     y = natToNum @(ForwardBytes headerBytes dataWidth)
@@ -159,7 +161,9 @@ depacketizerT toMetaOut st@Forward{..} (Just pkt@PacketStreamM2S{..}, bwdIn) = (
   outPkt = case sameNat d0 (SNat @(headerBytes `Mod` dataWidth)) of
     Just Refl ->
       pkt
-        { _meta = toMetaOut (bitCoerce header) _meta
+        { _data = if _lastFwd then repeat 0x00 else _data
+        , _last = if _lastFwd then Just 0 else _last
+        , _meta = toMetaOut (bitCoerce header) _meta
         , _abort = nextAborted
         }
     Nothing ->
@@ -289,8 +293,8 @@ depacketizeToDfT _ DfParse{..} (Just (PacketStreamM2S{..}), _) = (nextStOut, (Pa
 
   prematureEnd idx =
     case compareSNat (SNat @(headerBytes `Mod` dataWidth)) d0 of
-      SNatGT -> idx < (natToNum @(headerBytes `Mod` dataWidth - 1))
-      _ -> idx < (natToNum @(dataWidth - 1))
+      SNatGT -> idx < (natToNum @(headerBytes `Mod` dataWidth))
+      _ -> idx < (natToNum @dataWidth)
 
   (nextStOut, readyOut) =
     case (_dfCounter == 0, _last) of
@@ -361,7 +365,7 @@ depacketizeToDfC toOut = forceResetSanity |> fromSignals ckt
 data DropTailInfo dataWidth delay = DropTailInfo
   { _dtAborted :: Bool
   -- ^ Whether any fragment of the packet was aborted
-  , _newIdx :: Index dataWidth
+  , _newIdx :: Index (dataWidth + 1)
   -- ^ The adjusted byte enable
   , _drops :: Index (delay + 1)
   -- ^ The amount of transfers to drop from the tail

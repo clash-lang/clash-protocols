@@ -32,7 +32,7 @@ data UpConverterState (dwOut :: Nat) (n :: Nat) (meta :: Type) = UpConverterStat
   -- ^ If this is true we need to start a fresh buffer
   , _ucAborted :: Bool
   -- ^ Current packet is aborted
-  , _ucLastIdx :: Maybe (Index dwOut)
+  , _ucLastIdx :: Maybe (Index (dwOut + 1))
   -- ^ If true the current buffer contains the last byte of the current packet
   , _ucMeta :: meta
   }
@@ -120,7 +120,16 @@ upConverter ::
   )
 upConverter = mealyB go s0
  where
-  s0 = UpConverterState (repeat undefined) 0 False True False Nothing undefined
+  s0 =
+    UpConverterState
+      { _ucBuf = deepErrorX "upConverterC: undefined initial buffer"
+      , _ucIdx = 0
+      , _ucFlush = False
+      , _ucFreshBuf = True
+      , _ucAborted = False
+      , _ucLastIdx = Nothing
+      , _ucMeta = deepErrorX "upConverterC: undefined initial metadata"
+      }
   go st@(UpConverterState{..}) (fwdIn, bwdIn) =
     (nextState st fwdIn bwdIn, (PacketStreamS2M outReady, toPacketStream st))
    where
@@ -206,7 +215,7 @@ downConverterT st@DownConverterState{..} (Just inPkt, bwdIn) = (nextSt, (PacketS
   -- its corresponding _data. Else, we should use our stored buffer.
   (nextSize, buf) = case (_dcSize == 0, _last inPkt) of
     (True, Nothing) -> (maxBound - natToNum @dwOut, _data inPkt)
-    (True, Just i) -> (satSub SatBound (resize i + 1) (natToNum @dwOut), _data inPkt)
+    (True, Just i) -> (satSub SatBound i (natToNum @dwOut), _data inPkt)
     (False, _) -> (satSub SatBound _dcSize (natToNum @dwOut), _dcBuf)
 
   (newBuf, dataOut) = leToPlus @dwOut @dwIn shiftOutFrom0 (SNat @dwOut) buf
@@ -221,7 +230,13 @@ downConverterT st@DownConverterState{..} (Just inPkt, bwdIn) = (nextSt, (PacketS
 
   (outReady, outLast)
     | nextSize == 0 =
-        (_ready bwdIn, resize . (\i -> i `mod` natToNum @dwOut) <$> _last inPkt)
+        ( _ready bwdIn
+        , ( \i ->
+              let x = i `mod` natToNum @dwOut
+               in if i == 0 then 0 else if x == 0 then maxBound else resize x
+          )
+            <$> _last inPkt
+        )
     | otherwise = (False, Nothing)
 
   -- Keep the buffer in the state and rotate it once the byte is acknowledged to avoid
@@ -256,6 +271,6 @@ downConverterC = case sameNat (SNat @dwIn) (SNat @dwOut) of
    where
     s0 =
       DownConverterState
-        { _dcBuf = errorX "downConverterC: undefined initial value"
+        { _dcBuf = deepErrorX "downConverterC: undefined initial buffer"
         , _dcSize = 0
         }
