@@ -203,11 +203,17 @@ depacketizerModel toMetaOut ps = L.concat dataWidthPackets
   parseHdr (hdrF, fwdF) = fmap (\f -> f{_meta = metaOut}) fwdF'
    where
     fwdF' = case fwdF of
-      [] -> [PacketStreamM2S (Vec.singleton 0x00) (Just 0) (C.errorX "u") (_abort (last hdrF))]
+      [] ->
+        [ PacketStreamM2S
+            (Vec.singleton 0x00)
+            (Just 0)
+            (error "depacketizerModel: should be replaced")
+            (_abort (last hdrF))
+        ]
       _ -> fwdF
 
     hdr = C.bitCoerce $ Vec.unsafeFromList @headerBytes $ _data <$> hdrF
-    metaOut = toMetaOut hdr (_meta $ L.head fwdF)
+    metaOut = toMetaOut hdr (_meta $ L.head hdrF)
 
   bytePackets :: [[PacketStreamM2S 1 metaIn]]
   bytePackets =

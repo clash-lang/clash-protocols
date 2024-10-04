@@ -44,7 +44,7 @@ packetizerPropertyGenerator SNat SNat =
     ( genPackets
         (Range.linear 1 10)
         Abort
-        (genValidPacket (genVec Gen.enumBounded) (Range.linear 1 10))
+        (genValidPacket (genVec Gen.enumBounded) (Range.linear 0 10))
     )
     (exposeClockResetEnable model)
     (exposeClockResetEnable ckt)

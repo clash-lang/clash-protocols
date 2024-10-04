@@ -121,7 +121,7 @@ depacketizerT _ Parse{..} (Just PacketStreamM2S{..}, _) = (nextStOut, (PacketStr
   nextParseBuf = fst (shiftInAtN _buf _data)
 
   prematureEnd idx = case sameNat d0 (SNat @(headerBytes `Mod` dataWidth)) of
-    Just Refl -> idx == 0
+    Just Refl -> idx /= maxBound
     _ -> idx < natToNum @(headerBytes `Mod` dataWidth)
 
   -- Upon seeing _last being set, move back to the initial state if the
