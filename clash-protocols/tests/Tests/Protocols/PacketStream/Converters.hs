@@ -1,6 +1,8 @@
 {-# LANGUAGE NumericUnderscores #-}
 
-module Tests.Protocols.PacketStream.Converters where
+module Tests.Protocols.PacketStream.Converters (
+  tests,
+) where
 
 import Clash.Prelude
 
@@ -52,8 +54,8 @@ generateDownConverterProperty SNat SNat =
     (exposeClockResetEnable (upConvert . downConvert))
     (exposeClockResetEnable @System (downConverterC @dwIn @dwOut @Int))
 
-prop_downConverter3to9 :: Property
-prop_downConverter3to9 = generateUpConverterProperty d3 d9
+prop_upConverter3to9 :: Property
+prop_upConverter3to9 = generateUpConverterProperty d3 d9
 
 prop_upConverter4to8 :: Property
 prop_upConverter4to8 = generateUpConverterProperty d4 d8
