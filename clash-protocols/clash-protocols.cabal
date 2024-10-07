@@ -199,6 +199,7 @@ test-suite unittests
     Tests.Protocols.Wishbone
     Tests.Protocols.PacketStream
     Tests.Protocols.PacketStream.AsyncFifo
+    Tests.Protocols.PacketStream.Base
     Tests.Protocols.PacketStream.Converters
     Tests.Protocols.PacketStream.Delay
     Tests.Protocols.PacketStream.Depacketizers

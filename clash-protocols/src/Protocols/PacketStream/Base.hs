@@ -24,6 +24,7 @@ module Protocols.PacketStream.Base (
   fanout,
   forceResetSanity,
   zeroOutInvalidBytesC,
+  stripTrailingEmptyC,
   unsafeAbortOnBackpressureC,
 
   -- * Skid buffers
@@ -279,6 +280,49 @@ forceResetSanity ::
   (HiddenClockResetEnable dom) =>
   Circuit (PacketStream dom dataWidth meta) (PacketStream dom dataWidth meta)
 forceResetSanity = forceResetSanityGeneric
+
+{- |
+Strips trailing zero-byte transfers from packets in the stream. That is,
+if a packet consists of more than one transfer and '_last' of the last
+transfer in that packet is @Just 0@, the last transfer of that packet will
+be dropped and '_last' of the transfer before that will be set to @maxBound@.
+
+Has one clock cycle latency, but runs at full throughput.
+-}
+stripTrailingEmptyC ::
+  forall (dataWidth :: Nat) (meta :: Type) (dom :: Domain).
+  (HiddenClockResetEnable dom) =>
+  (KnownNat dataWidth) =>
+  (NFDataX meta) =>
+  Circuit
+    (PacketStream dom dataWidth meta)
+    (PacketStream dom dataWidth meta)
+stripTrailingEmptyC = forceResetSanity |> fromSignals (mealyB go (False, False, Nothing))
+ where
+  go (notFirst, flush, cache) (Nothing, bwdIn) =
+    ((notFirst, flush', cache'), (PacketStreamS2M True, fwdOut))
+   where
+    fwdOut = if flush then cache else Nothing
+    (flush', cache')
+      | flush && _ready bwdIn = (False, Nothing)
+      | otherwise = (flush, cache)
+  go (notFirst, flush, cache) (Just transferIn, bwdIn) = (nextStOut, (bwdOut, fwdOut))
+   where
+    (notFirst', flush', cache', fwdOut) = case _last transferIn of
+      Nothing -> (True, False, Just transferIn, cache)
+      Just i ->
+        let trailing = i == 0 && notFirst
+         in ( False
+            , not trailing
+            , if trailing then Nothing else Just transferIn
+            , if trailing then (\x -> x{_last = Just maxBound}) <$> cache else cache
+            )
+
+    bwdOut = PacketStreamS2M (Maybe.isNothing cache || _ready bwdIn)
+
+    nextStOut
+      | Maybe.isNothing cache || _ready bwdIn = (notFirst', flush', cache')
+      | otherwise = (notFirst, flush, cache)
 
 -- | Sets data bytes that are not enabled in a @PacketStream@ to @0x00@.
 zeroOutInvalidBytesC ::

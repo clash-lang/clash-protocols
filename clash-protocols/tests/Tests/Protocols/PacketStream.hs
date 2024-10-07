@@ -3,6 +3,7 @@ module Tests.Protocols.PacketStream (tests) where
 import Test.Tasty
 
 import qualified Tests.Protocols.PacketStream.AsyncFifo
+import qualified Tests.Protocols.PacketStream.Base
 import qualified Tests.Protocols.PacketStream.Converters
 import qualified Tests.Protocols.PacketStream.Delay
 import qualified Tests.Protocols.PacketStream.Depacketizers
@@ -15,6 +16,7 @@ tests =
   testGroup
     "PacketStream"
     [ Tests.Protocols.PacketStream.AsyncFifo.tests
+    , Tests.Protocols.PacketStream.Base.tests
     , Tests.Protocols.PacketStream.Converters.tests
     , Tests.Protocols.PacketStream.Delay.tests
     , Tests.Protocols.PacketStream.Depacketizers.tests
