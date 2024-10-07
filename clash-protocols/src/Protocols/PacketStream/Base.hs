@@ -137,6 +137,11 @@ Invariants:
 4. A subordinate which receives a transfer with `_abort` asserted must either forward this `_abort` or drop the packet.
 5. A packet may not be interrupted by another packet.
 6. All bytes in `_data` which are not enabled must be 0x00.
+
+This protocol allows the last transfer of a packet to have zero valid bytes in
+'_data', so it also allows 0-byte packets. Note that concrete implementations
+of the protocol are free to disallow 0-byte packets or packets with a trailing
+zero-byte transfer for whatever reason.
 -}
 data PacketStream (dom :: Domain) (dataWidth :: Nat) (meta :: Type)
 
@@ -286,6 +291,8 @@ Strips trailing zero-byte transfers from packets in the stream. That is,
 if a packet consists of more than one transfer and '_last' of the last
 transfer in that packet is @Just 0@, the last transfer of that packet will
 be dropped and '_last' of the transfer before that will be set to @maxBound@.
+If such a trailing zero-byte transfer had '_abort' asserted, it will be
+preserved.
 
 Has one clock cycle latency, but runs at full throughput.
 -}
@@ -315,7 +322,9 @@ stripTrailingEmptyC = forceResetSanity |> fromSignals (mealyB go (False, False, 
          in ( False
             , not trailing
             , if trailing then Nothing else Just transferIn
-            , if trailing then (\x -> x{_last = Just maxBound}) <$> cache else cache
+            , if trailing
+                then (\x -> x{_last = Just maxBound, _abort = _abort x || _abort transferIn}) <$> cache
+                else cache
             )
 
     bwdOut = PacketStreamS2M (Maybe.isNothing cache || _ready bwdIn)
