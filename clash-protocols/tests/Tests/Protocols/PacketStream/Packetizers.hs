@@ -42,9 +42,9 @@ packetizerPropertyGenerator SNat SNat =
     @System
     defExpectOptions
     ( genPackets
-        (Range.linear 1 10)
-        Abort
-        (genValidPacket (genVec Gen.enumBounded) (Range.linear 0 10))
+        1
+        10
+        (genValidPacket defPacketOptions (genVec Gen.enumBounded) (Range.linear 0 10))
     )
     (exposeClockResetEnable model)
     (exposeClockResetEnable ckt)

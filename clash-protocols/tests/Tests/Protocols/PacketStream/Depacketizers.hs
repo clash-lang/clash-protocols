@@ -39,7 +39,7 @@ depacketizerPropertyGenerator SNat SNat =
   idWithModelSingleDomain
     @System
     defExpectOptions{eoSampleMax = 1000, eoStopAfterEmpty = 1000}
-    (genPackets (Range.linear 1 4) Abort (genValidPacket (pure ()) (Range.linear 0 30)))
+    (genPackets 1 4 (genValidPacket defPacketOptions (pure ()) (Range.linear 0 30)))
     (exposeClockResetEnable (depacketizerModel const))
     (exposeClockResetEnable ckt)
  where
@@ -67,7 +67,7 @@ depacketizeToDfPropertyGenerator SNat SNat =
   idWithModelSingleDomain
     @System
     defExpectOptions{eoSampleMax = 1000, eoStopAfterEmpty = 1000}
-    (genPackets (Range.linear 1 10) Abort (genValidPacket (pure ()) (Range.linear 0 20)))
+    (genPackets 1 10 (genValidPacket defPacketOptions (pure ()) (Range.linear 0 20)))
     (exposeClockResetEnable (depacketizeToDfModel const))
     (exposeClockResetEnable ckt)
  where
@@ -88,11 +88,12 @@ dropTailTest ::
 dropTailTest SNat n =
   idWithModelSingleDomain
     @System
-    defExpectOptions
+    defExpectOptions -- (genPackets 1 10 (genValidPacket defPacketOptions Gen.enumBounded (Range.linear 0 10)))
     ( genPackets
-        (Range.linear 1 4)
-        Abort
+        1
+        4
         ( genValidPacket
+            defPacketOptions
             (Gen.int8 Range.linearBounded)
             (Range.linear (natToNum @(n `DivRU` dataWidth)) 20)
         )

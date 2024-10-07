@@ -28,8 +28,7 @@ prop_strip_trailing_empty =
   idWithModelSingleDomain
     @System
     defExpectOptions
-    ( genPackets (Range.linear 1 10) Abort (genValidPacket Gen.enumBounded (Range.linear 0 10))
-    )
+    (genPackets 1 10 (genValidPacket defPacketOptions Gen.enumBounded (Range.linear 0 10)))
     (exposeClockResetEnable model')
     (exposeClockResetEnable (stripTrailingEmptyC @1 @Char))
  where

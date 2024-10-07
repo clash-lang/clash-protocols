@@ -32,8 +32,7 @@ generateUpConverterProperty ::
 generateUpConverterProperty SNat SNat =
   idWithModelSingleDomain
     defExpectOptions
-    ( genPackets (Range.linear 1 10) Abort (genValidPacket Gen.enumBounded (Range.linear 1 20))
-    )
+    (genPackets 1 10 (genValidPacket defPacketOptions Gen.enumBounded (Range.linear 0 20)))
     (exposeClockResetEnable (upConvert . downConvert))
     (exposeClockResetEnable @System (upConverterC @dwIn @dwOut @Int))
 
@@ -50,7 +49,7 @@ generateDownConverterProperty ::
 generateDownConverterProperty SNat SNat =
   idWithModelSingleDomain
     defExpectOptions{eoSampleMax = 1000}
-    (genPackets (Range.linear 1 8) Abort (genValidPacket Gen.enumBounded (Range.linear 1 10)))
+    (genPackets 1 8 (genValidPacket defPacketOptions Gen.enumBounded (Range.linear 0 10)))
     (exposeClockResetEnable (upConvert . downConvert))
     (exposeClockResetEnable @System (downConverterC @dwIn @dwOut @Int))
 
