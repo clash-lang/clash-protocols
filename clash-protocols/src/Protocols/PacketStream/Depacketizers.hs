@@ -152,8 +152,10 @@ depacketizerT toMetaOut st@Forward{..} (Just pkt@PacketStreamM2S{..}, bwdIn) = (
   -- Only use if headerBytes `Mod` dataWidth > 0.
   adjustLast ::
     Index (dataWidth + 1) -> Either (Index (dataWidth + 1)) (Index (dataWidth + 1))
-  adjustLast idx =
-    if _lastFwd then Right (idx - x) else if idx <= x then Left (idx + y) else Right (idx - x)
+  adjustLast idx
+    | _lastFwd = Right (idx - x)
+    | idx <= x = Left (idx + y)
+    | otherwise = Right (idx - x)
    where
     x = natToNum @(headerBytes `Mod` dataWidth)
     y = natToNum @(ForwardBytes headerBytes dataWidth)
@@ -399,27 +401,28 @@ transmitDropInfoC SNat = forceResetSanity |> fromSignals (mealyB go False)
     toDropTailInfo i =
       DropTailInfo
         { _dtAborted = aborted || _abort
-        , _newIdx = satSub SatWrap i (natToNum @(n `Mod` dataWidth))
+        , _newIdx = newIdx
         , _drops = drops
         , _wait = wait
         }
      where
-      (drops, wait) = case ( compareSNat (SNat @dataWidth) (SNat @n)
-                           , sameNat d0 (SNat @(n `Mod` dataWidth))
-                           ) of
+      (newIdx, drops, wait) = case ( compareSNat (SNat @dataWidth) (SNat @n)
+                                   , sameNat d0 (SNat @(n `Mod` dataWidth))
+                                   ) of
         (SNatLE, Nothing) ->
-          let smaller = (resize i :: Index n) < natToNum @(n - dataWidth)
-           in ( if smaller
+          let smaller = (resize i :: Index n) <= natToNum @(n - dataWidth)
+           in ( satSub SatWrap i (natToNum @(n `Mod` dataWidth) + (if smaller then 1 else 0))
+              , if smaller
                   then natToNum @(n `DivRU` dataWidth)
                   else natToNum @(n `Div` dataWidth)
               , not smaller
               )
         (SNatLE, Just Refl) ->
-          (natToNum @(n `Div` dataWidth), False)
+          (i, natToNum @(n `Div` dataWidth), False)
         (SNatGT, _) ->
-          if i >= natToNum @n
-            then (0, True)
-            else (1, False)
+          if i > natToNum @n
+            then (i - natToNum @n, 0, True)
+            else (maxBound - (natToNum @n - i), 1, False)
 
 {- |
 Gets a delayed packet stream as input together with non-delayed

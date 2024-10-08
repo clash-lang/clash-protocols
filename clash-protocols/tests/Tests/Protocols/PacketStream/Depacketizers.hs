@@ -88,7 +88,7 @@ dropTailTest ::
 dropTailTest SNat n =
   idWithModelSingleDomain
     @System
-    defExpectOptions -- (genPackets 1 10 (genValidPacket defPacketOptions Gen.enumBounded (Range.linear 0 10)))
+    defExpectOptions
     ( genPackets
         1
         4

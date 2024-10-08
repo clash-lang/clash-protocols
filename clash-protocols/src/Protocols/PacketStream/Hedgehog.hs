@@ -286,7 +286,7 @@ dropTailModel SNat packets = L.concatMap go (chunkByPacket packets)
   go packet =
     upConvert
       $ L.init trimmed
-      L.++ [(L.last trimmed){_last = Just 1, _abort = aborted}]
+      L.++ [setNull (L.last trimmed){_last = _last $ L.last bytePkts, _abort = aborted}]
    where
     aborted = L.any _abort packet
     bytePkts = downConvert packet
