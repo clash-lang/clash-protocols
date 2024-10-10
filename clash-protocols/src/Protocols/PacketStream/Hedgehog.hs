@@ -1,4 +1,3 @@
-{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
@@ -428,9 +427,9 @@ genValidPacket ::
   --   This function will always generate an extra transfer with @_last = Just i@.
   Range Int ->
   Gen [PacketStreamM2S dataWidth meta]
-genValidPacket opts metaGen size =
+genValidPacket PacketOptions{..} metaGen size =
   let
-    abortGen = case opts.poAbortMode of
+    abortGen = case poAbortMode of
       NoAbort -> Gen.constant False
       Abort pktGen transferGen -> do
         allowAborts <- pktGen
@@ -442,8 +441,8 @@ genValidPacket opts metaGen size =
       lastTransfer <-
         genLastTransfer
           meta
-          ( (null transfers && opts.poAllowEmptyPackets)
-              || (not (null transfers) && opts.poAllowTrailingEmpty)
+          ( (null transfers && poAllowEmptyPackets)
+              || (not (null transfers) && poAllowTrailingEmpty)
           )
           abortGen
       pure (transfers L.++ [lastTransfer])
