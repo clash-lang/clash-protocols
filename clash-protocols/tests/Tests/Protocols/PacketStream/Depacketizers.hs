@@ -39,7 +39,7 @@ depacketizerPropertyGenerator SNat SNat =
   idWithModelSingleDomain
     @System
     defExpectOptions{eoSampleMax = 1000, eoStopAfterEmpty = 1000}
-    (genPackets (Range.linear 1 4) Abort (genValidPacket (pure ()) (Range.linear 1 30)))
+    (genPackets 1 4 (genValidPacket defPacketOptions (pure ()) (Range.linear 0 30)))
     (exposeClockResetEnable (depacketizerModel const))
     (exposeClockResetEnable ckt)
  where
@@ -67,7 +67,7 @@ depacketizeToDfPropertyGenerator SNat SNat =
   idWithModelSingleDomain
     @System
     defExpectOptions{eoSampleMax = 1000, eoStopAfterEmpty = 1000}
-    (genPackets (Range.linear 1 10) Abort (genValidPacket (pure ()) (Range.linear 1 20)))
+    (genPackets 1 10 (genValidPacket defPacketOptions (pure ()) (Range.linear 0 20)))
     (exposeClockResetEnable (depacketizeToDfModel const))
     (exposeClockResetEnable ckt)
  where
@@ -90,9 +90,10 @@ dropTailTest SNat n =
     @System
     defExpectOptions
     ( genPackets
-        (Range.linear 1 4)
-        Abort
+        1
+        4
         ( genValidPacket
+            defPacketOptions
             (Gen.int8 Range.linearBounded)
             (Range.linear (natToNum @(n `DivRU` dataWidth)) 20)
         )
@@ -134,17 +135,17 @@ prop_const_depacketize_to_df_d5_d4 = depacketizeToDfPropertyGenerator d5 d4
 
 -- | dataWidth < n && dataWidth % n ~ 0
 prop_droptail_4_bytes_d1 :: Property
-prop_droptail_4_bytes_d1 = dropTailTest d4 d1
+prop_droptail_4_bytes_d1 = dropTailTest d1 d4
 
 prop_droptail_7_bytes_d1 :: Property
-prop_droptail_7_bytes_d1 = dropTailTest d7 d1
+prop_droptail_7_bytes_d1 = dropTailTest d1 d7
 
 -- | dataWidth < n && dataWidth % n > 0
 prop_droptail_4_bytes_d3 :: Property
-prop_droptail_4_bytes_d3 = dropTailTest d4 d3
+prop_droptail_4_bytes_d3 = dropTailTest d3 d4
 
 prop_droptail_7_bytes_d4 :: Property
-prop_droptail_7_bytes_d4 = dropTailTest d7 d4
+prop_droptail_7_bytes_d4 = dropTailTest d4 d7
 
 -- | dataWidth ~ n
 prop_droptail_4_bytes_d4 :: Property
@@ -155,10 +156,10 @@ prop_droptail_7_bytes_d7 = dropTailTest d7 d7
 
 -- | dataWidth > n
 prop_droptail_4_bytes_d7 :: Property
-prop_droptail_4_bytes_d7 = dropTailTest d4 d7
+prop_droptail_4_bytes_d7 = dropTailTest d7 d4
 
 prop_droptail_7_bytes_d12 :: Property
-prop_droptail_7_bytes_d12 = dropTailTest d7 d12
+prop_droptail_7_bytes_d12 = dropTailTest d12 d7
 
 tests :: TestTree
 tests =

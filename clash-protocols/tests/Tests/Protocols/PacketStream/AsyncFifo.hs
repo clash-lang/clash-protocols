@@ -71,8 +71,7 @@ generateAsyncFifoIdProp ::
 generateAsyncFifoIdProp wClk wRst wEn rClk rRst rEn =
   idWithModel
     defExpectOptions
-    ( genPackets (Range.linear 1 10) Abort (genValidPacket Gen.enumBounded (Range.linear 1 30))
-    )
+    (genPackets 1 10 (genValidPacket defPacketOptions Gen.enumBounded (Range.linear 0 30)))
     id
     (asyncFifoC @wDom @rDom @4 @1 @Int d4 wClk wRst wEn rClk rRst rEn)
 

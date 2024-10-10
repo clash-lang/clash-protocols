@@ -31,8 +31,7 @@ prop_packetFifo_id =
   idWithModelSingleDomain
     @System
     defExpectOptions{eoSampleMax = 1000, eoStopAfterEmpty = 1000}
-    ( genPackets (Range.linear 1 30) Abort (genValidPacket Gen.enumBounded (Range.linear 1 10))
-    )
+    (genPackets 1 30 (genValidPacket defPacketOptions Gen.enumBounded (Range.linear 0 10)))
     (exposeClockResetEnable dropAbortedPackets)
     (exposeClockResetEnable ckt)
  where
@@ -47,8 +46,7 @@ prop_packetFifo_small_buffer_id =
   idWithModelSingleDomain
     @System
     defExpectOptions{eoSampleMax = 1000, eoStopAfterEmpty = 1000}
-    ( genPackets (Range.linear 1 10) Abort (genValidPacket Gen.enumBounded (Range.linear 1 30))
-    )
+    (genPackets 1 10 (genValidPacket defPacketOptions Gen.enumBounded (Range.linear 0 30)))
     (exposeClockResetEnable dropAbortedPackets)
     (exposeClockResetEnable ckt)
  where
@@ -70,9 +68,10 @@ prop_packetFifo_no_gaps = property $ do
           enableGen
       gen =
         genPackets
-          (Range.linear 1 10)
-          NoAbort
-          (genValidPacket Gen.enumBounded (Range.linear 1 10))
+          1
+          10
+          ( genValidPacket defPacketOptions{poAbortMode = NoAbort} Gen.enumBounded (Range.linear 0 10)
+          )
 
   packets :: [PacketStreamM2S 4 Int16] <- forAll gen
 
@@ -93,8 +92,7 @@ prop_overFlowDrop_packetFifo_id =
   idWithModelSingleDomain
     @System
     defExpectOptions{eoSampleMax = 2000, eoStopAfterEmpty = 1000}
-    ( genPackets (Range.linear 1 30) Abort (genValidPacket Gen.enumBounded (Range.linear 1 10))
-    )
+    (genPackets 1 30 (genValidPacket defPacketOptions Gen.enumBounded (Range.linear 0 10)))
     (exposeClockResetEnable dropAbortedPackets)
     (exposeClockResetEnable ckt)
  where
@@ -124,8 +122,13 @@ prop_overFlowDrop_packetFifo_drop =
    where
     packetChunk = chunkByPacket packets
 
-  genSmall = genValidPacket Gen.enumBounded (Range.linear 1 5) NoAbort
-  genBig = genValidPacket Gen.enumBounded (Range.linear 33 33) NoAbort
+  genSmall =
+    genValidPacket defPacketOptions{poAbortMode = NoAbort} Gen.enumBounded (Range.linear 1 5)
+  genBig =
+    genValidPacket
+      defPacketOptions{poAbortMode = NoAbort}
+      Gen.enumBounded
+      (Range.linear 33 33)
 
 -- | test for id using a small metabuffer to ensure backpressure using the metabuffer is tested
 prop_packetFifo_small_metaBuffer :: Property
@@ -133,7 +136,7 @@ prop_packetFifo_small_metaBuffer =
   idWithModelSingleDomain
     @System
     defExpectOptions
-    (genPackets (Range.linear 1 30) Abort (genValidPacket Gen.enumBounded (Range.linear 1 4)))
+    (genPackets 1 30 (genValidPacket defPacketOptions Gen.enumBounded (Range.linear 0 4)))
     (exposeClockResetEnable dropAbortedPackets)
     (exposeClockResetEnable ckt)
  where

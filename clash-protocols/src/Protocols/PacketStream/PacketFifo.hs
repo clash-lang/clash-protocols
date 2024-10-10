@@ -19,7 +19,7 @@ import Data.Maybe
 import Data.Maybe.Extra
 
 type PacketStreamContent (dataWidth :: Nat) (meta :: Type) =
-  (Vec dataWidth (BitVector 8), Maybe (Index dataWidth))
+  (Vec dataWidth (BitVector 8), Maybe (Index (dataWidth + 1)))
 
 toPacketStreamContent ::
   PacketStreamM2S dataWidth meta -> PacketStreamContent dataWidth meta

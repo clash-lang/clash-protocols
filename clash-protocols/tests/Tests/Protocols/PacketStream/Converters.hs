@@ -1,6 +1,8 @@
 {-# LANGUAGE NumericUnderscores #-}
 
-module Tests.Protocols.PacketStream.Converters where
+module Tests.Protocols.PacketStream.Converters (
+  tests,
+) where
 
 import Clash.Prelude
 
@@ -30,10 +32,29 @@ generateUpConverterProperty ::
 generateUpConverterProperty SNat SNat =
   idWithModelSingleDomain
     defExpectOptions
-    ( genPackets (Range.linear 1 10) Abort (genValidPacket Gen.enumBounded (Range.linear 1 20))
-    )
+    (genPackets 1 10 (genValidPacket defPacketOptions Gen.enumBounded (Range.linear 0 20)))
     (exposeClockResetEnable (upConvert . downConvert))
     (exposeClockResetEnable @System (upConverterC @dwIn @dwOut @Int))
+
+generateDownConverterProperty ::
+  forall (dwIn :: Nat) (dwOut :: Nat) (n :: Nat).
+  (1 <= dwIn) =>
+  (1 <= dwOut) =>
+  (1 <= n) =>
+  (KnownNat n) =>
+  (dwIn ~ n * dwOut) =>
+  SNat dwIn ->
+  SNat dwOut ->
+  Property
+generateDownConverterProperty SNat SNat =
+  idWithModelSingleDomain
+    defExpectOptions{eoSampleMax = 1000}
+    (genPackets 1 8 (genValidPacket defPacketOptions Gen.enumBounded (Range.linear 0 10)))
+    (exposeClockResetEnable (upConvert . downConvert))
+    (exposeClockResetEnable @System (downConverterC @dwIn @dwOut @Int))
+
+prop_upConverter3to9 :: Property
+prop_upConverter3to9 = generateUpConverterProperty d3 d9
 
 prop_upConverter4to8 :: Property
 prop_upConverter4to8 = generateUpConverterProperty d4 d8
@@ -53,22 +74,8 @@ prop_upConverter1to2 = generateUpConverterProperty d1 d2
 prop_upConverter1to1 :: Property
 prop_upConverter1to1 = generateUpConverterProperty d1 d1
 
-generateDownConverterProperty ::
-  forall (dwIn :: Nat) (dwOut :: Nat) (n :: Nat).
-  (1 <= dwIn) =>
-  (1 <= dwOut) =>
-  (1 <= n) =>
-  (KnownNat n) =>
-  (dwIn ~ n * dwOut) =>
-  SNat dwIn ->
-  SNat dwOut ->
-  Property
-generateDownConverterProperty SNat SNat =
-  idWithModelSingleDomain
-    defExpectOptions{eoSampleMax = 1000}
-    (genPackets (Range.linear 1 8) Abort (genValidPacket Gen.enumBounded (Range.linear 1 10)))
-    (exposeClockResetEnable (upConvert . downConvert))
-    (exposeClockResetEnable @System (downConverterC @dwIn @dwOut @Int))
+prop_downConverter9to3 :: Property
+prop_downConverter9to3 = generateDownConverterProperty d9 d3
 
 prop_downConverter8to4 :: Property
 prop_downConverter8to4 = generateDownConverterProperty d8 d4

@@ -18,7 +18,7 @@ import Data.Constraint.Deferrable ((:~:) (Refl))
 import Data.Maybe
 
 type M2SNoMeta dataWidth =
-  (Vec dataWidth (BitVector 8), Maybe (Index dataWidth), Bool)
+  (Vec dataWidth (BitVector 8), Maybe (Index (dataWidth + 1)), Bool)
 
 toPacketstreamM2S :: M2SNoMeta dataWidth -> meta -> PacketStreamM2S dataWidth meta
 toPacketstreamM2S (a, b, c) d = PacketStreamM2S a b d c
