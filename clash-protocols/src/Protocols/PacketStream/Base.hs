@@ -59,10 +59,11 @@ import Data.Coerce (coerce)
 import qualified Data.Maybe as Maybe
 import Data.Proxy
 
+import Protocols
 import qualified Protocols.Df as Df
 import qualified Protocols.DfConv as DfConv
-import Protocols.Hedgehog.Internal
-import Protocols.Internal
+import Protocols.Hedgehog (Test (..))
+import Protocols.Idle
 
 import Control.DeepSeq (NFData)
 
