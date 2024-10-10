@@ -66,7 +66,7 @@ makePropPacketArbiter _ _ mode =
   genSources = mapM setMeta (indicesI @p)
   setMeta j = do
     pkts <-
-      genPackets @n (Range.linear 1 10) Abort (genValidPacket (pure ()) (Range.linear 1 10))
+      genPackets @n 1 10 (genValidPacket defPacketOptions (pure ()) (Range.linear 0 10))
     pure $ L.map (\pkt -> pkt{_meta = j}) pkts
 
   partitionPackets packets =
@@ -117,7 +117,7 @@ makePropPacketDispatcher ::
 makePropPacketDispatcher _ fs =
   idWithModelSingleDomain @System
     defExpectOptions{eoSampleMax = 2000, eoStopAfterEmpty = 1000}
-    (genPackets (Range.linear 1 10) Abort (genValidPacket Gen.enumBounded (Range.linear 1 6)))
+    (genPackets 1 10 (genValidPacket defPacketOptions Gen.enumBounded (Range.linear 0 6)))
     (exposeClockResetEnable (model 0))
     (exposeClockResetEnable (packetDispatcherC fs))
  where

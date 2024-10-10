@@ -24,8 +24,7 @@ prop_delaystream_id =
   idWithModelSingleDomain
     @System
     defExpectOptions
-    ( genPackets (Range.linear 1 10) Abort (genValidPacket Gen.enumBounded (Range.linear 4 20))
-    )
+    (genPackets 1 10 (genValidPacket defPacketOptions Gen.enumBounded (Range.linear 4 20)))
     (exposeClockResetEnable id)
     (exposeClockResetEnable (delayStreamC @2 @Int d4))
 
