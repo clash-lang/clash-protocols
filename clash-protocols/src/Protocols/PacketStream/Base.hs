@@ -24,6 +24,7 @@ module Protocols.PacketStream.Base (
   fanout,
   forceResetSanity,
   zeroOutInvalidBytesC,
+  stripTrailingEmptyC,
   unsafeAbortOnBackpressureC,
 
   -- * Skid buffers
@@ -82,9 +83,11 @@ Heavily inspired by the M2S data of AMBA AXI4-Stream, but simplified:
 data PacketStreamM2S (dataWidth :: Nat) (meta :: Type) = PacketStreamM2S
   { _data :: Vec dataWidth (BitVector 8)
   -- ^ The bytes to be transmitted.
-  , _last :: Maybe (Index dataWidth)
-  -- ^ If this is @Just@ then it signals that this transfer
-  --   is the end of a packet and contains the index of the last valid byte in `_data`.
+  , _last :: Maybe (Index (dataWidth + 1))
+  -- ^ If this is @Just@ then it signals that this transfer is the end of a
+  --   packet and contains the number of valid bytes in '_data', starting from
+  --   index @0@.
+  --
   --   If it is @Nothing@ then this transfer is not yet the end of a packet and all
   --   bytes are valid. This implies that no null bytes are allowed in the middle of
   --   a packet, only after a packet.
@@ -94,7 +97,7 @@ data PacketStreamM2S (dataWidth :: Nat) (meta :: Type) = PacketStreamM2S
   -- ^ Iff true, the packet corresponding to this transfer is invalid. The subordinate
   --   must either drop the packet or forward the `_abort`.
   }
-  deriving (Bundle, Eq, Functor, Generic, NFData, Show, ShowX)
+  deriving (Eq, Generic, ShowX, Show, NFData, Bundle, Functor)
 
 deriving instance
   (KnownNat dataWidth, NFDataX meta) =>
@@ -134,6 +137,11 @@ Invariants:
 4. A subordinate which receives a transfer with `_abort` asserted must either forward this `_abort` or drop the packet.
 5. A packet may not be interrupted by another packet.
 6. All bytes in `_data` which are not enabled must be 0x00.
+
+This protocol allows the last transfer of a packet to have zero valid bytes in
+'_data', so it also allows 0-byte packets. Note that concrete implementations
+of the protocol are free to disallow 0-byte packets or packets with a trailing
+zero-byte transfer for whatever reason.
 -}
 data PacketStream (dom :: Domain) (dataWidth :: Nat) (meta :: Type)
 
@@ -278,6 +286,53 @@ forceResetSanity ::
   Circuit (PacketStream dom dataWidth meta) (PacketStream dom dataWidth meta)
 forceResetSanity = forceResetSanityGeneric
 
+{- |
+Strips trailing zero-byte transfers from packets in the stream. That is,
+if a packet consists of more than one transfer and '_last' of the last
+transfer in that packet is @Just 0@, the last transfer of that packet will
+be dropped and '_last' of the transfer before that will be set to @maxBound@.
+If such a trailing zero-byte transfer had '_abort' asserted, it will be
+preserved.
+
+Has one clock cycle latency, but runs at full throughput.
+-}
+stripTrailingEmptyC ::
+  forall (dataWidth :: Nat) (meta :: Type) (dom :: Domain).
+  (HiddenClockResetEnable dom) =>
+  (KnownNat dataWidth) =>
+  (NFDataX meta) =>
+  Circuit
+    (PacketStream dom dataWidth meta)
+    (PacketStream dom dataWidth meta)
+stripTrailingEmptyC = forceResetSanity |> fromSignals (mealyB go (False, False, Nothing))
+ where
+  go (notFirst, flush, cache) (Nothing, bwdIn) =
+    ((notFirst, flush', cache'), (PacketStreamS2M True, fwdOut))
+   where
+    fwdOut = if flush then cache else Nothing
+    (flush', cache')
+      | flush && _ready bwdIn = (False, Nothing)
+      | otherwise = (flush, cache)
+  go (notFirst, flush, cache) (Just transferIn, bwdIn) = (nextStOut, (bwdOut, fwdOut))
+   where
+    (notFirst', flush', cache', fwdOut) = case _last transferIn of
+      Nothing -> (True, False, Just transferIn, cache)
+      Just i ->
+        let trailing = i == 0 && notFirst
+         in ( False
+            , not trailing
+            , if trailing then Nothing else Just transferIn
+            , if trailing
+                then (\x -> x{_last = Just maxBound, _abort = _abort x || _abort transferIn}) <$> cache
+                else cache
+            )
+
+    bwdOut = PacketStreamS2M (Maybe.isNothing cache || _ready bwdIn)
+
+    nextStOut
+      | Maybe.isNothing cache || _ready bwdIn = (notFirst', flush', cache')
+      | otherwise = (notFirst, flush, cache)
+
 -- | Sets data bytes that are not enabled in a @PacketStream@ to @0x00@.
 zeroOutInvalidBytesC ::
   forall (dom :: Domain) (dataWidth :: Nat) (meta :: Type).
@@ -292,11 +347,10 @@ zeroOutInvalidBytesC = Circuit $ \(fwdIn, bwdIn) -> (bwdIn, fmap (go <$>) fwdIn)
    where
     dataOut = case _last transferIn of
       Nothing -> _data transferIn
-      Just i -> a ++ b
-       where
-        -- The first byte is always valid, so we only map over the rest.
-        (a, b') = splitAt d1 (_data transferIn)
-        b = imap (\(j :: Index (dataWidth - 1)) byte -> if resize j < i then byte else 0x00) b'
+      Just i ->
+        imap
+          (\(j :: Index dataWidth) byte -> if resize j < i then byte else 0x00)
+          (_data transferIn)
 
 {- |
 Copy data of a single `PacketStream` to multiple. LHS will only receive

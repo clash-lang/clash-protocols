@@ -87,7 +87,7 @@ packetizerT1 toMetaOut toHeader st (Just inPkt, bwdIn) =
       (nextSt, newLast) = case _last inPkt of
         Nothing -> (Forward1 nextAborted newBuf, Nothing)
         Just i
-          | i < natToNum @(dataWidth - headerBytes) ->
+          | i <= natToNum @(dataWidth - headerBytes) ->
               (Insert1 False, Just (i + natToNum @headerBytes))
           | otherwise -> (LastForward1 nextAborted newBuf, Nothing)
 
@@ -237,7 +237,7 @@ packetizerT3 toMetaOut _ st@Insert3{..} (Just inPkt, bwdIn) =
     (False, _) -> (Nothing, Insert3 nextAborted newHdrBuf (succ _counter3))
     (True, Nothing) -> (Nothing, Forward3 nextAborted newHdrBuf)
     (True, Just i) ->
-      if i < natToNum @(dataWidth - headerBytes `Mod` dataWidth)
+      if i <= natToNum @(dataWidth - headerBytes `Mod` dataWidth)
         then (Just (i + natToNum @(headerBytes `Mod` dataWidth)), LoadHeader3)
         else (Nothing, LastForward3 nextAborted newHdrBuf)
   nextStOut = if _ready bwdIn then nextSt else st
@@ -266,7 +266,7 @@ packetizerT3 toMetaOut _ st@Forward3{..} (Just inPkt, bwdIn) =
   (lastOut, nextSt) = case _last inPkt of
     Nothing -> (Nothing, Forward3 nextAborted newBuf)
     Just i ->
-      if i < natToNum @(dataWidth - headerBytes `Mod` dataWidth)
+      if i <= natToNum @(dataWidth - headerBytes `Mod` dataWidth)
         then (Just (i + natToNum @(headerBytes `Mod` dataWidth)), LoadHeader3)
         else (Nothing, LastForward3 nextAborted newBuf)
   nextStOut = if _ready bwdIn then nextSt else st
@@ -375,8 +375,8 @@ packetizeFromDfT toMetaOut _ st@DfInsert{..} (Df.Data dataIn, bwdIn) = (nextStOu
   outPkt = PacketStreamM2S dataOut newLast (toMetaOut dataIn) False
 
   newLast = toMaybe (_dfCounter == maxBound) $ case compareSNat (SNat @(headerBytes `Mod` dataWidth)) d0 of
-    SNatGT -> natToNum @(headerBytes `Mod` dataWidth - 1)
-    _ -> natToNum @(dataWidth - 1)
+    SNatGT -> natToNum @(headerBytes `Mod` dataWidth)
+    _ -> natToNum @dataWidth
 
   bwdOut = Ack (_ready bwdIn && _dfCounter == maxBound)
   nextSt = if _dfCounter == maxBound then DfIdle else DfInsert (succ _dfCounter) newHdrBuf
@@ -421,6 +421,6 @@ packetizeFromDfC toMetaOut toHeader = case strictlyPositiveDivRu @headerBytes @d
         outPkt = PacketStreamM2S dataOut (Just l) (toMetaOut dataIn) False
         dataOut = bitCoerce (toHeader dataIn) ++ repeat @(dataWidth - headerBytes) defaultByte
         l = case compareSNat (SNat @(headerBytes `Mod` dataWidth)) d0 of
-          SNatGT -> natToNum @(headerBytes `Mod` dataWidth - 1)
-          _ -> natToNum @(dataWidth - 1)
+          SNatGT -> natToNum @(headerBytes `Mod` dataWidth)
+          _ -> natToNum @dataWidth
     SNatGT -> fromSignals (mealyB (packetizeFromDfT toMetaOut toHeader) DfIdle)
