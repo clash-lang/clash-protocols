@@ -13,7 +13,7 @@ module Protocols.PacketStream.Converters (
 
 import Clash.Prelude
 
-import Data.Maybe (isJust)
+import Data.Maybe (fromMaybe, isJust)
 import Data.Maybe.Extra
 import Data.Type.Equality ((:~:) (Refl))
 
@@ -206,69 +206,102 @@ unsafeUpConverterC = case sameNat (SNat @dwIn) (SNat @dwOut) of
   Just Refl -> idC
   _ -> unsafeDropBackpressure (fromSignals upConverter)
 
-data DownConverterState (dwIn :: Nat) = DownConverterState
+-- | State of 'downConverterT'.
+data DownConverterState (dwIn :: Nat) (meta :: Type) = DownConverterState
   { _dcBuf :: Vec dwIn (BitVector 8)
-  -- ^ Buffer
+  -- ^ Registered _data of the last transfer.
+  , _dcLast :: Bool
+  -- ^ Is the last transfer the end of a packet?
+  , _dcMeta :: meta
+  -- ^ Registered _meta of the last transfer.
+  , _dcAborted :: Bool
+  -- ^ Registered _abort of the last transfer. All sub-transfers corresponding
+  --   to this transfer need to be marked with the same _abort value.
   , _dcSize :: Index (dwIn + 1)
-  -- ^ Number of valid bytes in _dcBuf
+  -- ^ Number of valid bytes in _dcBuf.
+  , _dcZeroByteTransfer :: Bool
+  -- ^ Is the current transfer we store a zero-byte transfer? In this case,
+  --   _dcSize is 0 but we still need to transmit something in order to
+  --   preserve zero-byte transfers.
   }
   deriving (Generic, NFDataX)
 
+-- | State transition function of 'downConverterC', in case @dwIn /= dwOut@.
 downConverterT ::
   forall (dwIn :: Nat) (dwOut :: Nat) (meta :: Type) (n :: Nat).
   (1 <= dwIn) =>
   (1 <= dwOut) =>
   (1 <= n) =>
+  (NFDataX meta) =>
   (KnownNat dwIn) =>
   (KnownNat dwOut) =>
   (dwIn ~ dwOut * n) =>
-  DownConverterState dwIn ->
+  DownConverterState dwIn meta ->
   (Maybe (PacketStreamM2S dwIn meta), PacketStreamS2M) ->
-  ( DownConverterState dwIn
+  ( DownConverterState dwIn meta
   , (PacketStreamS2M, Maybe (PacketStreamM2S dwOut meta))
   )
-downConverterT st (Nothing, _) = (st, (PacketStreamS2M True, Nothing))
-downConverterT st@DownConverterState{..} (Just inPkt, bwdIn) = (nextSt, (PacketStreamS2M outReady, Just outPkt))
+downConverterT st@(DownConverterState{..}) (fwdIn, bwdIn) =
+  (nextSt, (PacketStreamS2M readyOut, fwdOut))
  where
-  -- If _dcSize == 0, then we have received a new transfer and should use
-  -- its corresponding _data. Else, we should use our stored buffer.
-  (nextSize, buf) = case (_dcSize == 0, _last inPkt) of
-    (True, Nothing) -> (maxBound - natToNum @dwOut, _data inPkt)
-    (True, Just i) -> (satSub SatBound i (natToNum @dwOut), _data inPkt)
-    (False, _) -> (satSub SatBound _dcSize (natToNum @dwOut), _dcBuf)
+  (shiftedBuf, dataOut) = leToPlus @dwOut @dwIn $ shiftOutFrom0 (SNat @dwOut) _dcBuf
 
-  (newBuf, dataOut) = leToPlus @dwOut @dwIn shiftOutFrom0 (SNat @dwOut) buf
+  -- Either we preserve a zero-byte transfer or we have some real data to transmit.
+  fwdOut =
+    toMaybe (_dcSize > 0 || _dcZeroByteTransfer)
+      $ PacketStreamM2S
+        { _data = dataOut
+        , _last =
+            if _dcZeroByteTransfer
+              then Just 0
+              else toMaybe (_dcSize <= natToNum @dwOut && _dcLast) (resize _dcSize)
+        , _meta = _dcMeta
+        , _abort = _dcAborted
+        }
 
-  outPkt =
-    PacketStreamM2S
-      { _data = dataOut
-      , _last = outLast
-      , _meta = _meta inPkt
-      , _abort = _abort inPkt
-      }
+  -- If the state buffer is empty, or if the state buffer is not empty and
+  -- the final sub-transfer is acknowledged this clock cycle, we can acknowledge
+  -- newly received valid data and load it into our registers.
+  emptyState = _dcSize == 0 && not _dcZeroByteTransfer
+  readyOut = isJust fwdIn && (emptyState || (_dcSize <= natToNum @dwOut && _ready bwdIn))
 
-  (outReady, outLast)
-    | nextSize == 0 =
-        ( _ready bwdIn
-        , (\i -> resize $ if _dcSize == 0 then i else _dcSize)
-            <$> _last inPkt
-        )
-    | otherwise = (False, Nothing)
-
-  -- Keep the buffer in the state and rotate it once the byte is acknowledged to avoid
-  -- dynamic indexing.
   nextSt
-    | _ready bwdIn = DownConverterState newBuf nextSize
+    | readyOut = newState (fromJustX fwdIn)
+    | not emptyState && _ready bwdIn =
+        st
+          { _dcBuf = shiftedBuf
+          , _dcSize = satSub SatBound _dcSize (natToNum @dwOut)
+          , _dcZeroByteTransfer = False
+          }
     | otherwise = st
 
-{- | Converts packet streams of arbitrary data width @dwIn@ to packet streams of
-a smaller data width @dwOut@, where @dwOut@ must divide @dwIn@. When @dwIn ~ dwOut@,
-this component is set to be `idC`.
+  -- Computes a new state from a valid incoming transfer.
+  newState PacketStreamM2S{..} =
+    DownConverterState
+      { _dcBuf = _data
+      , _dcMeta = _meta
+      , _dcSize = fromMaybe (natToNum @dwIn) _last
+      , _dcLast = isJust _last
+      , _dcAborted = _abort
+      , _dcZeroByteTransfer = _last == Just 0
+      }
 
-If `_abort` is asserted on an input transfer, it will be asserted on all
-corresponding output transfers as well.
+{- |
+Converts packet streams of arbitrary data width @dwIn@ to packet streams of
+a smaller (or equal) data width @dwOut@, where @dwOut@ must divide @dwIn@.
+When @dwIn ~ dwOut@, this component is just the identity circuit, `idC`.
 
-Provides zero latency and full throughput.
+If '_abort' is asserted on an input transfer, it will be asserted on all
+corresponding output sub-transfers as well. All zero-byte transfers are
+preserved.
+
+Has one clock cycle of latency, all M2S outputs are registered.
+Throughput is optimal, a transfer of @n@ valid bytes is transmitted in @n@
+clock cycles. To be precise, throughput is at least @(dwIn / dwOut)%@, so at
+least @50%@ if @dwIn = 4@ and @dwOut = 2@ for example. We specify /at least/,
+because the throughput may be on the last transfer of a packet, when not all
+bytes have to be valid. If there is only one valid byte in the last transfer,
+then the throughput will always be @100%@ for that particular transfer.
 -}
 downConverterC ::
   forall (dwIn :: Nat) (dwOut :: Nat) (meta :: Type) (dom :: Domain) (n :: Nat).
@@ -276,6 +309,7 @@ downConverterC ::
   (1 <= dwIn) =>
   (1 <= dwOut) =>
   (1 <= n) =>
+  (NFDataX meta) =>
   (KnownNat dwIn) =>
   (KnownNat dwOut) =>
   (dwIn ~ dwOut * n) =>
@@ -285,8 +319,13 @@ downConverterC = case sameNat (SNat @dwIn) (SNat @dwOut) of
   Just Refl -> idC
   _ -> forceResetSanity |> fromSignals (mealyB downConverterT s0)
    where
+    errPrefix = "downConverterT: undefined initial "
     s0 =
       DownConverterState
-        { _dcBuf = deepErrorX "downConverterC: undefined initial buffer"
+        { _dcBuf = deepErrorX (errPrefix <> "_dcBuf")
+        , _dcLast = deepErrorX (errPrefix <> "_dcLast")
+        , _dcMeta = deepErrorX (errPrefix <> "_dcMeta")
+        , _dcAborted = deepErrorX (errPrefix <> "_dcAborted")
         , _dcSize = 0
+        , _dcZeroByteTransfer = False
         }
