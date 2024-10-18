@@ -1,7 +1,7 @@
 {- |
-  Copyright   :  (C) 2024, QBayLogic B.V.
-  License     :  BSD2 (see the file LICENSE)
-  Maintainer  :  QBayLogic B.V. <devops@qbaylogic.com>
+Copyright  :  (C) 2024, QBayLogic B.V.
+License    :  BSD2 (see the file LICENSE)
+Maintainer :  QBayLogic B.V. <devops@qbaylogic.com>
 
 Provides the PacketStream protocol, a simple streaming protocol for transferring packets of data between components.
 

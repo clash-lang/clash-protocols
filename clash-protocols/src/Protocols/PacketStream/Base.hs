@@ -4,7 +4,11 @@
 {-# OPTIONS_HADDOCK hide #-}
 
 {- |
-Definitions and instances of the PacketStream protocol
+Copyright  :  (C) 2024, QBayLogic B.V.
+License    :  BSD2 (see the file LICENSE)
+Maintainer :  QBayLogic B.V. <devops@qbaylogic.com>
+
+Definitions and instances of the PacketStream protocol.
 -}
 module Protocols.PacketStream.Base (
   -- * Protocol definition

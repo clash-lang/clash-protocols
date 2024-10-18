@@ -3,6 +3,10 @@
 {-# OPTIONS_HADDOCK hide #-}
 
 {- |
+Copyright  :  (C) 2024, QBayLogic B.V.
+License    :  BSD2 (see the file LICENSE)
+Maintainer :  QBayLogic B.V. <devops@qbaylogic.com>
+
 Provides a circuit that delays a stream by a configurable amount of transfers.
 -}
 module Protocols.PacketStream.Delay (
