@@ -20,31 +20,31 @@ import Data.Type.Equality ((:~:) (Refl))
 import Protocols (CSignal, Circuit (..), fromSignals, idC, (|>))
 import Protocols.PacketStream.Base
 
--- | Upconverter state, consisting of at most p `BitVector 8`s and a vector indicating which bytes are valid
+-- | State of 'upConverter'.
 data UpConverterState (dwOut :: Nat) (n :: Nat) (meta :: Type) = UpConverterState
   { _ucBuf :: Vec dwOut (BitVector 8)
-  -- ^ The buffer we are filling
+  -- ^ The data buffer we are filling.
   , _ucIdx :: Index n
-  -- ^ Where in the buffer we need to write the next element
+  -- ^ Where in _ucBuf we need to write the next data.
   , _ucIdx2 :: Index (dwOut + 1)
   -- ^ Used when @dwIn@ is not a power of two to determine the adjusted '_last',
   --   to avoid multiplication (infers an expensive DSP slice).
-  --   If @dwIn@ is a power of two then we can multiply by shifting left.
+  --   If @dwIn@ is a power of two then we can multiply by shifting left with
+  --   a constant, which is free in hardware in terms of resource usage.
   , _ucFlush :: Bool
-  -- ^ If this is true the current state can presented as packetstream word
+  -- ^ If true, we should output the current state as a PacketStream transfer.
   , _ucFreshBuf :: Bool
-  -- ^ If this is true we need to start a fresh buffer
+  -- ^ If true, we need to start a fresh buffer (all zeroes).
   , _ucAborted :: Bool
-  -- ^ Current packet is aborted
+  -- ^ Whether the current transfer we are building is aborted.
   , _ucLastIdx :: Maybe (Index (dwOut + 1))
-  -- ^ If true the current buffer contains the last byte of the current packet
+  -- ^ If true, the current buffer contains the last byte of the current packet.
   , _ucMeta :: meta
+  -- ^ Metadata of the current transfer we are a building.
   }
   deriving (Generic, NFDataX, Show, ShowX)
 
-toPacketStream :: UpConverterState dwOut n meta -> Maybe (PacketStreamM2S dwOut meta)
-toPacketStream UpConverterState{..} = toMaybe _ucFlush (PacketStreamM2S _ucBuf _ucLastIdx _ucMeta _ucAborted)
-
+-- | Computes the next state for 'upConverter'.
 nextState ::
   forall (dwIn :: Nat) (dwOut :: Nat) (meta :: Type) (n :: Nat).
   (1 <= dwIn) =>
@@ -94,8 +94,8 @@ nextState st@(UpConverterState{..}) (Just PacketStreamM2S{..}) (PacketStreamS2M 
   nextIdx = if nextFlush then 0 else _ucIdx + 1
 
   -- If @dwIn@ is not a power of two, we need to do some extra bookkeeping to
-  -- avoid multiplication. If not, _ucIdx2 stays at 0 and is never used, and
-  -- should therefore be optimized out by synthesis tools.
+  -- avoid multiplication to calculate _last. If not, _ucIdx2 stays at 0 and is
+  -- never used, and should therefore be optimized out by synthesis tools.
   (nextIdx2, nextLastIdx) = case sameNat (SNat @(FLog 2 dwIn)) (SNat @(CLog 2 dwIn)) of
     Just Refl ->
       ( 0
@@ -138,28 +138,43 @@ upConverter ::
   )
 upConverter = mealyB go s0
  where
+  errPrefix = "upConverterT: undefined initial "
   s0 =
     UpConverterState
-      { _ucBuf = deepErrorX "upConverterC: undefined initial buffer"
+      { _ucBuf = deepErrorX (errPrefix <> " _ucBuf")
       , _ucIdx = 0
       , _ucIdx2 = 0
       , _ucFlush = False
       , _ucFreshBuf = True
       , _ucAborted = False
-      , _ucLastIdx = Nothing
-      , _ucMeta = deepErrorX "upConverterC: undefined initial metadata"
+      , _ucLastIdx = deepErrorX (errPrefix <> " _ucLastIdx")
+      , _ucMeta = deepErrorX (errPrefix <> " _ucMeta")
       }
   go st@(UpConverterState{..}) (fwdIn, bwdIn) =
-    (nextState st fwdIn bwdIn, (PacketStreamS2M outReady, toPacketStream st))
+    (nextState st fwdIn bwdIn, (PacketStreamS2M outReady, fwdOut))
    where
     outReady = not _ucFlush || _ready bwdIn
 
+    fwdOut =
+      toMaybe _ucFlush
+        $ PacketStreamM2S
+          { _data = _ucBuf
+          , _last = _ucLastIdx
+          , _meta = _ucMeta
+          , _abort = _ucAborted
+          }
+
 {- |
 Converts packet streams of arbitrary data width @dwIn@ to packet streams of
-a bigger data width @dwOut@, where @dwIn@ must divide @dwOut@. When @dwIn ~ dwOut@,
-this component is set to be `idC`.
+a bigger (or equal) data width @dwOut@, where @dwOut@ must divide @dwIn@.
+When @dwIn ~ dwOut@, this component is just the identity circuit, `idC`.
 
-Has one cycle of latency, but full throughput.
+If '_abort' is asserted on any of the input sub-transfers, it will be asserted
+on the corresponding output transfer as well. All zero-byte transfers are
+preserved.
+
+Has one cycle of latency, all M2S outputs are registered.
+Provides full throughput.
 -}
 upConverterC ::
   forall (dwIn :: Nat) (dwOut :: Nat) (meta :: Type) (dom :: Domain) (n :: Nat).
