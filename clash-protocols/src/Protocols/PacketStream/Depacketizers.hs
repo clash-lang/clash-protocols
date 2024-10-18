@@ -94,7 +94,7 @@ instance
   Default (DepacketizerState headerBytes dataWidth)
   where
   def :: DepacketizerState headerBytes dataWidth
-  def = Parse False (repeat undefined) maxBound
+  def = Parse False (deepErrorX "depacketizerT: undefined intial buffer") maxBound
 
 -- | Depacketizer state transition function.
 depacketizerT ::
@@ -270,7 +270,7 @@ instance
   Default (DfDepacketizerState headerBytes dataWidth)
   where
   def :: DfDepacketizerState headerBytes dataWidth
-  def = DfParse False (repeat undefined) maxBound
+  def = DfParse False (deepErrorX "depacketizeToDfT: undefined intial buffer") maxBound
 
 -- | Df depacketizer transition function.
 depacketizeToDfT ::

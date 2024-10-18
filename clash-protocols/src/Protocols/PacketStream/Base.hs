@@ -166,7 +166,10 @@ instance DfConv.DfConv (PacketStream dom dataWidth meta) where
   toDfCircuit _ = fromSignals go
    where
     go (fwdIn, bwdIn) =
-      ( (fmap coerce bwdIn, pure undefined)
+      (
+        ( fmap coerce bwdIn
+        , pure (deepErrorX "PacketStream toDfCircuit: undefined")
+        )
       , Df.dataToMaybe <$> P.fst fwdIn
       )
 
@@ -174,7 +177,10 @@ instance DfConv.DfConv (PacketStream dom dataWidth meta) where
    where
     go (fwdIn, bwdIn) =
       ( coerce <$> P.fst bwdIn
-      , (fmap Df.maybeToData fwdIn, pure undefined)
+      ,
+        ( fmap Df.maybeToData fwdIn
+        , pure (deepErrorX "PacketStream fromDfCircuit: undefined")
+        )
       )
 
 instance
