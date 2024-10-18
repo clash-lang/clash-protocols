@@ -2,6 +2,10 @@
 {-# OPTIONS_HADDOCK hide #-}
 
 {- |
+Copyright  :  (C) 2024, QBayLogic B.V.
+License    :  BSD2 (see the file LICENSE)
+Maintainer :  QBayLogic B.V. <devops@qbaylogic.com>
+
 Provides a packet arbiter and dispatcher, for merging and splitting packet streams.
 -}
 module Protocols.PacketStream.Routing (
