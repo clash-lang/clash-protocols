@@ -2,9 +2,9 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
 {- |
-Copyright   : (C) 2024, QBayLogic B.V.
-License     : BSD2 (see the file LICENSE)
-Maintainer  : QBayLogic B.V.
+Copyright  :  (C) 2024, QBayLogic B.V.
+License    :  BSD2 (see the file LICENSE)
+Maintainer :  QBayLogic B.V. <devops@qbaylogic.com>
 
 Provides Hedgehog generators, models and utility functions for testing
 `PacketStream` circuits.

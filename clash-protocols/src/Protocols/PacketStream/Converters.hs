@@ -3,7 +3,12 @@
 {-# OPTIONS_HADDOCK hide #-}
 
 {- |
-Provides an upconverter and downconverter for changing the data width of packet streams.
+Copyright  :  (C) 2024, QBayLogic B.V.
+License    :  BSD2 (see the file LICENSE)
+Maintainer :  QBayLogic B.V. <devops@qbaylogic.com>
+
+Provides an upconverter and downconverter for changing the data width of
+packet streams.
 -}
 module Protocols.PacketStream.Converters (
   downConverterC,
