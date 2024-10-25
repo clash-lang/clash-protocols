@@ -306,7 +306,7 @@ instance (C.KnownDomain dom) => Simulate (CSignal dom a) where
   type SimulateChannels (CSignal dom a) = 1
 
   simToSigFwd Proxy list = C.fromList_lazy list
-  simToSigBwd Proxy () = def
+  simToSigBwd Proxy () = pure ()
   sigToSimFwd Proxy sig = C.sample_lazy sig
   sigToSimBwd Proxy _ = ()
 
@@ -324,7 +324,7 @@ instance (C.NFDataX a, C.ShowX a, Show a, C.KnownDomain dom) => Drivable (CSigna
      in Circuit (\_ -> ((), fwd1))
 
   sampleC SimulationConfig{resetCycles, ignoreReset} (Circuit f) =
-    let sampled = CE.sample_lazy (snd (f ((), def)))
+    let sampled = CE.sample_lazy (snd (f ((), pure ())))
      in if ignoreReset then drop resetCycles sampled else sampled
 
 {- | Simulate a circuit. Includes samples while reset is asserted.
