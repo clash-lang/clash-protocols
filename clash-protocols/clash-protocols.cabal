@@ -77,7 +77,6 @@ common common-options
     -fplugin GHC.TypeLits.Extra.Solver
     -fplugin GHC.TypeLits.Normalise
     -fplugin GHC.TypeLits.KnownNat.Solver
-    -fconstraint-solver-iterations=6
 
     -- Clash needs access to the source code in compiled modules
     -fexpose-all-unfoldings

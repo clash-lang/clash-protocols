@@ -1,7 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-{-# OPTIONS_GHC -fconstraint-solver-iterations=10 #-}
+{-# OPTIONS_GHC -fconstraint-solver-iterations=5 #-}
 {-# OPTIONS_HADDOCK hide #-}
 
 {- |
