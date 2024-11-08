@@ -63,6 +63,6 @@ module Protocols (
   TaggedBundle (..),
 ) where
 
-import Data.Default (def)
+import Data.Default.Class (def)
 import Protocols.Df (Df)
 import Protocols.Internal

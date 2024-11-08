@@ -1511,7 +1511,7 @@ simulate ::
   ) =>
   Proxy dfA ->
   Proxy dfB ->
-  -- | Simulation configuration. Use 'Data.Default.def' for sensible defaults.
+  -- | Simulation configuration. Use 'Data.Default.Class.def' for sensible defaults.
   SimulationConfig ->
   -- | Circuit to simulate.
   ( Clock (Dom dfA) ->

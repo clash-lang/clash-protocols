@@ -1094,7 +1094,7 @@ For a generalized version of 'simulate', check out 'Protocols.simulateC'.
 simulate ::
   forall dom a b.
   (C.KnownDomain dom) =>
-  -- | Simulation configuration. Use 'Data.Default.def' for sensible defaults.
+  -- | Simulation configuration. Use 'Data.Default.Class.def' for sensible defaults.
   SimulationConfig ->
   -- | Circuit to simulate.
   ( C.Clock dom ->
