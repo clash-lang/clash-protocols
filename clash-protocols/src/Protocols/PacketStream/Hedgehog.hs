@@ -101,7 +101,7 @@ chunkToPacket xs =
           <$> _last lastTransfer
     , _abort = any _abort xs
     , _meta = _meta lastTransfer
-    , _data = L.foldr ((+>>) . head . _data) (repeat 0x00) xs
+    , _data = L.foldr ((+>>) . head . _data) (repeat nullByte) xs
     }
  where
   lastTransfer = L.last xs
@@ -207,7 +207,7 @@ depacketizerModel toMetaOut ps = L.concat dataWidthPackets
     fwdF' = case fwdF of
       [] ->
         [ PacketStreamM2S
-            (Vec.singleton 0x00)
+            (Vec.singleton nullByte)
             (Just 0)
             (error "depacketizerModel: should be replaced")
             (_abort (L.last hdrF))
@@ -285,7 +285,7 @@ dropTailModel SNat packets = L.concatMap go (chunkByPacket packets)
   go packet =
     upConvert
       $ L.init trimmed
-      L.++ [setNull (L.last trimmed){_last = _last $ L.last bytePkts, _abort = aborted}]
+      L.++ [(L.last trimmed){_last = _last $ L.last bytePkts, _abort = aborted}]
    where
     aborted = L.any _abort packet
     bytePkts = downConvert packet
@@ -468,7 +468,7 @@ genTransfer meta abortGen =
 
 {- |
 Generate the last transfer of a packet, i.e. a transfer with @_last@ set as @Just@.
-All bytes which are not enabled are set to 0x00.
+All bytes which are not enabled are forced /undefined/.
 -}
 genLastTransfer ::
   forall (dataWidth :: Nat) (meta :: Type).
@@ -504,6 +504,6 @@ setNull transfer =
             fromJust
               ( Vec.fromList
                   $ L.take (fromIntegral i) (toList (_data transfer))
-                  L.++ L.replicate ((natToNum @dataWidth) - fromIntegral i) 0x00
+                  L.++ L.replicate ((natToNum @dataWidth) - fromIntegral i) nullByte
               )
         }
