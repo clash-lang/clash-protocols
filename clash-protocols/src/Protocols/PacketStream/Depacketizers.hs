@@ -32,9 +32,6 @@ import Data.Constraint.Nat.Extra
 import Data.Data ((:~:) (Refl))
 import Data.Maybe
 
-defaultByte :: BitVector 8
-defaultByte = 0x00
-
 {- | Vectors of this size are able to hold @headerBytes `DivRU` dataWidth@
      transfers of size @dataWidth@, which is bigger than or equal to @headerBytes@.
 -}
@@ -167,17 +164,14 @@ depacketizerT toMetaOut st@Forward{..} (Just pkt@PacketStreamM2S{..}, bwdIn) = (
   outPkt = case sameNat d0 (SNat @(headerBytes `Mod` dataWidth)) of
     Just Refl ->
       pkt
-        { _data = if _lastFwd then repeat 0x00 else _data
+        { _data = _data
         , _last = if _lastFwd then Just 0 else _last
         , _meta = toMetaOut (bitCoerce header) _meta
         , _abort = nextAborted
         }
     Nothing ->
       pkt
-        { _data =
-            if _lastFwd
-              then fwdBytes ++ repeat @(dataWidth - ForwardBytes headerBytes dataWidth) defaultByte
-              else dataOut
+        { _data = dataOut
         , _last =
             if _lastFwd
               then either Just Just =<< newLast
@@ -497,6 +491,5 @@ dropTailC SNat = case strictlyPositiveDivRu @n @dataWidth of
             [s1, s2] <- fanout -< stream
             delayed <- delayStreamC (SNat @(n `DivRU` dataWidth)) -< s1
             info <- transmitDropInfoC @dataWidth @(n `DivRU` dataWidth) (SNat @n) -< s2
-            dropped <- dropTailC' @dataWidth @(n `DivRU` dataWidth) -< (delayed, info)
-            zeroOutInvalidBytesC -< dropped
+            dropTailC' @dataWidth @(n `DivRU` dataWidth) -< (delayed, info)
         )

@@ -28,9 +28,6 @@ import Data.Constraint.Nat.Extra (leModulusDivisor, leZeroIsZero, strictlyPositi
 import Data.Maybe
 import Data.Maybe.Extra
 
-defaultByte :: BitVector 8
-defaultByte = 0x00
-
 type PacketizerCt (header :: Type) (headerBytes :: Nat) (dataWidth :: Nat) =
   ( BitPack header
   , BitSize header ~ headerBytes * 8
@@ -107,7 +104,7 @@ packetizerT1 toMetaOut toHeader st (Just inPkt, bwdIn) =
        where
         outPkt =
           inPkt
-            { _data = _hdrBuf1 ++ repeat defaultByte
+            { _data = _hdrBuf1 ++ repeat nullByte
             , _last = (\i -> i - natToNum @(dataWidth - headerBytes)) <$> _last inPkt
             , _meta = toMetaOut (_meta inPkt)
             , _abort = _aborted1 || _abort inPkt
@@ -256,7 +253,7 @@ packetizerT3 toMetaOut _ st@Forward3{..} (Just inPkt, bwdIn) =
   buf :: Vec (headerBytes `Mod` dataWidth) (BitVector 8)
   (bytesOut, buf) = splitAt (SNat @(dataWidth - headerBytes `Mod` dataWidth)) (_data inPkt)
   newBuf :: Vec (headerBytes + dataWidth) (BitVector 8)
-  newBuf = buf ++ repeat @(headerBytes + dataWidth - headerBytes `Mod` dataWidth) defaultByte
+  newBuf = buf ++ repeat @(headerBytes + dataWidth - headerBytes `Mod` dataWidth) nullByte
   nextAborted = _aborted3 || _abort inPkt
 
   outPkt =
@@ -375,7 +372,7 @@ packetizeFromDfT toMetaOut toHeader DfIdle (Df.Data dataIn, bwdIn) = (nextStOut,
 -- Thus, we don't need to store the metadata in the state.
 packetizeFromDfT toMetaOut _ st@DfInsert{..} (Df.Data dataIn, bwdIn) = (nextStOut, (bwdOut, Just outPkt))
  where
-  (dataOut, newHdrBuf) = splitAt (SNat @dataWidth) (_dfHdrBuf ++ repeat @dataWidth defaultByte)
+  (dataOut, newHdrBuf) = splitAt (SNat @dataWidth) (_dfHdrBuf ++ repeat @dataWidth nullByte)
   outPkt = PacketStreamM2S dataOut newLast (toMetaOut dataIn) False
 
   newLast = toMaybe (_dfCounter == maxBound) $ case compareSNat (SNat @(headerBytes `Mod` dataWidth)) d0 of
@@ -423,7 +420,7 @@ packetizeFromDfC toMetaOut toHeader = case strictlyPositiveDivRu @headerBytes @d
       go (Df.Data dataIn, bwdIn) = (Ack (_ready bwdIn), Just outPkt)
        where
         outPkt = PacketStreamM2S dataOut (Just l) (toMetaOut dataIn) False
-        dataOut = bitCoerce (toHeader dataIn) ++ repeat @(dataWidth - headerBytes) defaultByte
+        dataOut = bitCoerce (toHeader dataIn) ++ repeat @(dataWidth - headerBytes) nullByte
         l = case compareSNat (SNat @(headerBytes `Mod` dataWidth)) d0 of
           SNatGT -> natToNum @(headerBytes `Mod` dataWidth)
           _ -> natToNum @dataWidth

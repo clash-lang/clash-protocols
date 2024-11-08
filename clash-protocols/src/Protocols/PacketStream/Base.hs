@@ -16,6 +16,9 @@ module Protocols.PacketStream.Base (
   PacketStreamS2M (..),
   PacketStream,
 
+  -- * Constants
+  nullByte,
+
   -- * CSignal conversion
   toCSignal,
   unsafeFromCSignal,
@@ -102,11 +105,59 @@ data PacketStreamM2S (dataWidth :: Nat) (meta :: Type) = PacketStreamM2S
   -- ^ Iff true, the packet corresponding to this transfer is invalid. The subordinate
   --   must either drop the packet or forward the `_abort`.
   }
-  deriving (Eq, Generic, ShowX, Show, NFData, Bundle, Functor)
+  deriving (Generic, ShowX, Show, NFData, Bundle, Functor)
 
 deriving instance
   (KnownNat dataWidth, NFDataX meta) =>
   NFDataX (PacketStreamM2S dataWidth meta)
+
+{- |
+Two PacketStream transfers are equal if and only if:
+
+1. They have the same `_last`
+2. They have the same `_meta`.
+3. They have the same `_abort`.
+4. All bytes in `_data` which are enabled by `_last` are equal.
+
+Data bytes that are not enabled are not considered in the equality check,
+because the protocol allows them to be /undefined/.
+
+=== Examples
+
+>>> t1 = PacketStreamM2S (0x11 :> 0x22 :> 0x33 :> Nil) Nothing () False
+>>> t2 = PacketStreamM2S (0x11 :> 0x22 :> 0x33 :> Nil) (Just 2) () False
+>>> t3 = PacketStreamM2S (0x11 :> 0x22 :> 0xFF :> Nil) (Just 2) () False
+>>> t4 = PacketStreamM2S (0x11 :> 0x22 :> undefined :> Nil) (Just 2) () False
+
+>>> t1 == t1
+True
+>>> t2 == t3
+True
+>>> t1 /= t2
+True
+>>> t3 == t4
+True
+-}
+instance (KnownNat dataWidth, Eq meta) => Eq (PacketStreamM2S dataWidth meta) where
+  t1 == t2 = lastEq && metaEq && abortEq && dataEq
+   where
+    lastEq = _last t1 == _last t2
+    metaEq = _meta t1 == _meta t2
+    abortEq = _abort t1 == _abort t2
+
+    -- Bitmask used for data equality. If the index of a data byte is larger
+    -- than or equal to the size of `_data`, it is a null byte and must be
+    -- disregarded in the equality check.
+    mask = case _last t1 of
+      Nothing -> repeat False
+      Just size -> imap (\i _ -> resize i >= size) (_data t1)
+
+    dataEq = case compareSNat (SNat @dataWidth) d0 of
+      SNatLE -> True
+      SNatGT ->
+        leToPlus @1 @dataWidth
+          $ fold (&&)
+          $ zipWith3 (\b1 b2 isNull -> isNull || b1 == b2) (_data t1) (_data t2) mask
 
 -- | Used by circuit-notation to create an empty stream
 instance Default (Maybe (PacketStreamM2S dataWidth meta)) where
@@ -141,12 +192,13 @@ Invariants:
 3. A manager must keep the metadata (`_meta`) of an entire packet it sends constant.
 4. A subordinate which receives a transfer with `_abort` asserted must either forward this `_abort` or drop the packet.
 5. A packet may not be interrupted by another packet.
-6. All bytes in `_data` which are not enabled must be 0x00.
 
 This protocol allows the last transfer of a packet to have zero valid bytes in
 '_data', so it also allows 0-byte packets. Note that concrete implementations
 of the protocol are free to disallow 0-byte packets or packets with a trailing
 zero-byte transfer for whatever reason.
+
+The value of data bytes which are not enabled is /undefined/.
 -}
 data PacketStream (dom :: Domain) (dataWidth :: Nat) (meta :: Type)
 
@@ -239,6 +291,13 @@ instance
     expectN (Proxy @(Df.Df dom _)) options
       $ Df.maybeToData
       <$> sampled
+
+-- | Undefined PacketStream null byte. Will throw an error if evaluated.
+nullByte :: BitVector 8
+nullByte =
+  deepErrorX
+    $ "value of PacketStream null byte is undefined. "
+    <> "Data bytes that are not enabled must not be evaluated."
 
 {- |
 Circuit to convert a 'CSignal' into a 'PacketStream'.

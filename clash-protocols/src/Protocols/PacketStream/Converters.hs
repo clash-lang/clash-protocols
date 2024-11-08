@@ -38,12 +38,10 @@ data UpConverterState (dwOut :: Nat) (n :: Nat) (meta :: Type) = UpConverterStat
   --   a constant, which is free in hardware in terms of resource usage.
   , _ucFlush :: Bool
   -- ^ If true, we should output the current state as a PacketStream transfer.
-  , _ucFreshBuf :: Bool
-  -- ^ If true, we need to start a fresh buffer (all zeroes).
   , _ucAborted :: Bool
   -- ^ Whether the current transfer we are building is aborted.
   , _ucLastIdx :: Maybe (Index (dwOut + 1))
-  -- ^ If true, the current buffer contains the last byte of the current packet.
+  -- ^ If Just, the current buffer contains the last byte of the current packet.
   , _ucMeta :: meta
   -- ^ Metadata of the current transfer we are a building.
   }
@@ -86,14 +84,13 @@ nextState st@(UpConverterState{..}) (Just PacketStreamM2S{..}) (PacketStreamS2M 
   -- output fragment is accepted by the sink
   outReady = not _ucFlush || inReady
   bufFull = _ucIdx == maxBound
-  currBuf = if _ucFreshBuf then repeat 0 else _ucBuf
 
   nextBuf =
     bitCoerce
       $ replace
         _ucIdx
         (bitCoerce _data :: BitVector (8 * dwIn))
-        (bitCoerce currBuf :: Vec n (BitVector (8 * dwIn)))
+        (bitCoerce _ucBuf :: Vec n (BitVector (8 * dwIn)))
 
   nextFlush = isJust _last || bufFull
   nextIdx = if nextFlush then 0 else _ucIdx + 1
@@ -117,7 +114,6 @@ nextState st@(UpConverterState{..}) (Just PacketStreamM2S{..}) (PacketStreamS2M 
       , _ucIdx = nextIdx
       , _ucIdx2 = nextIdx2
       , _ucFlush = nextFlush
-      , _ucFreshBuf = nextFlush
       , _ucAborted = nextAbort
       , _ucLastIdx = nextLastIdx
       , _ucMeta = _meta
@@ -146,11 +142,10 @@ upConverter = mealyB go s0
   errPrefix = "upConverterT: undefined initial "
   s0 =
     UpConverterState
-      { _ucBuf = deepErrorX (errPrefix <> " _ucBuf")
+      { _ucBuf = repeat nullByte
       , _ucIdx = 0
       , _ucIdx2 = 0
       , _ucFlush = False
-      , _ucFreshBuf = True
       , _ucAborted = False
       , _ucLastIdx = deepErrorX (errPrefix <> " _ucLastIdx")
       , _ucMeta = deepErrorX (errPrefix <> " _ucMeta")
