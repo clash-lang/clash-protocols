@@ -116,6 +116,7 @@ library
     , clash-protocols-base
     , circuit-notation
     , clash-prelude-hedgehog
+    , constraints
     , data-default ^>= 0.7.1.1
     , deepseq
     , extra
@@ -144,6 +145,16 @@ library
     Protocols.Axi4.WriteAddress
     Protocols.Axi4.WriteData
     Protocols.Axi4.WriteResponse
+    Protocols.PacketStream
+    Protocols.PacketStream.Base
+    Protocols.PacketStream.AsyncFifo
+    Protocols.PacketStream.Converters
+    Protocols.PacketStream.Delay
+    Protocols.PacketStream.Depacketizers
+    Protocols.PacketStream.Hedgehog
+    Protocols.PacketStream.PacketFifo
+    Protocols.PacketStream.Packetizers
+    Protocols.PacketStream.Routing
     Protocols.Df
     Protocols.Internal
     Protocols.DfConv
@@ -165,6 +176,9 @@ library
   autogen-modules:    Paths_clash_protocols
 
   other-modules:
+    Data.Constraint.Nat.Extra
+    Data.Maybe.Extra
+    Clash.Sized.Vector.Extra
     Protocols.Internal.Types
     Paths_clash_protocols
 
@@ -177,6 +191,7 @@ test-suite unittests
   ghc-options: -threaded -with-rtsopts=-N
   main-is: unittests.hs
   other-modules:
+    Tests.Haxioms
     Tests.Protocols
     Tests.Protocols.Df
     Tests.Protocols.DfConv
@@ -184,6 +199,16 @@ test-suite unittests
     Tests.Protocols.Axi4
     Tests.Protocols.Plugin
     Tests.Protocols.Wishbone
+    Tests.Protocols.PacketStream
+    Tests.Protocols.PacketStream.AsyncFifo
+    Tests.Protocols.PacketStream.Base
+    Tests.Protocols.PacketStream.Converters
+    Tests.Protocols.PacketStream.Delay
+    Tests.Protocols.PacketStream.Depacketizers
+    Tests.Protocols.PacketStream.Packetizers
+    Tests.Protocols.PacketStream.PacketFifo
+    Tests.Protocols.PacketStream.Routing
+
     Util
 
   build-depends:
