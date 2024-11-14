@@ -102,7 +102,6 @@ library
 
   build-depends:
     , circuit-notation
-    , data-default-class
     , deepseq
     , extra
     , ghc >= 8.7 && < 9.7

@@ -40,7 +40,7 @@ import Protocols.Plugin.Units
 
 import Control.Arrow ((***))
 import Data.Coerce (coerce)
-import Data.Default.Class (Default (def))
+import Data.Default (Default (def))
 import Data.Functor.Identity (Identity (..), runIdentity)
 import Data.Kind (Type)
 import Data.Tuple (swap)

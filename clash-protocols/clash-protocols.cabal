@@ -116,7 +116,7 @@ library
     , clash-protocols-base
     , circuit-notation
     , clash-prelude-hedgehog
-    , data-default-class
+    , data-default ^>= 0.7.1.1
     , deepseq
     , extra
     , ghc >= 8.7 && < 9.7
