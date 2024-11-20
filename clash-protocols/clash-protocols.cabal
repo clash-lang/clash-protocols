@@ -185,6 +185,7 @@ test-suite unittests
     Tests.Protocols.Avalon
     Tests.Protocols.Axi4
     Tests.Protocols.Plugin
+    Tests.Protocols.Vec
     Tests.Protocols.Wishbone
     Util
 
