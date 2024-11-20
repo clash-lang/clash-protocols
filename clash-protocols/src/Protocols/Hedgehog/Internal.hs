@@ -9,7 +9,10 @@
 {- |
 Internals for "Protocols.Hedgehog".
 -}
-module Protocols.Hedgehog.Internal where
+module Protocols.Hedgehog.Internal (
+  module Protocols.Hedgehog.Internal,
+  module Protocols.Hedgehog.Types,
+) where
 
 -- base
 import Data.Proxy (Proxy (Proxy))

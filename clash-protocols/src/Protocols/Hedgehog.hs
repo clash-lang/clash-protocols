@@ -55,9 +55,6 @@ import qualified Hedgehog.Range as Range
 -- lifted-async
 import Control.Concurrent.Async.Lifted (race)
 
--- me
-import Protocols.Hedgehog.Types
-
 -- | Whether to stall or not. Used in 'idWithModel'.
 data StallMode = NoStall | Stall
   deriving (Show, Enum, Bounded)
