@@ -7,6 +7,7 @@ import Control.Monad.Extra (concatMapM)
 import Data.Proxy
 import GHC.TypeNats
 import Language.Haskell.TH
+import Protocols.Hedgehog.Types
 import Protocols.Internal.Types
 import Protocols.Plugin
 
@@ -175,3 +176,27 @@ backPressureTupleInstance n =
   circTys = map (\i -> varT $ mkName $ "c" <> show i) [1 .. n]
   instCtx = foldl appT (tupleT n) $ map (\ty -> [t|Backpressure $ty|]) circTys
   instTy = foldl appT (tupleT n) circTys
+
+testTupleInstances :: Int -> Int -> DecsQ
+testTupleInstances n m = concatMapM testTupleInstance [n .. m]
+
+testTupleInstance :: Int -> DecsQ
+testTupleInstance n =
+  [d|
+    instance ($instCtx) => Test $instTy where
+      expectN Proxy $(varP $ mkName "opts") $(tupP sampledPats) = $(doE stmts)
+    |]
+ where
+  circStrings = map (\i -> "c" <> show i) [1 .. n]
+  circTys = map (varT . mkName) circStrings
+  instCtx = foldl appT (tupleT n) $ map (\ty -> [t|Test $ty|]) circTys
+  instTy = foldl appT (tupleT n) circTys
+
+  sampledPats = map (varP . mkName . ("sampled" <>)) circStrings
+  sampledExprs = map (varE . mkName . ("sampled" <>)) circStrings
+  trimmedPats = map (varP . mkName . ("trimmed" <>)) circStrings
+  trimmedExprs = map (varE . mkName . ("trimmed" <>)) circStrings
+
+  mkTrimStmt trim ty sam = bindS trim [e|expectN (Proxy @($ty)) opts $sam|]
+  expectResult = noBindS [e|pure $(tupE trimmedExprs)|]
+  stmts = zipWith3 mkTrimStmt trimmedPats circTys sampledExprs <> [expectResult]
