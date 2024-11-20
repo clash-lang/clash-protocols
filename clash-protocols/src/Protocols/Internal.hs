@@ -265,6 +265,7 @@ instance (Drivable a, Drivable b) => Drivable (a, b) where
       )
 
 drivableTupleInstances 3 maxTupleSize
+
 instance (CE.KnownNat n, Simulate a) => Simulate (C.Vec n a) where
   type SimulateFwdType (C.Vec n a) = C.Vec n (SimulateFwdType a)
   type SimulateBwdType (C.Vec n a) = C.Vec n (SimulateBwdType a)
