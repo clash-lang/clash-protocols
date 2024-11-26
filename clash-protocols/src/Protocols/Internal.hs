@@ -539,14 +539,6 @@ mapCircuit ::
   Circuit a' b'
 mapCircuit ia oa ob ib (Circuit f) = Circuit ((oa *** ob) . f . (ia *** ib))
 
-{- | "Bundle" together a 'C.Vec' of 'Circuit's into a 'Circuit' with 'C.Vec' input and output.
-The 'Circuit's all run in parallel.
--}
-vecCircuits :: (C.KnownNat n) => C.Vec n (Circuit a b) -> Circuit (C.Vec n a) (C.Vec n b)
-vecCircuits fs = Circuit (\inps -> C.unzip $ f <$> fs <*> uncurry C.zip inps)
- where
-  f (Circuit ff) x = ff x
-
 {- | "Bundle" together a pair of 'Circuit's into a 'Circuit' with two inputs and outputs.
 The 'Circuit's run in parallel.
 -}

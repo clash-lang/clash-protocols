@@ -115,6 +115,7 @@ import Protocols.Axi4.WriteResponse
 import Protocols.Df (Data (..), Df)
 import qualified Protocols.Df as Df
 import Protocols.Internal
+import qualified Protocols.Vec as Vec
 
 {- | Class for protocols that are "similar" to 'Df', i.e. they can be converted
 to and from a pair of 'Df' ports (one going 'Fwd', one going 'Bwd'), using
@@ -599,7 +600,7 @@ vecToDfConv ::
     (Vec n df)
 vecToDfConv proxy =
   mapCircuit (uncurry C.zip) unzip id id
-    $ vecCircuits
+    $ Vec.vecCircuits
     $ repeat
     $ toDfCircuit proxy
 
@@ -616,7 +617,7 @@ vecFromDfConv ::
     )
 vecFromDfConv proxy =
   mapCircuit id id unzip (uncurry C.zip)
-    $ vecCircuits
+    $ Vec.vecCircuits
     $ repeat
     $ fromDfCircuit proxy
 

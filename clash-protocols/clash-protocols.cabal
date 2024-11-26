@@ -151,6 +151,7 @@ library
     Protocols.Idle
     Protocols.Internal
     Protocols.Internal.TH
+    Protocols.Vec
     Protocols.Wishbone
     Protocols.Wishbone.Standard
     Protocols.Wishbone.Standard.Hedgehog
@@ -184,6 +185,7 @@ test-suite unittests
     Tests.Protocols.Avalon
     Tests.Protocols.Axi4
     Tests.Protocols.Plugin
+    Tests.Protocols.Vec
     Tests.Protocols.Wishbone
     Util
 
