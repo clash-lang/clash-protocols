@@ -33,6 +33,9 @@ module Protocols.PacketStream (
   -- * Packetizers
   module Protocols.PacketStream.Packetizers,
 
+  -- * Padding removal
+  module Protocols.PacketStream.Padding,
+
   -- * Routing components
   module Protocols.PacketStream.Routing,
 )
@@ -45,4 +48,5 @@ import Protocols.PacketStream.Delay
 import Protocols.PacketStream.Depacketizers
 import Protocols.PacketStream.PacketFifo
 import Protocols.PacketStream.Packetizers
+import Protocols.PacketStream.Padding
 import Protocols.PacketStream.Routing
