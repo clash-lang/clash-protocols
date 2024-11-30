@@ -154,6 +154,7 @@ library
     Protocols.PacketStream.Hedgehog
     Protocols.PacketStream.PacketFifo
     Protocols.PacketStream.Packetizers
+    Protocols.PacketStream.Padding
     Protocols.PacketStream.Routing
     Protocols.Df
     Protocols.DfConv
@@ -210,6 +211,7 @@ test-suite unittests
     Tests.Protocols.PacketStream.Depacketizers
     Tests.Protocols.PacketStream.Packetizers
     Tests.Protocols.PacketStream.PacketFifo
+    Tests.Protocols.PacketStream.Padding
     Tests.Protocols.PacketStream.Routing
 
     Util
