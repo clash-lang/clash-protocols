@@ -22,10 +22,6 @@ cancelMulDiv = unsafeCoerce (Dict :: Dict (0 ~ 0))
 leModulusDivisor :: forall a b. (1 <= b) => Dict (Mod a b + 1 <= b)
 leModulusDivisor = unsafeCoerce (Dict :: Dict (0 <= 0))
 
--- | if (a <= 0) then (a ~ 0)
-leZeroIsZero :: forall (a :: Nat). (a <= 0) => Dict (a ~ 0)
-leZeroIsZero = unsafeCoerce (Dict :: Dict (0 ~ 0))
-
 -- | if (1 <= a) and (1 <= b) then (1 <= DivRU a b)
 strictlyPositiveDivRu :: forall a b. (1 <= a, 1 <= b) => Dict (1 <= DivRU a b)
 strictlyPositiveDivRu = unsafeCoerce (Dict :: Dict (0 <= 0))

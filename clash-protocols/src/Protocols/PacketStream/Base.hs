@@ -292,11 +292,19 @@ instance
       $ Df.maybeToData
       <$> sampled
 
--- | Undefined PacketStream null byte. Will throw an error if evaluated.
-nullByte :: BitVector 8
-nullByte =
+{- |
+Undefined PacketStream null byte. Will throw an error if evaluated. The source
+of the error should be supplied for a more informative error message; otherwise
+it is unclear which component threw the error.
+-}
+nullByte ::
+  -- | Component which caused the error
+  String ->
+  BitVector 8
+nullByte src =
   deepErrorX
-    $ "value of PacketStream null byte is undefined. "
+    $ src
+    <> ": value of PacketStream null byte is undefined. "
     <> "Data bytes that are not enabled must not be evaluated."
 
 {- |
@@ -334,7 +342,14 @@ unsafeDropBackpressure ckt = unsafeFromCSignal |> ckt |> toCSignal
 Sets '_abort' upon receiving backpressure from the subordinate.
 
 __UNSAFE__: because @fwdOut@ depends on @bwdIn@, this may introduce
-combinatorial loops.
+combinatorial loops. You need to make sure that a sequential element is
+inserted along this path. It is possible to use one of the skid buffers to
+ensure this. For example:
+
+>>> safeAbortOnBackpressureC1 = unsafeAbortOnBackpressureC |> registerFwd
+>>> safeAbortOnBackpressureC2 = unsafeAbortOnBackpressureC |> registerBwd
+
+Note that `registerFwd` utilizes less resources than `registerBwd`.
 -}
 unsafeAbortOnBackpressureC ::
   forall (dataWidth :: Nat) (meta :: Type) (dom :: Domain).
@@ -342,9 +357,11 @@ unsafeAbortOnBackpressureC ::
   Circuit
     (CSignal dom (Maybe (PacketStreamM2S dataWidth meta)))
     (PacketStream dom dataWidth meta)
-unsafeAbortOnBackpressureC = Circuit $ \(fwdInS, bwdInS) -> (pure (), go <$> bundle (fwdInS, bwdInS))
+unsafeAbortOnBackpressureC =
+  Circuit $ \(fwdInS, bwdInS) -> (pure (), go <$> bundle (fwdInS, bwdInS))
  where
-  go (fwdIn, bwdIn) = fmap (\pkt -> pkt{_abort = _abort pkt || not (_ready bwdIn)}) fwdIn
+  go (fwdIn, bwdIn) =
+    fmap (\pkt -> pkt{_abort = _abort pkt || not (_ready bwdIn)}) fwdIn
 
 {- |
 Force a /nack/ on the backward channel and /Nothing/ on the forward

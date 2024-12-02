@@ -24,9 +24,10 @@ import Protocols.PacketStream.Base
 
 import Clash.Sized.Vector.Extra (takeLe)
 import Data.Constraint (Dict (Dict))
-import Data.Constraint.Nat.Extra (leModulusDivisor, leZeroIsZero, strictlyPositiveDivRu)
+import Data.Constraint.Nat.Extra (leModulusDivisor, strictlyPositiveDivRu)
 import Data.Maybe
 import Data.Maybe.Extra
+import Data.Type.Equality ((:~:) (Refl))
 
 type PacketizerCt (header :: Type) (headerBytes :: Nat) (dataWidth :: Nat) =
   ( BitPack header
@@ -104,7 +105,7 @@ packetizerT1 toMetaOut toHeader st (Just inPkt, bwdIn) =
        where
         outPkt =
           inPkt
-            { _data = _hdrBuf1 ++ repeat nullByte
+            { _data = _hdrBuf1 ++ repeat (nullByte "packetizerT1")
             , _last = (\i -> i - natToNum @(dataWidth - headerBytes)) <$> _last inPkt
             , _meta = toMetaOut (_meta inPkt)
             , _abort = _aborted1 || _abort inPkt
@@ -253,7 +254,7 @@ packetizerT3 toMetaOut _ st@Forward3{..} (Just inPkt, bwdIn) =
   buf :: Vec (headerBytes `Mod` dataWidth) (BitVector 8)
   (bytesOut, buf) = splitAt (SNat @(dataWidth - headerBytes `Mod` dataWidth)) (_data inPkt)
   newBuf :: Vec (headerBytes + dataWidth) (BitVector 8)
-  newBuf = buf ++ repeat @(headerBytes + dataWidth - headerBytes `Mod` dataWidth) nullByte
+  newBuf = buf ++ repeat @(headerBytes + dataWidth - headerBytes `Mod` dataWidth) (nullByte "packetizerT3")
   nextAborted = _aborted3 || _abort inPkt
 
   outPkt =
@@ -320,10 +321,15 @@ packetizerC toMetaOut toHeader = fromSignals outCircuit
   outCircuit = case leModulusDivisor @headerBytes @dataWidth of
     Dict -> case compareSNat (SNat @(headerBytes + 1)) (SNat @dataWidth) of
       SNatLE -> mealyB (packetizerT1 @headerBytes toMetaOut toHeader) (Insert1 False)
-      SNatGT -> case compareSNat (SNat @(headerBytes `Mod` dataWidth)) d0 of
-        SNatLE -> case leZeroIsZero @(headerBytes `Mod` dataWidth) of
-          Dict -> mealyB (packetizerT2 @headerBytes toMetaOut toHeader) LoadHeader2
-        SNatGT -> mealyB (packetizerT3 @headerBytes toMetaOut toHeader) LoadHeader3
+      SNatGT ->
+        case ( sameNat (SNat @(headerBytes `Mod` dataWidth)) d0
+             , compareSNat d1 (SNat @(headerBytes `Mod` dataWidth))
+             ) of
+          (Just Refl, _) -> mealyB (packetizerT2 @headerBytes toMetaOut toHeader) LoadHeader2
+          (Nothing, SNatLE) -> mealyB (packetizerT3 @headerBytes toMetaOut toHeader) LoadHeader3
+          (_, _) ->
+            clashCompileError
+              "packetizerC: unreachable. Report this at https://github.com/clash-lang/clash-protocols/issues"
 
 data DfPacketizerState (metaOut :: Type) (headerBytes :: Nat) (dataWidth :: Nat)
   = DfIdle
@@ -372,7 +378,7 @@ packetizeFromDfT toMetaOut toHeader DfIdle (Df.Data dataIn, bwdIn) = (nextStOut,
 -- Thus, we don't need to store the metadata in the state.
 packetizeFromDfT toMetaOut _ st@DfInsert{..} (Df.Data dataIn, bwdIn) = (nextStOut, (bwdOut, Just outPkt))
  where
-  (dataOut, newHdrBuf) = splitAt (SNat @dataWidth) (_dfHdrBuf ++ repeat @dataWidth nullByte)
+  (dataOut, newHdrBuf) = splitAt (SNat @dataWidth) (_dfHdrBuf ++ repeat @dataWidth (nullByte "packetizeFromDfT"))
   outPkt = PacketStreamM2S dataOut newLast (toMetaOut dataIn) False
 
   newLast = toMaybe (_dfCounter == maxBound) $ case compareSNat (SNat @(headerBytes `Mod` dataWidth)) d0 of
@@ -420,7 +426,7 @@ packetizeFromDfC toMetaOut toHeader = case strictlyPositiveDivRu @headerBytes @d
       go (Df.Data dataIn, bwdIn) = (Ack (_ready bwdIn), Just outPkt)
        where
         outPkt = PacketStreamM2S dataOut (Just l) (toMetaOut dataIn) False
-        dataOut = bitCoerce (toHeader dataIn) ++ repeat @(dataWidth - headerBytes) nullByte
+        dataOut = bitCoerce (toHeader dataIn) ++ repeat @(dataWidth - headerBytes) (nullByte "packetizeFromDfC")
         l = case compareSNat (SNat @(headerBytes `Mod` dataWidth)) d0 of
           SNatGT -> natToNum @(headerBytes `Mod` dataWidth)
           _ -> natToNum @dataWidth
