@@ -89,7 +89,7 @@ nextState st@(UpConverterState{..}) (Just PacketStreamM2S{..}) (PacketStreamS2M 
     bitCoerce
       $ replace
         _ucIdx
-        (bitCoerce _data :: BitVector (8 * dwIn))
+        (pack _data :: BitVector (8 * dwIn))
         (bitCoerce _ucBuf :: Vec n (BitVector (8 * dwIn)))
 
   nextFlush = isJust _last || bufFull
@@ -142,7 +142,7 @@ upConverter = mealyB go s0
   errPrefix = "upConverterT: undefined initial "
   s0 =
     UpConverterState
-      { _ucBuf = repeat nullByte
+      { _ucBuf = repeat (nullByte "upConverter")
       , _ucIdx = 0
       , _ucIdx2 = 0
       , _ucFlush = False

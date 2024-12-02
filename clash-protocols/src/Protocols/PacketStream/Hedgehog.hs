@@ -101,7 +101,7 @@ chunkToPacket xs =
           <$> _last lastTransfer
     , _abort = any _abort xs
     , _meta = _meta lastTransfer
-    , _data = L.foldr ((+>>) . head . _data) (repeat nullByte) xs
+    , _data = L.foldr ((+>>) . head . _data) (repeat (nullByte "chunkToPacket")) xs
     }
  where
   lastTransfer = L.last xs
@@ -190,6 +190,7 @@ depacketizerModel ::
   (KnownNat headerBytes) =>
   (1 <= dataWidth) =>
   (1 <= headerBytes) =>
+  (NFDataX metaIn) =>
   (BitPack header) =>
   (BitSize header ~ headerBytes * 8) =>
   (header -> metaIn -> metaOut) ->
@@ -207,9 +208,9 @@ depacketizerModel toMetaOut ps = L.concat dataWidthPackets
     fwdF' = case fwdF of
       [] ->
         [ PacketStreamM2S
-            (Vec.singleton nullByte)
+            (Vec.singleton (nullByte "depacketizerModel"))
             (Just 0)
-            (error "depacketizerModel: should be replaced")
+            (deepErrorX "depacketizerModel: should be replaced")
             (_abort (L.last hdrF))
         ]
       _ -> fwdF
@@ -504,6 +505,6 @@ setNull transfer =
             fromJust
               ( Vec.fromList
                   $ L.take (fromIntegral i) (toList (_data transfer))
-                  L.++ L.replicate ((natToNum @dataWidth) - fromIntegral i) nullByte
+                  L.++ L.replicate ((natToNum @dataWidth) - fromIntegral i) (nullByte "setNull")
               )
         }
