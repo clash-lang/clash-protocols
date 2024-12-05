@@ -103,7 +103,8 @@ Manager may not decide whether or not to send 'Nothing' based on
 the '_tready' signal.
 -}
 newtype Axi4StreamS2M = Axi4StreamS2M {_tready :: Bool}
-  deriving (Generic, C.NFDataX, C.ShowX, Eq, NFData, Show, Bundle)
+  deriving stock (Show, Eq, Generic)
+  deriving anyclass (C.NFDataX, C.ShowX, NFData, Bundle)
 
 -- | Type for AXI4 Stream protocol.
 data Axi4Stream (dom :: Domain) (conf :: Axi4StreamConfig) (userType :: Type)
