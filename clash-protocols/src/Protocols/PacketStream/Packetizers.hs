@@ -254,7 +254,9 @@ packetizerT3 toMetaOut _ st@Forward3{..} (Just inPkt, bwdIn) =
   buf :: Vec (headerBytes `Mod` dataWidth) (BitVector 8)
   (bytesOut, buf) = splitAt (SNat @(dataWidth - headerBytes `Mod` dataWidth)) (_data inPkt)
   newBuf :: Vec (headerBytes + dataWidth) (BitVector 8)
-  newBuf = buf ++ repeat @(headerBytes + dataWidth - headerBytes `Mod` dataWidth) (nullByte "packetizerT3")
+  newBuf =
+    buf
+      ++ repeat @(headerBytes + dataWidth - headerBytes `Mod` dataWidth) (nullByte "packetizerT3")
   nextAborted = _aborted3 || _abort inPkt
 
   outPkt =
@@ -378,7 +380,8 @@ packetizeFromDfT toMetaOut toHeader DfIdle (Df.Data dataIn, bwdIn) = (nextStOut,
 -- Thus, we don't need to store the metadata in the state.
 packetizeFromDfT toMetaOut _ st@DfInsert{..} (Df.Data dataIn, bwdIn) = (nextStOut, (bwdOut, Just outPkt))
  where
-  (dataOut, newHdrBuf) = splitAt (SNat @dataWidth) (_dfHdrBuf ++ repeat @dataWidth (nullByte "packetizeFromDfT"))
+  (dataOut, newHdrBuf) =
+    splitAt (SNat @dataWidth) (_dfHdrBuf ++ repeat @dataWidth (nullByte "packetizeFromDfT"))
   outPkt = PacketStreamM2S dataOut newLast (toMetaOut dataIn) False
 
   newLast = toMaybe (_dfCounter == maxBound) $ case compareSNat (SNat @(headerBytes `Mod` dataWidth)) d0 of
@@ -426,7 +429,9 @@ packetizeFromDfC toMetaOut toHeader = case strictlyPositiveDivRu @headerBytes @d
       go (Df.Data dataIn, bwdIn) = (Ack (_ready bwdIn), Just outPkt)
        where
         outPkt = PacketStreamM2S dataOut (Just l) (toMetaOut dataIn) False
-        dataOut = bitCoerce (toHeader dataIn) ++ repeat @(dataWidth - headerBytes) (nullByte "packetizeFromDfC")
+        dataOut =
+          bitCoerce (toHeader dataIn)
+            ++ repeat @(dataWidth - headerBytes) (nullByte "packetizeFromDfC")
         l = case compareSNat (SNat @(headerBytes `Mod` dataWidth)) d0 of
           SNatGT -> natToNum @(headerBytes `Mod` dataWidth)
           _ -> natToNum @dataWidth

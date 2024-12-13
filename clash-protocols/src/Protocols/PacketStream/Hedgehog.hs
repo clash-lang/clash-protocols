@@ -259,7 +259,7 @@ depacketizeToDfModel toOut ps = L.map parseHdr bytePackets
   parseHdr :: [PacketStreamM2S 1 metaIn] -> a
   parseHdr hdrF =
     toOut
-      (bitCoerce $ Vec.unsafeFromList $ _data <$> hdrF)
+      (bitCoerce $ Vec.unsafeFromList $ L.map _data hdrF)
       (_meta $ L.head hdrF)
 
   bytePackets :: [[PacketStreamM2S 1 metaIn]]

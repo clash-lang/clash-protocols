@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE NoImplicitPrelude #-}
 
 module Tests.Protocols.PacketStream.Packetizers (
   tests,
@@ -7,6 +8,8 @@ module Tests.Protocols.PacketStream.Packetizers (
 
 import Clash.Hedgehog.Sized.Vector (genVec)
 import Clash.Prelude
+
+import Control.DeepSeq (NFData)
 
 import Hedgehog
 import qualified Hedgehog.Gen as Gen
@@ -25,19 +28,33 @@ import Protocols.PacketStream.Base
 import Protocols.PacketStream.Hedgehog
 
 {- |
-Test the packetizer with varying datawidth and number of bytes in the header,
-with metaOut = ().
+Test @packetizerC@ with varying data width, number of bytes in the
+header, input metadata, and output metadata.
+
+We consider the input metadata to be @Vec metaInBytes (BitVector 8)@ to
+avoid unnecessary conversions, because @packetizerC@ requires that the
+input metadata is convertible to this type anyway.
 -}
-packetizerPropertyGenerator ::
+packetizerPropGen ::
   forall
     (dataWidth :: Nat)
-    (headerBytes :: Nat).
+    (headerBytes :: Nat)
+    (metaInBytes :: Nat)
+    (metaOut :: Type).
+  (KnownNat metaInBytes) =>
   (1 <= dataWidth) =>
   (1 <= headerBytes) =>
+  (NFData metaOut) =>
+  (NFDataX metaOut) =>
+  (Eq metaOut) =>
+  (Show metaOut) =>
+  (ShowX metaOut) =>
   SNat dataWidth ->
   SNat headerBytes ->
+  (Vec metaInBytes (BitVector 8) -> metaOut) ->
+  (Vec metaInBytes (BitVector 8) -> Vec headerBytes (BitVector 8)) ->
   Property
-packetizerPropertyGenerator SNat SNat =
+packetizerPropGen SNat SNat toMetaOut toHeader =
   idWithModelSingleDomain
     @System
     defExpectOptions
@@ -49,28 +66,42 @@ packetizerPropertyGenerator SNat SNat =
     (exposeClockResetEnable model)
     (exposeClockResetEnable ckt)
  where
-  model = packetizerModel (const ()) id
+  model = packetizerModel toMetaOut toHeader
   ckt ::
     (HiddenClockResetEnable System) =>
     Circuit
-      (PacketStream System dataWidth (Vec headerBytes (BitVector 8)))
-      (PacketStream System dataWidth ())
-  ckt = packetizerC (const ()) id
+      (PacketStream System dataWidth (Vec metaInBytes (BitVector 8)))
+      (PacketStream System dataWidth metaOut)
+  ckt = packetizerC toMetaOut toHeader
 
 {- |
-Test packetizeFromDf with varying datawidth and number of bytes in the header,
-with metaOut = ().
+Test @packetizeFromDfC@ with varying data width, number of bytes in the
+header, input type, and output metadata.
+
+We consider the input type to be @Vec aBytes (BitVector 8)@ to
+avoid unnecessary conversions, because @packetizerC@ requires that the
+input type is convertible to this type anyway.
 -}
-packetizeFromDfPropertyGenerator ::
+packetizeFromDfPropGen ::
   forall
     (dataWidth :: Nat)
-    (headerBytes :: Nat).
+    (headerBytes :: Nat)
+    (aBytes :: Nat)
+    (metaOut :: Type).
+  (KnownNat aBytes) =>
   (1 <= dataWidth) =>
   (1 <= headerBytes) =>
+  (NFData metaOut) =>
+  (NFDataX metaOut) =>
+  (Eq metaOut) =>
+  (Show metaOut) =>
+  (ShowX metaOut) =>
   SNat dataWidth ->
   SNat headerBytes ->
+  (Vec aBytes (BitVector 8) -> metaOut) ->
+  (Vec aBytes (BitVector 8) -> Vec headerBytes (BitVector 8)) ->
   Property
-packetizeFromDfPropertyGenerator SNat SNat =
+packetizeFromDfPropGen SNat SNat toMetaOut toHeader =
   idWithModelSingleDomain
     @System
     defExpectOptions
@@ -78,47 +109,108 @@ packetizeFromDfPropertyGenerator SNat SNat =
     (exposeClockResetEnable model)
     (exposeClockResetEnable ckt)
  where
-  model = packetizeFromDfModel (const ()) id
+  model = packetizeFromDfModel toMetaOut toHeader
   ckt ::
     (HiddenClockResetEnable System) =>
-    Circuit (Df.Df System (Vec headerBytes (BitVector 8))) (PacketStream System dataWidth ())
-  ckt = packetizeFromDfC (const ()) id
+    Circuit
+      (Df.Df System (Vec aBytes (BitVector 8)))
+      (PacketStream System dataWidth metaOut)
+  ckt = packetizeFromDfC toMetaOut toHeader
+
+{- |
+Do something interesting with the input metadata to derive the output
+metadata for testing purposes. We just xor-reduce the input metadata.
+-}
+myToMetaOut :: Vec n (BitVector 8) -> BitVector 8
+myToMetaOut = foldr xor 0
+
+{- |
+Do something interesting with the input metadata to derive the header
+for testing purposes. We just xor every byte in the input metadata with
+an arbitrary constant and add some bytes.
+-}
+myToHeader ::
+  forall metaInBytes headerBytes.
+  (2 + metaInBytes ~ headerBytes) =>
+  Vec metaInBytes (BitVector 8) ->
+  Vec headerBytes (BitVector 8)
+myToHeader metaIn = map (`xor` 0xAB) metaIn ++ (0x01 :> 0x02 :> Nil)
 
 -- | headerBytes % dataWidth ~ 0
 prop_const_packetizer_d1_d14 :: Property
-prop_const_packetizer_d1_d14 = packetizerPropertyGenerator d1 d14
+prop_const_packetizer_d1_d14 =
+  packetizerPropGen d1 d14 (const ()) id
+
+prop_xor_packetizer_d1_d14 :: Property
+prop_xor_packetizer_d1_d14 =
+  packetizerPropGen d1 d14 myToMetaOut myToHeader
 
 -- | dataWidth < headerBytes
 prop_const_packetizer_d3_d11 :: Property
-prop_const_packetizer_d3_d11 = packetizerPropertyGenerator d3 d11
+prop_const_packetizer_d3_d11 =
+  packetizerPropGen d3 d11 (const ()) id
+
+prop_xor_packetizer_d3_d11 :: Property
+prop_xor_packetizer_d3_d11 =
+  packetizerPropGen d3 d11 myToMetaOut myToHeader
 
 -- | dataWidth ~ header byte size
 prop_const_packetizer_d7_d7 :: Property
-prop_const_packetizer_d7_d7 = packetizerPropertyGenerator d7 d7
+prop_const_packetizer_d7_d7 =
+  packetizerPropGen d7 d7 (const ()) id
+
+prop_xor_packetizer_d7_d7 :: Property
+prop_xor_packetizer_d7_d7 =
+  packetizerPropGen d7 d7 myToMetaOut myToHeader
 
 -- | dataWidth > header byte size
 prop_const_packetizer_d5_d4 :: Property
-prop_const_packetizer_d5_d4 = packetizerPropertyGenerator d5 d4
+prop_const_packetizer_d5_d4 =
+  packetizerPropGen d5 d4 (const ()) id
+
+prop_xor_packetizer_d5_d4 :: Property
+prop_xor_packetizer_d5_d4 =
+  packetizerPropGen d5 d4 myToMetaOut myToHeader
 
 -- | headerBytes % dataWidth ~ 0
 prop_const_packetizeFromDf_d1_d14 :: Property
-prop_const_packetizeFromDf_d1_d14 = packetizeFromDfPropertyGenerator d1 d14
+prop_const_packetizeFromDf_d1_d14 =
+  packetizeFromDfPropGen d1 d14 (const ()) id
+
+prop_xor_packetizeFromDf_d1_d14 :: Property
+prop_xor_packetizeFromDf_d1_d14 =
+  packetizeFromDfPropGen d1 d14 myToMetaOut myToHeader
 
 -- | dataWidth < headerBytes
 prop_const_packetizeFromDf_d3_d11 :: Property
-prop_const_packetizeFromDf_d3_d11 = packetizeFromDfPropertyGenerator d3 d11
+prop_const_packetizeFromDf_d3_d11 =
+  packetizeFromDfPropGen d3 d11 (const ()) id
+
+prop_xor_packetizeFromDf_d3_d11 :: Property
+prop_xor_packetizeFromDf_d3_d11 =
+  packetizeFromDfPropGen d3 d11 myToMetaOut myToHeader
 
 -- | dataWidth ~ header byte size
 prop_const_packetizeFromDf_d7_d7 :: Property
-prop_const_packetizeFromDf_d7_d7 = packetizeFromDfPropertyGenerator d7 d7
+prop_const_packetizeFromDf_d7_d7 =
+  packetizeFromDfPropGen d7 d7 (const ()) id
+
+prop_xor_packetizeFromDf_d7_d7 :: Property
+prop_xor_packetizeFromDf_d7_d7 =
+  packetizeFromDfPropGen d7 d7 myToMetaOut myToHeader
 
 -- | dataWidth > header byte size
 prop_const_packetizeFromDf_d5_d4 :: Property
-prop_const_packetizeFromDf_d5_d4 = packetizeFromDfPropertyGenerator d5 d4
+prop_const_packetizeFromDf_d5_d4 =
+  packetizeFromDfPropGen d5 d4 (const ()) id
+
+prop_xor_packetizeFromDf_d5_d4 :: Property
+prop_xor_packetizeFromDf_d5_d4 =
+  packetizeFromDfPropGen d5 d4 myToMetaOut myToHeader
 
 tests :: TestTree
 tests =
-  localOption (mkTimeout 20_000_000 {- 20 seconds -}) $
-    localOption
+  localOption (mkTimeout 20_000_000 {- 20 seconds -})
+    $ localOption
       (HedgehogTestLimit (Just 1_000))
       $(testGroupGenerator)
