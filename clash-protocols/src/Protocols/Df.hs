@@ -804,16 +804,18 @@ roundrobin =
      in
       (i1, (Ack ack, datOut1))
 
--- | Collect mode in 'roundrobinCollect'
+-- | Collect modes for dataflow arbiters.
 data CollectMode
-  = -- | Collect in a /roundrobin/ fashion. If a component does not produce
-    -- data, wait until it does.
+  = -- | Collect in a /round-robin/ fashion. If a source does not produce
+    -- data, wait until it does. Use with care, as there is a risk of
+    -- starvation if a selected source is idle for a long time.
     NoSkip
-  | -- | Collect in a /roundrobin/ fashion. If a component does not produce
-    -- data, skip it and check the next component on the next cycle.
+  | -- | Collect in a /round-robin/ fashion. If a source does not produce
+    -- data, skip it and check the next source on the next cycle.
     Skip
-  | -- | Check all components in parallel. Biased towards the /last/ Df
-    -- channel.
+  | -- | Check all sources in parallel. Biased towards the /last/ source.
+    -- If the number of sources is high, this is more expensive than other
+    -- modes.
     Parallel
 
 {- | Opposite of 'roundrobin'. Useful to collect data from workers that only
