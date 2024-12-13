@@ -149,7 +149,6 @@ library
     Protocols.PacketStream.Base
     Protocols.PacketStream.AsyncFifo
     Protocols.PacketStream.Converters
-    Protocols.PacketStream.Delay
     Protocols.PacketStream.Depacketizers
     Protocols.PacketStream.Hedgehog
     Protocols.PacketStream.PacketFifo
@@ -207,7 +206,6 @@ test-suite unittests
     Tests.Protocols.PacketStream.AsyncFifo
     Tests.Protocols.PacketStream.Base
     Tests.Protocols.PacketStream.Converters
-    Tests.Protocols.PacketStream.Delay
     Tests.Protocols.PacketStream.Depacketizers
     Tests.Protocols.PacketStream.Packetizers
     Tests.Protocols.PacketStream.PacketFifo

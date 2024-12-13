@@ -8,8 +8,6 @@ module Tests.Protocols.PacketStream.Depacketizers (
 
 import Clash.Prelude
 
-import Control.DeepSeq (NFData)
-
 import Hedgehog (Gen, Property)
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
@@ -38,16 +36,8 @@ depacketizerPropGen ::
     (headerBytes :: Nat).
   (1 <= dataWidth) =>
   (1 <= headerBytes) =>
-  (NFData metaIn) =>
-  (NFDataX metaIn) =>
-  (NFData metaOut) =>
-  (NFDataX metaOut) =>
-  (Eq metaIn) =>
-  (Eq metaOut) =>
-  (Show metaIn) =>
-  (Show metaOut) =>
-  (ShowX metaIn) =>
-  (ShowX metaOut) =>
+  (TestType metaIn) =>
+  (TestType metaOut) =>
   SNat dataWidth ->
   SNat headerBytes ->
   Gen metaIn ->
@@ -82,16 +72,8 @@ depacketizeToDfPropGen ::
   (1 <= headerBytes) =>
   (BitPack a) =>
   (BitSize a ~ headerBytes * 8) =>
-  (NFData metaIn) =>
-  (NFDataX metaIn) =>
-  (NFData a) =>
-  (NFDataX a) =>
-  (Eq metaIn) =>
-  (Eq a) =>
-  (Show metaIn) =>
-  (Show a) =>
-  (ShowX metaIn) =>
-  (ShowX a) =>
+  (TestType a) =>
+  (TestType metaIn) =>
   SNat dataWidth ->
   SNat headerBytes ->
   Gen metaIn ->
@@ -109,31 +91,6 @@ depacketizeToDfPropGen SNat SNat metaGen toOut =
     (HiddenClockResetEnable System) =>
     Circuit (PacketStream System dataWidth metaIn) (Df System a)
   ckt = depacketizeToDfC toOut
-
--- | Test 'dropTailC' with varying data width and bytes to drop.
-dropTailTest ::
-  forall dataWidth n.
-  (KnownNat n) =>
-  (1 <= dataWidth) =>
-  (1 <= n) =>
-  SNat dataWidth ->
-  SNat n ->
-  Property
-dropTailTest SNat n =
-  idWithModelSingleDomain
-    @System
-    defExpectOptions
-    ( genPackets
-        1
-        4
-        ( genValidPacket
-            defPacketOptions
-            (Gen.int8 Range.linearBounded)
-            (Range.linear (natToNum @(n `DivRU` dataWidth)) 20)
-        )
-    )
-    (exposeClockResetEnable (dropTailModel n))
-    (exposeClockResetEnable (dropTailC @dataWidth n))
 
 {- |
 Do something interesting with both the parsed header and the input
@@ -217,34 +174,6 @@ prop_const_depacketize_to_df_d5_d4 =
 prop_xor_depacketize_to_df_d5_d4 :: Property
 prop_xor_depacketize_to_df_d5_d4 =
   depacketizeToDfPropGen d5 d4 Gen.enumBounded exampleToMetaOut
-
--- | dataWidth < n && dataWidth % n ~ 0
-prop_droptail_4_bytes_d1 :: Property
-prop_droptail_4_bytes_d1 = dropTailTest d1 d4
-
-prop_droptail_7_bytes_d1 :: Property
-prop_droptail_7_bytes_d1 = dropTailTest d1 d7
-
--- | dataWidth < n && dataWidth % n > 0
-prop_droptail_4_bytes_d3 :: Property
-prop_droptail_4_bytes_d3 = dropTailTest d3 d4
-
-prop_droptail_7_bytes_d4 :: Property
-prop_droptail_7_bytes_d4 = dropTailTest d4 d7
-
--- | dataWidth ~ n
-prop_droptail_4_bytes_d4 :: Property
-prop_droptail_4_bytes_d4 = dropTailTest d4 d4
-
-prop_droptail_7_bytes_d7 :: Property
-prop_droptail_7_bytes_d7 = dropTailTest d7 d7
-
--- | dataWidth > n
-prop_droptail_4_bytes_d7 :: Property
-prop_droptail_4_bytes_d7 = dropTailTest d7 d4
-
-prop_droptail_7_bytes_d12 :: Property
-prop_droptail_7_bytes_d12 = dropTailTest d12 d7
 
 tests :: TestTree
 tests =

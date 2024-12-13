@@ -24,9 +24,6 @@ module Protocols.PacketStream (
   -- * Converters
   module Protocols.PacketStream.Converters,
 
-  -- * Delay components
-  module Protocols.PacketStream.Delay,
-
   -- * Depacketizers
   module Protocols.PacketStream.Depacketizers,
 
@@ -44,7 +41,6 @@ where
 import Protocols.PacketStream.AsyncFifo
 import Protocols.PacketStream.Base
 import Protocols.PacketStream.Converters
-import Protocols.PacketStream.Delay
 import Protocols.PacketStream.Depacketizers
 import Protocols.PacketStream.PacketFifo
 import Protocols.PacketStream.Packetizers

@@ -9,9 +9,7 @@ module Tests.Protocols.PacketStream.Packetizers (
 import Clash.Hedgehog.Sized.Vector (genVec)
 import Clash.Prelude
 
-import Control.DeepSeq (NFData)
-
-import Hedgehog
+import Hedgehog (Property)
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
@@ -44,11 +42,7 @@ packetizerPropGen ::
   (KnownNat metaInBytes) =>
   (1 <= dataWidth) =>
   (1 <= headerBytes) =>
-  (NFData metaOut) =>
-  (NFDataX metaOut) =>
-  (Eq metaOut) =>
-  (Show metaOut) =>
-  (ShowX metaOut) =>
+  (TestType metaOut) =>
   SNat dataWidth ->
   SNat headerBytes ->
   (Vec metaInBytes (BitVector 8) -> metaOut) ->
@@ -91,11 +85,7 @@ packetizeFromDfPropGen ::
   (KnownNat aBytes) =>
   (1 <= dataWidth) =>
   (1 <= headerBytes) =>
-  (NFData metaOut) =>
-  (NFDataX metaOut) =>
-  (Eq metaOut) =>
-  (Show metaOut) =>
-  (ShowX metaOut) =>
+  (TestType metaOut) =>
   SNat dataWidth ->
   SNat headerBytes ->
   (Vec aBytes (BitVector 8) -> metaOut) ->
