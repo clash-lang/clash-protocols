@@ -27,17 +27,17 @@ module Protocols.PacketStream.Base (
   -- * Basic operations on the PacketStream protocol
   empty,
   consume,
-  void,
-  fanout,
   forceResetSanity,
   zeroOutInvalidBytesC,
   stripTrailingEmptyC,
   unsafeAbortOnBackpressureC,
 
-  -- * Skid buffers
-  registerBoth,
+  -- * Components imported from DfConv
+  void,
+  fanout,
   registerBwd,
   registerFwd,
+  registerBoth,
 
   -- * Operations on metadata
   fstMeta,
@@ -58,8 +58,11 @@ module Protocols.PacketStream.Base (
   eitherMetaS,
 ) where
 
-import Clash.Prelude hiding (empty, sample)
 import qualified Prelude as P
+
+import Control.DeepSeq (NFData)
+
+import Clash.Prelude hiding (empty, sample)
 
 import qualified Data.Bifunctor as B
 import Data.Coerce (coerce)
@@ -71,8 +74,6 @@ import qualified Protocols.Df as Df
 import qualified Protocols.DfConv as DfConv
 import Protocols.Hedgehog (Test (..))
 import Protocols.Idle
-
-import Control.DeepSeq (NFData)
 
 {- |
 Data sent from manager to subordinate.
@@ -526,7 +527,10 @@ mapMeta ::
   Circuit (PacketStream dom dataWidth metaIn) (PacketStream dom dataWidth metaOut)
 mapMeta f = mapMetaS (pure f)
 
--- | Like 'mapMeta', but can reason over signals.
+{- |
+Like 'mapMeta' but can reason over signals,
+this circuit combinator is akin to `Clash.HaskellPrelude.<*>`.
+-}
 mapMetaS ::
   -- | Function to apply on the metadata, wrapped in a @Signal@
   Signal dom (metaIn -> metaOut) ->
@@ -542,7 +546,10 @@ filterMeta ::
   Circuit (PacketStream dom dataWidth meta) (PacketStream dom dataWidth meta)
 filterMeta p = filterMetaS (pure p)
 
--- | Like 'filterMeta', but can reason over signals.
+{- |
+Like 'filterMeta' but can reason over signals,
+this circuit combinator is akin to `Clash.HaskellPrelude.<*>`.
+-}
 filterMetaS ::
   -- | Predicate which specifies whether to keep a fragment based on its metadata,
   --   wrapped in a @Signal@
@@ -564,7 +571,10 @@ eitherMeta ::
     (PacketStream dom dataWidth c)
 eitherMeta f g = eitherMetaS (pure f) (pure g)
 
--- | Like 'eitherMeta', but can reason over signals.
+{- |
+Like 'eitherMeta' but can reason over signals,
+this circuit combinator is akin to `Clash.HaskellPrelude.<*>`.
+-}
 eitherMetaS ::
   Signal dom (a -> c) ->
   Signal dom (b -> c) ->
@@ -583,7 +593,10 @@ bimapMeta ::
     (PacketStream dom dataWidth (p b d))
 bimapMeta f g = bimapMetaS (pure f) (pure g)
 
--- | Like 'bimapMeta', but can reason over signals.
+{- |
+Like 'bimapMeta' but can reason over signals,
+this circuit combinator is akin to `Clash.HaskellPrelude.<*>`.
+-}
 bimapMetaS ::
   (B.Bifunctor p) =>
   Signal dom (a -> b) ->
@@ -602,7 +615,10 @@ firstMeta ::
     (PacketStream dom dataWidth (p b c))
 firstMeta f = firstMetaS (pure f)
 
--- | Like 'firstMeta', but can reason over signals.
+{- |
+Like 'firstMeta' but can reason over signals,
+this circuit combinator is akin to `Clash.HaskellPrelude.<*>`.
+-}
 firstMetaS ::
   (B.Bifunctor p) =>
   Signal dom (a -> b) ->
@@ -620,7 +636,10 @@ secondMeta ::
     (PacketStream dom dataWidth (p a c))
 secondMeta f = secondMetaS (pure f)
 
--- | Like 'secondMeta', but can reason over signals.
+{- |
+Like 'secondMeta' but can reason over signals,
+this circuit combinator is akin to `Clash.HaskellPrelude.<*>`.
+-}
 secondMetaS ::
   (B.Bifunctor p) =>
   Signal dom (b -> c) ->
