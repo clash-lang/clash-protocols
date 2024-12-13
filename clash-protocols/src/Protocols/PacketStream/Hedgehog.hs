@@ -198,7 +198,7 @@ depacketizerModel ::
   [PacketStreamM2S dataWidth metaOut]
 depacketizerModel toMetaOut ps = L.concat dataWidthPackets
  where
-  hdrbytes = natToNum @headerBytes
+  hdrBytes = natToNum @headerBytes
 
   parseHdr ::
     ([PacketStreamM2S 1 metaIn], [PacketStreamM2S 1 metaIn]) ->
@@ -223,7 +223,7 @@ depacketizerModel toMetaOut ps = L.concat dataWidthPackets
     L.filter
       ( \fs ->
           let len' = L.length fs
-           in len' > hdrbytes || len' == hdrbytes && _last (L.last fs) == Just 1
+           in len' > hdrBytes || len' == hdrBytes && _last (L.last fs) == Just 1
       )
       $ downConvert
       . smearAbort
@@ -232,7 +232,7 @@ depacketizerModel toMetaOut ps = L.concat dataWidthPackets
   parsedPackets :: [[PacketStreamM2S 1 metaOut]]
   parsedPackets = L.map go bytePackets
 
-  go = parseHdr . L.splitAt hdrbytes
+  go = parseHdr . L.splitAt hdrBytes
 
   dataWidthPackets :: [[PacketStreamM2S dataWidth metaOut]]
   dataWidthPackets = L.map upConvert parsedPackets
@@ -414,7 +414,7 @@ genPackets minB maxB pktGen = L.concat <$> Gen.list (Range.linear minB maxB) pkt
 
 {- |
 Generate a valid packet, i.e. a packet of which all transfers carry the same
-`_meta` and with all unenabled bytes in `_data` set to 0x00.
+`_meta` and with all bytes in `_data` that are not enabled set to 0x00.
 -}
 genValidPacket ::
   forall (dataWidth :: Nat) (meta :: Type).

@@ -38,12 +38,12 @@ import Data.Maybe
 type BufSize (headerBytes :: Nat) (dataWidth :: Nat) =
   dataWidth * headerBytes `DivRU` dataWidth
 
-{- | Since the header might be unaligned compared to the datawidth
+{- | Since the header might be unaligned compared to the data width
      we need to store a partial fragment when forwarding.
      The number of bytes we need to store depends on our "unalignedness".
 
      Ex. We parse a header of 17 bytes and our @dataWidth@ is 4 bytes.
-     That means at the end of the header we can have upto 3 bytes left
+     That means at the end of the header we can have up to 3 bytes left
      in the fragment which we may need to forward.
 -}
 type ForwardBytes (headerBytes :: Nat) (dataWidth :: Nat) =
@@ -95,7 +95,7 @@ instance
   Default (DepacketizerState headerBytes dataWidth)
   where
   def :: DepacketizerState headerBytes dataWidth
-  def = Parse False (deepErrorX "depacketizerT: undefined intial buffer") maxBound
+  def = Parse False (deepErrorX "depacketizerT: undefined initial buffer") maxBound
 
 -- | Depacketizer state transition function.
 depacketizerT ::
@@ -268,7 +268,7 @@ instance
   Default (DfDepacketizerState headerBytes dataWidth)
   where
   def :: DfDepacketizerState headerBytes dataWidth
-  def = DfParse False (deepErrorX "depacketizeToDfT: undefined intial buffer") maxBound
+  def = DfParse False (deepErrorX "depacketizeToDfT: undefined initial buffer") maxBound
 
 -- | Df depacketizer transition function.
 depacketizeToDfT ::

@@ -50,7 +50,7 @@ prop_packet_fifo_id =
     (exposeClockResetEnable (packetFifoC @_ @1 @Int16 d10 d10 Backpressure))
 
 {- |
-Ensure that backpressure becayse of a full content RAM and dropping of packets
+Ensure that backpressure because of a full content RAM and dropping of packets
 that are too big to fit in the FIFO is tested.
 -}
 prop_packet_fifo_small_buffer_id :: Property
@@ -62,7 +62,10 @@ prop_packet_fifo_small_buffer_id =
     (exposeClockResetEnable (dropBigPackets d3 . dropAbortedPackets))
     (exposeClockResetEnable (packetFifoC @_ @1 @Int16 d3 d5 Backpressure))
 
--- | test for id using a small metabuffer to ensure backpressure using the metabuffer is tested
+{- |
+Test for id using a small meta buffer to ensure backpressure using
+the meta buffer is tested.
+-}
 prop_packet_fifo_small_meta_buffer_id :: Property
 prop_packet_fifo_small_meta_buffer_id =
   idWithModelSingleDomain

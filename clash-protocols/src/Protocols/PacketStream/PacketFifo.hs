@@ -230,7 +230,7 @@ packetFifoImpl SNat SNat (fwdIn, bwdIn) = (PacketStreamS2M . not <$> fullBuffer,
 
   mReadAddr' = mux mReadEnable (mReadAddr + 1) mReadAddr
   mReadAddr = register 0 mReadAddr'
-  -- only read the next value if we've outpustted the last word of a packet
+  -- only read the next value if we've outputted the last word of a packet
   mReadEnable = lastWordOut .&&. readEnable
 
   -- Registers : status
@@ -238,7 +238,8 @@ packetFifoImpl SNat SNat (fwdIn, bwdIn) = (PacketStreamS2M . not <$> fullBuffer,
   -- start dropping packet on abort
   dropping' = abortIn .||. dropping
   dropping = register False $ dropping' .&&. (not <$> lastWordIn)
-  -- the buffer is empty if the metaBuffer is empty as the metabuffer only updates when a packet is complete
+  -- the buffer is empty if the metaBuffer is empty as the meta buffer
+  -- only updates when a packet is complete
   emptyBuffer = register 0 mWriteAddr .==. mReadAddr
 
   -- Only write if there is space and we're not dropping
@@ -257,7 +258,7 @@ packetFifoImpl SNat SNat (fwdIn, bwdIn) = (PacketStreamS2M . not <$> fullBuffer,
 {- |
 FIFO circuit optimized for the PacketStream protocol. Contains two FIFOs, one
 for packet data ('_data', '_last') and one for packet metadata ('_meta').
-Because metadata is constant per packet, the metadata FIFO can be signficantly
+Because metadata is constant per packet, the metadata FIFO can be significantly
 shallower, saving resources.
 
 Moreover, the output of the FIFO has some other properties:
