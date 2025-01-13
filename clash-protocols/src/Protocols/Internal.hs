@@ -57,7 +57,7 @@ import GHC.Generics (Generic)
 
 -- | Protocol-agnostic acknowledgement
 newtype Ack = Ack Bool
-  deriving (Generic, C.NFDataX, Show, C.Bundle, Eq, Ord)
+  deriving (Generic, C.NFDataX, C.ShowX, Show, C.Bundle, Eq, NFData, Ord)
 
 -- | Acknowledge. Used in circuit-notation plugin to drive ignore components.
 instance Default Ack where
