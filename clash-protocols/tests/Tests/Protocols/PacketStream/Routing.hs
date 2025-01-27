@@ -70,8 +70,12 @@ makePropPacketArbiter _ _ mode =
     pure $ L.map (\pkt -> pkt{_meta = j}) pkts
 
   partitionPackets packets =
-    L.sortOn (_meta . L.head . L.head) $
-      L.groupBy (\a b -> _meta a == _meta b) <$> chunkByPacket packets
+    L.sortOn getMeta
+      $ L.groupBy (\a b -> _meta a == _meta b)
+      <$> chunkByPacket packets
+
+  getMeta ((pkt : _) : _) = _meta pkt
+  getMeta _ = error "makePropPacketArbiter: empty partition"
 
 {- | Tests that the packet dispatcher works correctly with one sink that accepts
 all packets; essentially an id test.
