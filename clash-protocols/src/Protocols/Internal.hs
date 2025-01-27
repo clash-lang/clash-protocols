@@ -5,9 +5,7 @@
 {-# LANGUAGE RoleAnnotations #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
-#if !MIN_VERSION_clash_prelude(1, 8, 2)
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-#endif
 
 -- TODO: Hide internal documentation
 -- {-# OPTIONS_HADDOCK hide #-}
