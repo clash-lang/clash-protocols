@@ -33,7 +33,12 @@ stripPaddingModel packets = L.concatMap go (chunkByPacket packets)
   go packet
     | packetBytes == expectedSize = packet
     | packetBytes > expectedSize =
-        x L.++ [(L.head padding){_last = Just 0, _abort = any _abort padding}]
+        case padding of
+          [] ->
+            -- There are (packetBytes - expectedSize) bytes, so more than 0
+            error "stripPaddingModel: absurd"
+          (padding0 : _) ->
+            x L.++ [padding0{_last = Just 0, _abort = any _abort padding}]
     | otherwise = a L.++ [b{_abort = True}]
    where
     (a, b) = case L.unsnoc packet of

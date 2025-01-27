@@ -62,9 +62,12 @@ makePropPacketArbiter SNat SNat mode =
     pure $ L.map (\pkt -> pkt{_meta = j}) pkts
 
   partitionPackets packets =
-    L.sortOn (_meta . L.head . L.head)
+    L.sortOn getMeta
       $ L.groupBy (\a b -> _meta a == _meta b)
       <$> chunkByPacket packets
+
+  getMeta ((pkt : _) : _) = _meta pkt
+  getMeta _ = error "makePropPacketArbiter: empty partition"
 
 {- |
 Generic test function for the packet dispatcher, testing for all data widths,

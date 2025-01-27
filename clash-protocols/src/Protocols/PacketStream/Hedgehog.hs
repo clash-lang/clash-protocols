@@ -216,7 +216,12 @@ depacketizerModel toMetaOut ps = L.concat dataWidthPackets
       _ -> fwdF
 
     hdr = bitCoerce $ Vec.unsafeFromList @headerBytes $ _data <$> hdrF
-    metaOut = toMetaOut hdr (_meta $ L.head hdrF)
+    metaIn = case hdrF of
+      [] ->
+        -- There are @headerBytes@ packets in this list, and (1 <= headerBytes)
+        error "depacketizerModel: absurd"
+      (hdrF0 : _) -> _meta hdrF0
+    metaOut = toMetaOut hdr metaIn
 
   bytePackets :: [[PacketStreamM2S 1 metaIn]]
   bytePackets =
@@ -257,10 +262,14 @@ depacketizeToDfModel ::
 depacketizeToDfModel toOut ps = L.map parseHdr bytePackets
  where
   parseHdr :: [PacketStreamM2S 1 metaIn] -> a
-  parseHdr hdrF =
+  parseHdr [] =
+    -- There are at least @headerBytes@ packets in this list, and
+    -- (1 <= headerBytes)
+    error "depacketizeToDfModel: absurd"
+  parseHdr hdrF@(hdrF0 : _) =
     toOut
       (bitCoerce $ Vec.unsafeFromList $ L.map _data hdrF)
-      (_meta $ L.head hdrF)
+      (_meta hdrF0)
 
   bytePackets :: [[PacketStreamM2S 1 metaIn]]
   bytePackets =
@@ -313,9 +322,13 @@ packetizerModel ::
 packetizerModel toMetaOut toHeader ps = L.concatMap (upConvert . prependHdr) bytePackets
  where
   prependHdr :: [PacketStreamM2S 1 metaIn] -> [PacketStreamM2S 1 metaOut]
-  prependHdr fragments = hdr L.++ L.map (\f -> f{_meta = metaOut}) fragments
+  prependHdr [] =
+    -- 'chunkBy' filters empty lists, so all elements of bytePackets are
+    -- guaranteed to be non-null
+    error "packetizerModel: Unreachable code"
+  prependHdr fragments@(h : _) =
+    hdr L.++ L.map (\f -> f{_meta = metaOut}) fragments
    where
-    h = L.head fragments
     metaOut = toMetaOut (_meta h)
     hdr = L.map go (toList $ bitCoerce (toHeader (_meta h)))
     go byte = PacketStreamM2S (singleton byte) Nothing metaOut (_abort h)
