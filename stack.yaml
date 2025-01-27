@@ -6,6 +6,6 @@ packages:
 
 extra-deps:
 - git: https://github.com/cchalmers/circuit-notation.git
-  commit: 19b386c4aa3ff690758ae089c7754303f3500cc9
+  commit: 564769c52aa05b90f81bbc898b7af7087d96613d
 - clash-prelude-1.8.1
 - clash-prelude-hedgehog-1.8.1

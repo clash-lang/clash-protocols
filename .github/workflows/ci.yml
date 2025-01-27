@@ -47,23 +47,32 @@ jobs:
           .ci/test_stack.sh
 
   cabal:
-    name: Cabal tests - ghc ${{ matrix.ghc }} / clash ${{ matrix.clash }}
+    name: Cabal tests - ghc ${{ matrix.ghc }} / clash ${{ matrix.clash }} / doc ${{ matrix.check_haddock }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
         clash:
-          - "1.8.1"
+          - "1.8.2"
         cabal:
           - "3.10"
         ghc:
           - "9.0.2"
           - "9.2.8"
           - "9.4.8"
-          - "9.6.4"
+          - "9.8.4"
+          - "9.10.1"
+        include:
+          - check_haddock: "False"
+          - ghc: "9.6.4"
+            check_haddock: "True"
+            os: "ubuntu-latest"
+            clash: "1.8.2"
+            cabal: "3.10"
 
     env:
+      check_haddock: ${{ matrix.check_haddock }}
       clash_version: ${{ matrix.clash }}
 
     steps:
@@ -79,7 +88,7 @@ jobs:
 
       - name: Use CI specific settings
         run: |
-          cp .ci/cabal.project.local .
+          .ci/apply_settings.sh
 
       - name: Setup CI
         run: |
@@ -105,6 +114,7 @@ jobs:
           .ci/test_cabal.sh
 
       - name: Documentation
+        if: ${{ matrix.check_haddock == 'True' }}
         run: |
           .ci/build_docs.sh
 
