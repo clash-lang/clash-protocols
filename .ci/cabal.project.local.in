@@ -2,6 +2,7 @@ package *
   documentation: __CHECK_HADDOCK__
 
 package clash-protocols-base
+  documentation: False
   ghc-options: -Werror
 
 package clash-protocols
