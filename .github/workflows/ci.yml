@@ -22,8 +22,8 @@ jobs:
       - name: Setup Stack / GHC
         uses: haskell-actions/setup@v2
         with:
-          ghc-version: '9.4.8'
-          cabal-version: '3.10.2.1'
+          ghc-version: '9.8.4'
+          cabal-version: '3.14.1.1'
           enable-stack: true
           stack-version: 'latest'
 
@@ -71,7 +71,7 @@ jobs:
         clash:
           - "1.8.2"
         cabal:
-          - "3.10"
+          - "3.14.1.1"
         ghc:
           - "9.0.2"
           - "9.2.8"
@@ -80,11 +80,11 @@ jobs:
           - "9.10.1"
         include:
           - check_haddock: "False"
-          - ghc: "9.6.4"
+          - ghc: "9.6.6"
             check_haddock: "True"
             os: "ubuntu-latest"
             clash: "1.8.2"
-            cabal: "3.10"
+            cabal: "3.14.1.1"
 
     env:
       check_haddock: ${{ matrix.check_haddock }}
