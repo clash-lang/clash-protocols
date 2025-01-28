@@ -1,10 +1,10 @@
 name: CI
 
-# Trigger the workflow on all pull requests and pushes/merges to master branch
+# Trigger the workflow on all pull requests and pushes/merges to main branch
 on:
   pull_request:
   push:
-    branches: [master]
+    branches: [main]
 
 
 concurrency:
