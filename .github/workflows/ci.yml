@@ -107,7 +107,7 @@ jobs:
 
       - name: Build
         run: |
-          cabal build all --constraint=clash-prelude==$clash_version -fci
+          cabal build all --enable-tests
 
       - name: Test
         run: |
