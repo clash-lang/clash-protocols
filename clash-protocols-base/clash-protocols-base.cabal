@@ -9,11 +9,6 @@ license-file:        LICENSE
 author:              Martijn Bastiaan, QBayLogic B.V.
 maintainer:          Martijn Bastiaan <martijn@hmbastiaan.nl>
 
-flag ci
-    Description: Running on CI? Used to set fail-on-warning flag.
-    Manual: True
-    Default: False
-
 flag large-tuples
   description:
     Generate instances for classes such as `Units` and `TaggedBundle` for tuples
@@ -74,9 +69,6 @@ common common-options
     -- blackboxes attached for them. You can disable this, but be sure to add
     -- a no-specialize pragma to every function with a blackbox.
     -fno-worker-wrapper
-
-  if flag(ci)
-    ghc-options: -Werror
 
   default-language: Haskell2010
   build-depends:

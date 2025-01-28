@@ -1,6 +1,12 @@
 package *
   documentation: __CHECK_HADDOCK__
 
+package clash-protocols-base
+  ghc-options: -Werror
+
 package clash-protocols
   documentation: False
   ghc-options: -Werror
+
+constraints:
+  clash-prelude == __CLASH_VERSION__
