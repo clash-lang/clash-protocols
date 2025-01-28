@@ -1,7 +1,7 @@
 #!/bin/bash
 set -xeou pipefail
 
-cabal v2-haddock clash-protocols |& tee haddock_log
+cabal v2-haddock all |& tee haddock_log
 
 set +e
 
