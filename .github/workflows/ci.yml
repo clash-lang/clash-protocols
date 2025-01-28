@@ -27,8 +27,14 @@ jobs:
           enable-stack: true
           stack-version: 'latest'
 
-      - name: Cache dependencies
-        uses: actions/cache@v4
+      # Ask Stack to use system GHC instead of installing its own copy
+      - name: Use system GHC
+        run: |
+          stack config set system-ghc --global true
+
+      - name: Restore cached dependencies
+        uses: actions/cache/restore@v4
+        id: cache
         with:
           path: ~/.stack
           key: ${{ runner.os }}-ghc-${{ matrix.ghc }}-${{ github.ref }}-${{ github.sha }}
@@ -37,10 +43,19 @@ jobs:
             ${{ runner.os }}-ghc-${{ matrix.ghc }}-${{ github.ref }}-
             ${{ runner.os }}-ghc-${{ matrix.ghc }}-
 
-      # Ask Stack to use system GHC instead of installing its own copy
-      - name: Use system GHC
-        run: |
-          stack config set system-ghc --global true
+      - name: Install dependencies
+        run: stack build --test --only-dependencies
+
+      # Cache dependencies already at this point, so that we do not have to
+      # rebuild them should the subsequent steps fail
+      - name: Save cached dependencies
+        uses: actions/cache/save@v4
+        # Trying to save over an existing cache gives distracting
+        # "Warning: Cache save failed." since they are immutable
+        if: ${{ steps.cache.outputs.cache-hit != 'true' }}
+        with:
+          path: ~/.stack
+          key: ${{ runner.os }}-ghc-${{ matrix.ghc }}-${{ github.ref }}-${{ github.sha }}
 
       - name: Test with Stack
         run: |
@@ -95,8 +110,14 @@ jobs:
           cabal v2-freeze
           mv cabal.project.freeze frozen
 
-      - name: Cache dependencies
-        uses: actions/cache@v4
+      - name: Restore cached dependencies
+        uses: actions/cache/restore@v4
+        id: cache
+        env:
+          key:
+            ${{ runner.os }}-ghc-${{ matrix.ghc }}-cabal-${{
+            steps.setup-haskell.outputs.cabal-version }}${{
+            matrix.project-variant }}
         with:
           path: ${{ steps.setup-haskell-cabal.outputs.cabal-store }}
           key: ${{ runner.os }}-ghc-${{ matrix.ghc }}-${{ matrix.clash }}-${{ hashFiles('frozen') }}
@@ -105,9 +126,23 @@ jobs:
             ${{ runner.os }}-ghc-${{ matrix.ghc }}-${{ matrix.clash }}-
             ${{ runner.os }}-ghc-${{ matrix.ghc }}-
 
+      - name: Install dependencies
+        run: cabal v2-build all --enable-tests --only-dependencies
+
+      # Cache dependencies already at this point, so that we do not have to
+      # rebuild them should the subsequent steps fail
+      - name: Save cached dependencies
+        uses: actions/cache/save@v3
+        # Trying to save over an existing cache gives distracting
+        # "Warning: Cache save failed." since they are immutable
+        if: ${{ steps.cache.outputs.cache-hit != 'true' }}
+        with:
+          path: ${{ steps.setup-haskell-cabal.outputs.cabal-store }}
+          key: ${{ runner.os }}-ghc-${{ matrix.ghc }}-${{ matrix.clash }}-${{ hashFiles('frozen') }}
+
       - name: Build
         run: |
-          cabal build all --enable-tests
+          cabal v2-build all --enable-tests
 
       - name: Test
         run: |
