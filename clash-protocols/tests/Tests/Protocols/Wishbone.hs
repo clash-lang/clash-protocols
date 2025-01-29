@@ -1,5 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -13,6 +14,7 @@ import Control.Exception (SomeException, evaluate, try)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Either (isLeft)
 import qualified Data.List as L
+import GHC.Stack (HasCallStack)
 import Hedgehog
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
@@ -144,6 +146,25 @@ memoryWbModel (Write addr sel a) s st
   | acknowledge s = Right ((addr, a) : st)
   | otherwise = Left $ "Write should be acked : " <> show s
 
+blockRamUClear ::
+  forall n dom a addr.
+  ( HasCallStack
+  , HiddenClockResetEnable dom
+  , NFDataX a
+  , Enum addr
+  , NFDataX addr
+  , 1 <= n ) =>
+  (Index n -> a) ->
+  SNat n ->
+  Signal dom addr ->
+  Signal dom (Maybe (addr, a)) ->
+  Signal dom a
+#if MIN_VERSION_clash_prelude(1,9,0)
+blockRamUClear initF = blockRamU (ClearOnReset initF)
+#else
+blockRamUClear initF n = blockRamU ClearOnReset n initF
+#endif
+
 prop_memoryWb_model :: Property
 prop_memoryWb_model =
   property $
@@ -151,7 +172,7 @@ prop_memoryWb_model =
       wishbonePropWithModel @System
         defExpectOptions
         memoryWbModel
-        (memoryWb (blockRamU ClearOnReset (SNat @256) (const def)))
+        (memoryWb (blockRamUClear (const def) (SNat @256)))
         (genData (genWishboneTransfer @8 genSmallInt))
         [] -- initial state
 
@@ -207,7 +228,7 @@ prop_memoryWb_validator = property $ do
       withClockResetEnable @System clockGen resetGen enableGen $
         let
           driver = driveStandard @System @(BitVector 8) @8 defExpectOptions reqs
-          memory = memoryWb @System @(BitVector 8) @8 (blockRamU ClearOnReset (SNat @256) (const def))
+          memory = memoryWb @System @(BitVector 8) @8 (blockRamUClear (const def) (SNat @256))
          in
           evaluateUnitCircuit
             sampleNumber
@@ -249,7 +270,7 @@ prop_memoryWb_validator_lenient = property $ do
       withClockResetEnable @System clockGen resetGen enableGen $
         let
           driver = driveStandard @System @(BitVector 8) @8 defExpectOptions reqs
-          memory = memoryWb @System @(BitVector 8) @8 (blockRamU ClearOnReset (SNat @256) (const def))
+          memory = memoryWb @System @(BitVector 8) @8 (blockRamUClear (const def) (SNat @256))
          in
           evaluateUnitCircuit
             sampleNumber

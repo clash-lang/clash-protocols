@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# OPTIONS_HADDOCK hide #-}
@@ -20,6 +21,7 @@ import Protocols.PacketStream.Base
 
 import Data.Constraint.Deferrable ((:~:) (Refl))
 import Data.Maybe
+import GHC.Stack (HasCallStack)
 
 type M2SNoMeta dataWidth =
   (Vec dataWidth (BitVector 8), Maybe (Index (dataWidth + 1)), Bool)
@@ -119,6 +121,25 @@ delayStreamT st (fwdIn, bwdIn, buff@(_, b, _), metaBuf) =
       then nextSt
       else st
 
+blockRamUNoClear ::
+  forall n dom a addr.
+  ( HasCallStack
+  , HiddenClockResetEnable dom
+  , NFDataX a
+  , Enum addr
+  , NFDataX addr
+  , 1 <= n ) =>
+  SNat n ->
+  Signal dom addr ->
+  Signal dom (Maybe (addr, a)) ->
+  Signal dom a
+#if MIN_VERSION_clash_prelude(1,9,0)
+blockRamUNoClear = blockRamU NoClearOnReset
+#else
+blockRamUNoClear n =
+  blockRamU NoClearOnReset n (errorX "No reset function")
+#endif
+
 {- |
 Forwards incoming packets with @n@ transactions latency. Because of potential
 stalls this is not the same as @n@ clock cycles. Assumes that all packets
@@ -143,14 +164,12 @@ delayStreamC SNat = forceResetSanity |> fromSignals ckt
  where
   ckt (fwdInS, bwdInS) = (bwdOutS, fwdOutS)
    where
-    noRstFunc = deepErrorX "delayStream: undefined reset function"
-
     -- Store the contents of transactions without metadata.
     -- We only need write before read semantics in case n ~ 1.
     bram :: Signal dom (M2SNoMeta dataWidth)
     bram = case sameNat d1 (SNat @n) of
-      Nothing -> blockRamU NoClearOnReset (SNat @n) noRstFunc readAddr writeCmd
-      Just Refl -> readNew (blockRamU NoClearOnReset (SNat @n) noRstFunc) readAddr writeCmd
+      Nothing -> blockRamUNoClear (SNat @n) readAddr writeCmd
+      Just Refl -> readNew (blockRamUNoClear (SNat @n)) readAddr writeCmd
 
     -- There are at most two packets in the blockram, but they are required
     -- to be bigger than @n@ transactions. Thus, we only need to store the
