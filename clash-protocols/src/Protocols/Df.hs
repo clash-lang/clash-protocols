@@ -902,6 +902,25 @@ registerBwd =
     iDatX1 = C.regEn (C.errorX "registerBwd") oAck iDatX0
     oDat = toData <$> valid <*> (C.mux oAck iDatX0 iDatX1)
 
+blockRamUNoClear ::
+  forall n dom a addr.
+  ( HasCallStack
+  , C.HiddenClockResetEnable dom
+  , C.NFDataX a
+  , Enum addr
+  , C.NFDataX addr
+  , 1 <= n ) =>
+  C.SNat n ->
+  Signal dom addr ->
+  Signal dom (Maybe (addr, a)) ->
+  Signal dom a
+#if MIN_VERSION_clash_prelude(1,9,0)
+blockRamUNoClear = C.blockRamU C.NoClearOnReset
+#else
+blockRamUNoClear n =
+  C.blockRamU C.NoClearOnReset n (C.errorX "No reset function")
+#endif
+
 {- | A fifo buffer with user-provided depth. Uses blockram to store data. Can
 handle simultaneous write and read (full throughput rate).
 -}
@@ -923,7 +942,7 @@ fifo fifoDepth = Circuit $ C.hideReset circuitFunction
     -- initialize bram
     brRead =
       C.readNew
-        (C.blockRamU C.NoClearOnReset fifoDepth (C.errorX "No reset function"))
+        (blockRamUNoClear fifoDepth)
         brReadAddr
         brWrite
     -- run the state machine (a mealy machine)
