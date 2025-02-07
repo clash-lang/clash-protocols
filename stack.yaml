@@ -1,4 +1,4 @@
-resolver: lts-21.25 # ghc-9.4.8
+resolver: lts-23.6 # ghc-9.8.4
 
 packages:
   - clash-protocols-base
@@ -7,5 +7,7 @@ packages:
 extra-deps:
 - git: https://github.com/cchalmers/circuit-notation.git
   commit: 564769c52aa05b90f81bbc898b7af7087d96613d
-- clash-prelude-1.8.1
-- clash-prelude-hedgehog-1.8.1
+- clash-prelude-1.8.2
+- clash-prelude-hedgehog-1.8.2
+- hedgehog-1.4@sha256:9860ab34ab3951d9515c71b777d8c9c47610aae7339933e17d26ad9a4afa5618,4754
+- tasty-1.4.3@sha256:5b53fded93109f6704b599c3498eb73c5b0ed1a975f1912dd98b4b19c61f8bc9,2653

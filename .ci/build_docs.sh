@@ -1,10 +1,7 @@
 #!/bin/bash
 set -xeou pipefail
 
-cabal v2-haddock \
-  --constraint=clash-prelude==$clash_version \
-  clash-protocols \
-  |& tee haddock_log
+cabal v2-haddock all |& tee haddock_log
 
 set +e
 
