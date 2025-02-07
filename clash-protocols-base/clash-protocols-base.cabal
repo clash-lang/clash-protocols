@@ -104,7 +104,7 @@ library
     , circuit-notation
     , deepseq
     , extra
-    , ghc >= 8.7 && < 9.7
+    , ghc >= 8.7 && < 9.11
     , hashable
     , tagged
     , template-haskell

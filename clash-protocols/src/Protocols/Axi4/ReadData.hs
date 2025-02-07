@@ -111,7 +111,8 @@ data
 
 -- | See Table A2-6 "Read data channel signals"
 newtype M2S_ReadData = M2S_ReadData {_rready :: Bool}
-  deriving (Show, Generic, C.NFDataX)
+  deriving stock (Show, Generic)
+  deriving anyclass (C.NFDataX)
 
 {- | Shorthand for a "well-behaved" read data config,
 so that we don't need to write out a bunch of type constraints later.

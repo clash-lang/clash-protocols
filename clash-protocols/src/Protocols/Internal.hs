@@ -6,9 +6,7 @@
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -fconstraint-solver-iterations=20 #-}
-#if !MIN_VERSION_clash_prelude(1, 8, 2)
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-#endif
 
 -- TODO: Hide internal documentation
 -- {-# OPTIONS_HADDOCK hide #-}

@@ -1,0 +1,6 @@
+package *
+  documentation: __CHECK_HADDOCK__
+
+package clash-protocols
+  documentation: False
+  ghc-options: -Werror

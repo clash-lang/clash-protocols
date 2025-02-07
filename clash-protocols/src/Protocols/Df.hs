@@ -114,9 +114,13 @@ import Prelude hiding (
 import qualified Data.Bifunctor as B
 import Data.Bool (bool)
 import qualified Data.Coerce as Coerce
+#if MIN_VERSION_base(4,19,0)
+import qualified Data.Functor as Functor (unzip)
+#else
+import qualified Data.List.NonEmpty as Functor (unzip)
+#endif
 import Data.Kind (Type)
 import Data.List ((\\))
-import qualified Data.List.NonEmpty
 import qualified Data.Maybe as Maybe
 import Data.Proxy
 import qualified Prelude as P
@@ -862,7 +866,7 @@ roundrobinCollect Parallel =
     nacks = C.repeat (Ack False)
     acks = Maybe.fromMaybe nacks ((\i -> C.replace i ack nacks) <$> iM)
     dat1 = Maybe.fromMaybe NoData dat0
-    (iM, dat0) = Data.List.NonEmpty.unzip dats1
+    (iM, dat0) = Functor.unzip dats1
     dats1 = C.fold @(n C.- 1) (<|>) (C.zipWith goDat C.indicesI dats0)
 
     goDat i dat

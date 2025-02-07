@@ -90,7 +90,8 @@ data
 
 -- | See Table A2-4 "Write response channel signals"
 newtype M2S_WriteResponse = M2S_WriteResponse {_bready :: Bool}
-  deriving (Show, Generic, C.NFDataX)
+  deriving stock (Show, Generic)
+  deriving anyclass (C.NFDataX)
 
 {- | Shorthand for a "well-behaved" write response config,
 so that we don't need to write out a bunch of type constraints later.
