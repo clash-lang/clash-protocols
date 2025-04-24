@@ -88,6 +88,7 @@ module Protocols.Df (
   noData,
   fromData,
   toData,
+  dataDefault,
 ) where
 
 -- base
@@ -114,11 +115,6 @@ import Prelude hiding (
 import qualified Data.Bifunctor as B
 import Data.Bool (bool)
 import qualified Data.Coerce as Coerce
-#if MIN_VERSION_base(4,19,0)
-import qualified Data.Functor as Functor (unzip)
-#else
-import qualified Data.List.NonEmpty as Functor (unzip)
-#endif
 import Data.Kind (Type)
 import Data.List ((\\))
 import qualified Data.Maybe as Maybe
@@ -223,6 +219,14 @@ fromData (Data a) = a
 toData :: Bool -> a -> Data a
 toData False _ = NoData
 toData True a = Data a
+
+{- |
+  If the t'Data' is v'NoData', it returns the given value; otherwise,
+  it returns the value contained in the v'Data'.
+-}
+dataDefault :: a -> Data a -> a
+dataDefault a NoData = a
+dataDefault _ (Data a) = a
 
 instance (C.KnownDomain dom, C.NFDataX a, C.ShowX a, Show a) => Simulate (Df dom a) where
   type SimulateFwdType (Df dom a) = [Data a]
@@ -859,19 +863,20 @@ roundrobinCollect Skip =
       NoData ->
         (C.satSucc C.SatWrap i, (C.repeat (Ack False), NoData))
 roundrobinCollect Parallel =
-  Circuit (B.first C.unbundle . C.unbundle . fmap go . C.bundle . B.first C.bundle)
+  Circuit (B.first C.unbundle . C.mealyB go NoData . B.first C.bundle)
  where
-  go (dats0, ack) = (acks, dat1)
+  go im (fwds, bwd@(Ack ack)) = (nextIm, (bwds, fwd))
    where
-    nacks = C.repeat (Ack False)
-    acks = Maybe.fromMaybe nacks ((\i -> C.replace i ack nacks) <$> iM)
-    dat1 = Maybe.fromMaybe NoData dat0
-    (iM, dat0) = Functor.unzip dats1
-    dats1 = C.fold @(n C.- 1) (<|>) (C.zipWith goDat C.indicesI dats0)
+    nextSrc = C.fold @(n C.- 1) (<|>) (C.zipWith (<$) C.indicesI fwds)
+    i = dataDefault (dataDefault maxBound nextSrc) im
 
-    goDat i dat
-      | Maybe.isJust (dataToMaybe dat) = Just (i, dat)
-      | otherwise = Nothing
+    bwds = C.replace i bwd (C.repeat (Ack False))
+    fwd = fwds C.!! i
+
+    nextIm =
+      if noData fwd || not ack
+        then nextSrc
+        else im
 
 -- | Place register on /forward/ part of a circuit. This adds combinational delay on the /backward/ path.
 registerFwd ::
