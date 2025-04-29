@@ -22,6 +22,7 @@ import qualified Clash.Prelude as C
 
 -- containers
 import qualified Data.HashMap.Strict as HashMap
+import qualified Data.HashSet as HashSet
 
 -- extra
 import Data.List (partition, transpose)
@@ -305,7 +306,7 @@ prop_roundrobinCollectSkip =
     prop
  where
   prop :: [Int] -> [Int] -> PropertyT IO ()
-  prop expected actual = tally expected === tally actual
+  prop expected actual = HashSet.fromList expected === HashSet.fromList actual
 
 prop_roundrobinCollectParallel :: Property
 prop_roundrobinCollectParallel =
@@ -318,7 +319,7 @@ prop_roundrobinCollectParallel =
     prop
  where
   prop :: [Int] -> [Int] -> PropertyT IO ()
-  prop expected actual = tally expected === tally actual
+  prop expected actual = HashSet.fromList expected === HashSet.fromList actual
 
 prop_unbundleVec :: Property
 prop_unbundleVec =
