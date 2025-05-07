@@ -173,7 +173,7 @@ data
       -- ^ Burst type*
       , _awlock :: !(LockType (AWKeepLock conf))
       -- ^ Lock type*
-      , _awcache :: !(CacheType (AWKeepCache conf))
+      , _awcache :: !(AwCacheType (AWKeepCache conf))
       -- ^ Cache type*
       , _awprot :: !(PermissionsType (AWKeepPermissions conf))
       -- ^ Protection type
@@ -209,7 +209,7 @@ type KnownAxi4WriteAddressConfig conf =
   , C.ShowX (SizeType (AWKeepSize conf))
   , C.ShowX (BurstType (AWKeepBurst conf))
   , C.ShowX (LockType (AWKeepLock conf))
-  , C.ShowX (CacheType (AWKeepCache conf))
+  , C.ShowX (AwCacheType (AWKeepCache conf))
   , C.ShowX (PermissionsType (AWKeepPermissions conf))
   , C.ShowX (QosType (AWKeepQos conf))
   , Show (RegionType (AWKeepRegion conf))
@@ -217,7 +217,7 @@ type KnownAxi4WriteAddressConfig conf =
   , Show (SizeType (AWKeepSize conf))
   , Show (BurstType (AWKeepBurst conf))
   , Show (LockType (AWKeepLock conf))
-  , Show (CacheType (AWKeepCache conf))
+  , Show (AwCacheType (AWKeepCache conf))
   , Show (PermissionsType (AWKeepPermissions conf))
   , Show (QosType (AWKeepQos conf))
   , C.NFDataX (RegionType (AWKeepRegion conf))
@@ -225,7 +225,7 @@ type KnownAxi4WriteAddressConfig conf =
   , C.NFDataX (SizeType (AWKeepSize conf))
   , C.NFDataX (BurstType (AWKeepBurst conf))
   , C.NFDataX (LockType (AWKeepLock conf))
-  , C.NFDataX (CacheType (AWKeepCache conf))
+  , C.NFDataX (AwCacheType (AWKeepCache conf))
   , C.NFDataX (PermissionsType (AWKeepPermissions conf))
   , C.NFDataX (QosType (AWKeepQos conf))
   , NFData (RegionType (AWKeepRegion conf))
@@ -233,7 +233,7 @@ type KnownAxi4WriteAddressConfig conf =
   , NFData (SizeType (AWKeepSize conf))
   , NFData (BurstType (AWKeepBurst conf))
   , NFData (LockType (AWKeepLock conf))
-  , NFData (CacheType (AWKeepCache conf))
+  , NFData (AwCacheType (AWKeepCache conf))
   , NFData (PermissionsType (AWKeepPermissions conf))
   , NFData (QosType (AWKeepQos conf))
   , Eq (RegionType (AWKeepRegion conf))
@@ -241,7 +241,7 @@ type KnownAxi4WriteAddressConfig conf =
   , Eq (SizeType (AWKeepSize conf))
   , Eq (BurstType (AWKeepBurst conf))
   , Eq (LockType (AWKeepLock conf))
-  , Eq (CacheType (AWKeepCache conf))
+  , Eq (AwCacheType (AWKeepCache conf))
   , Eq (PermissionsType (AWKeepPermissions conf))
   , Eq (QosType (AWKeepQos conf))
   )
@@ -276,7 +276,7 @@ data Axi4WriteAddressInfo (conf :: Axi4WriteAddressConfig) (userType :: Type) = 
   -- ^ Burst size
   , _awilock :: !(LockType (AWKeepLock conf))
   -- ^ Lock type
-  , _awicache :: !(CacheType (AWKeepCache conf))
+  , _awicache :: !(AwCacheType (AWKeepCache conf))
   -- ^ Cache type
   , _awiprot :: !(PermissionsType (AWKeepPermissions conf))
   -- ^ Protection type

@@ -244,8 +244,8 @@ prop_axi4_convert_read_id =
               <$> ( (,,,)
                       <$> (pure NonBufferable C.<|> pure Bufferable)
                       <*> (pure NonModifiable C.<|> pure Modifiable)
-                      <*> (pure OtherNoLookupCache C.<|> pure OtherLookupCache)
                       <*> (pure NoLookupCache C.<|> pure LookupCache)
+                      <*> (pure OtherNoLookupCache C.<|> pure OtherLookupCache)
                   )
           )
       <*> ( toKeepType
@@ -309,8 +309,8 @@ prop_axi4_convert_read_id_rev =
           toKeepType
             ( NonBufferable
             , NonModifiable
-            , OtherNoLookupCache
             , NoLookupCache
+            , OtherNoLookupCache
             )
       , _ariprot =
           toKeepType

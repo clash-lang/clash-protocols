@@ -175,7 +175,7 @@ data
       -- ^ Burst type*
       , _arlock :: !(LockType (ARKeepLock conf))
       -- ^ Lock type*
-      , _arcache :: !(CacheType (ARKeepCache conf))
+      , _arcache :: !(ArCacheType (ARKeepCache conf))
       -- ^ Cache type* (has been renamed to modifiable in AXI spec)
       , _arprot :: !(PermissionsType (ARKeepPermissions conf))
       -- ^ Protection type
@@ -212,7 +212,7 @@ type KnownAxi4ReadAddressConfig conf =
   , C.ShowX (SizeType (ARKeepSize conf))
   , C.ShowX (BurstType (ARKeepBurst conf))
   , C.ShowX (LockType (ARKeepLock conf))
-  , C.ShowX (CacheType (ARKeepCache conf))
+  , C.ShowX (ArCacheType (ARKeepCache conf))
   , C.ShowX (PermissionsType (ARKeepPermissions conf))
   , C.ShowX (QosType (ARKeepQos conf))
   , Show (RegionType (ARKeepRegion conf))
@@ -220,7 +220,7 @@ type KnownAxi4ReadAddressConfig conf =
   , Show (SizeType (ARKeepSize conf))
   , Show (BurstType (ARKeepBurst conf))
   , Show (LockType (ARKeepLock conf))
-  , Show (CacheType (ARKeepCache conf))
+  , Show (ArCacheType (ARKeepCache conf))
   , Show (PermissionsType (ARKeepPermissions conf))
   , Show (QosType (ARKeepQos conf))
   , C.NFDataX (RegionType (ARKeepRegion conf))
@@ -228,7 +228,7 @@ type KnownAxi4ReadAddressConfig conf =
   , C.NFDataX (SizeType (ARKeepSize conf))
   , C.NFDataX (BurstType (ARKeepBurst conf))
   , C.NFDataX (LockType (ARKeepLock conf))
-  , C.NFDataX (CacheType (ARKeepCache conf))
+  , C.NFDataX (ArCacheType (ARKeepCache conf))
   , C.NFDataX (PermissionsType (ARKeepPermissions conf))
   , C.NFDataX (QosType (ARKeepQos conf))
   , NFData (RegionType (ARKeepRegion conf))
@@ -236,7 +236,7 @@ type KnownAxi4ReadAddressConfig conf =
   , NFData (SizeType (ARKeepSize conf))
   , NFData (BurstType (ARKeepBurst conf))
   , NFData (LockType (ARKeepLock conf))
-  , NFData (CacheType (ARKeepCache conf))
+  , NFData (ArCacheType (ARKeepCache conf))
   , NFData (PermissionsType (ARKeepPermissions conf))
   , NFData (QosType (ARKeepQos conf))
   , Eq (RegionType (ARKeepRegion conf))
@@ -244,7 +244,7 @@ type KnownAxi4ReadAddressConfig conf =
   , Eq (SizeType (ARKeepSize conf))
   , Eq (BurstType (ARKeepBurst conf))
   , Eq (LockType (ARKeepLock conf))
-  , Eq (CacheType (ARKeepCache conf))
+  , Eq (ArCacheType (ARKeepCache conf))
   , Eq (PermissionsType (ARKeepPermissions conf))
   , Eq (QosType (ARKeepQos conf))
   )
@@ -283,7 +283,7 @@ data Axi4ReadAddressInfo (conf :: Axi4ReadAddressConfig) (userType :: Type) = Ax
   -- ^ Burst type
   , _arilock :: !(LockType (ARKeepLock conf))
   -- ^ Lock type
-  , _aricache :: !(CacheType (ARKeepCache conf))
+  , _aricache :: !(ArCacheType (ARKeepCache conf))
   -- ^ Cache type
   , _ariprot :: !(PermissionsType (ARKeepPermissions conf))
   -- ^ Protection type

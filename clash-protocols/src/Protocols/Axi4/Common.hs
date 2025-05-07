@@ -24,8 +24,11 @@ type BurstType (keep :: Bool) = KeepType keep BurstMode
 -- | Enables or disables burst length
 type BurstLengthType (keep :: Bool) = KeepType keep (C.Index (2 ^ 8))
 
--- | Enables or disables 'Cache'
-type CacheType (keep :: Bool) = KeepType keep Cache
+-- | Enables or disables the 'ArCache' for Write Address operations
+type AwCacheType (keep :: Bool) = KeepType keep AwCache
+
+-- | Enables or disables the 'ArCache' for Read Address operations
+type ArCacheType (keep :: Bool) = KeepType keep ArCache
 
 -- | Enables or disables a boolean indicating whether a transaction is done
 type LastType (keep :: Bool) = KeepType keep Bool
@@ -183,8 +186,15 @@ allocated in the cache for performance reasons.
 data OtherAllocate = OtherNoLookupCache | OtherLookupCache
   deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq, C.BitPack)
 
--- | See Table A4-3 AWCACHE bit allocations
-type Cache = (Bufferable, Modifiable, OtherAllocate, Allocate)
+{- | Memory attributes. Note that the 'Allocate' and 'OtherAllocate' bits are
+in different posistions for read and write requests.
+-}
+type AwCache = (Bufferable, Modifiable, OtherAllocate, Allocate)
+
+{- | Memory attributes. Note that the 'Allocate' and 'OtherAllocate' bits are
+in different posistions for read and write requests.
+-}
+type ArCache = (Bufferable, Modifiable, Allocate, OtherAllocate)
 
 -- | Status of the write transaction.
 data Resp
