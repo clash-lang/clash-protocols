@@ -1,8 +1,4 @@
-{-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
-{-# LANGUAGE UndecidableInstances #-}
--- NFDataX and ShowX for T3 and T4
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 {- |
 Types and utilities shared between AXI4, AXI4-Lite, and AXI3.
@@ -20,40 +16,7 @@ import GHC.TypeNats (Nat)
 import Clash.Prelude (type (-), type (^))
 import qualified Clash.Prelude as C
 
--- strict-tuple
-import Data.Tuple.Strict (T3, T4)
-
 import Protocols.Internal
-
-deriving instance
-  ( C.NFDataX a
-  , C.NFDataX b
-  , C.NFDataX c
-  ) =>
-  C.NFDataX (T3 a b c)
-
-deriving instance
-  ( C.NFDataX a
-  , C.NFDataX b
-  , C.NFDataX c
-  , C.NFDataX d
-  ) =>
-  C.NFDataX (T4 a b c d)
-
-deriving instance
-  ( C.ShowX a
-  , C.ShowX b
-  , C.ShowX c
-  ) =>
-  C.ShowX (T3 a b c)
-
-deriving instance
-  ( C.ShowX a
-  , C.ShowX b
-  , C.ShowX c
-  , C.ShowX d
-  ) =>
-  C.ShowX (T4 a b c d)
 
 -- | Enables or disables 'BurstMode'
 type BurstType (keep :: Bool) = KeepType keep BurstMode
@@ -70,9 +33,8 @@ type LastType (keep :: Bool) = KeepType keep Bool
 -- | Enables or disables 'AtomicAccess'
 type LockType (keep :: Bool) = KeepType keep AtomicAccess
 
--- | Enables or disables 'Privileged', 'Secure', and 'InstructionOrData'
-type PermissionsType (keep :: Bool) =
-  KeepType keep (T3 Privileged Secure InstructionOrData)
+-- | Enables or disables 'Permissions'
+type PermissionsType (keep :: Bool) = KeepType keep Permissions
 
 -- | Enables or disables 'Qos'
 type QosType (keep :: Bool) = KeepType keep Qos
@@ -222,7 +184,7 @@ data OtherAllocate = OtherNoLookupCache | OtherLookupCache
   deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq)
 
 -- | See Table A4-3 AWCACHE bit allocations
-type Cache = T4 Bufferable Modifiable OtherAllocate Allocate
+type Cache = (Bufferable, Modifiable, OtherAllocate, Allocate)
 
 -- | Status of the write transaction.
 data Resp
@@ -279,3 +241,6 @@ data InstructionOrData
   = Data
   | Instruction
   deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq)
+
+-- | Enables or disables 'Privileged', 'Secure', and 'InstructionOrData'
+type Permissions = (Privileged, Secure, InstructionOrData)
