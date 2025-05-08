@@ -1,13 +1,11 @@
 {-# LANGUAGE BlockArguments #-}
-
-{-# OPTIONS -fplugin=Protocols.Plugin #-}
+-- This /must/ be enabled in order for the plugin to do its work. You might
+-- want to add this to 'ghc-options' in your cabal file.
+{-# OPTIONS_GHC -fplugin=Protocols.Plugin #-}
 
 -- For debugging purposes:
--- {-# OPTIONS -fplugin-opt=Protocols.Plugin:debug #-}
+-- {-# OPTIONS_GHC -fplugin-opt=Protocols.Plugin:debug #-}
 
-{- | This /must/ be enabled in order for the plugin to do its work. You might
-want to add this to 'ghc-options' in your cabal file.
--}
 module Tests.Protocols.Plugin where
 
 import qualified Clash.Prelude as C
