@@ -187,7 +187,8 @@ instance
   ) =>
   Test (Axi4Stream dom conf userType)
   where
-  expectN Proxy = expectN (Proxy @(Df.Df dom _))
+  trimN Proxy = trimN (Proxy @(Df.Df dom _))
+  getExpectType Proxy = Maybe.catMaybes
 
 instance IdleCircuit (Axi4Stream dom conf userType) where
   idleFwd Proxy = C.pure Nothing

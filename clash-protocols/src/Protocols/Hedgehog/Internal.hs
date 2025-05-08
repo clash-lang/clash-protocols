@@ -29,6 +29,8 @@ import Clash.Prelude (type (*), type (+), type (<=))
 import qualified Clash.Prelude as C
 
 -- hedgehog
+
+import qualified Data.Maybe as Maybe
 import qualified Hedgehog as H
 import qualified Hedgehog.Internal.Property as H
 
@@ -50,20 +52,21 @@ defExpectOptions =
     , eoDriveEarly = True
     , eoTimeoutMs = Nothing
     , eoTrace = False
+    , eoVcd = Nothing
     }
 
 instance (TestType a, C.KnownDomain dom) => Test (Df dom a) where
-  expectN ::
+  trimN ::
     forall m.
     (HasCallStack, H.MonadTest m) =>
     Proxy (Df dom a) ->
     ExpectOptions ->
     [Maybe a] ->
-    m [a]
-  expectN Proxy (ExpectOptions{eoSampleMax, eoStopAfterEmpty}) sampled = do
+    m [Maybe a]
+  trimN Proxy (ExpectOptions{eoSampleMax, eoStopAfterEmpty}) sampled = do
     go eoSampleMax eoStopAfterEmpty sampled
    where
-    go :: (HasCallStack) => Int -> Int -> [Maybe a] -> m [a]
+    go :: (HasCallStack) => Int -> Int -> [Maybe a] -> m [Maybe a]
     go _timeout _n [] =
       -- This really should not happen, protocols should produce data indefinitely
       error "unexpected end of signal"
@@ -79,12 +82,15 @@ instance (TestType a, C.KnownDomain dom) => Test (Df dom a) where
     go _ 0 _ =
       -- Saw enough valid samples, return to user
       pure []
-    go sampleTimeout _emptyTimeout (Just a : as) =
+    go sampleTimeout _emptyTimeout (a : as) =
       -- Valid sample
       (a :) <$> go (sampleTimeout - 1) eoStopAfterEmpty as
-    go sampleTimeout emptyTimeout (Nothing : as) =
-      -- Empty sample
-      go sampleTimeout (emptyTimeout - 1) as
+
+  getExpectType ::
+    Proxy (Df dom a) ->
+    [Maybe a] ->
+    [a]
+  getExpectType Proxy = Maybe.catMaybes
 
 instance
   ( Test a
@@ -94,16 +100,22 @@ instance
   ) =>
   Test (C.Vec n a)
   where
-  expectN ::
+  trimN ::
     forall m.
     (HasCallStack, H.MonadTest m) =>
     Proxy (C.Vec n a) ->
     ExpectOptions ->
     C.Vec n (SimulateFwdType a) ->
-    m (C.Vec n (ExpectType a))
+    m (C.Vec n (SimulateFwdType a))
   -- TODO: This creates some pretty terrible error messages, as one
   -- TODO: simulate channel is checked at a time.
-  expectN Proxy opts = mapM (expectN (Proxy @a) opts)
+  trimN Proxy opts = mapM (trimN (Proxy @a) opts)
+
+  getExpectType ::
+    Proxy (C.Vec n a) ->
+    C.Vec n (SimulateFwdType a) ->
+    C.Vec n (ExpectType a)
+  getExpectType Proxy = fmap (getExpectType (Proxy @a))
 
 instance
   ( Test a
@@ -112,19 +124,30 @@ instance
   ) =>
   Test (a, b)
   where
-  expectN ::
+  trimN ::
     forall m.
     (HasCallStack, H.MonadTest m) =>
     Proxy (a, b) ->
     ExpectOptions ->
     (SimulateFwdType a, SimulateFwdType b) ->
-    m (ExpectType a, ExpectType b)
-  expectN Proxy opts (sampledA, sampledB) = do
+    m (SimulateFwdType a, SimulateFwdType b)
+  trimN Proxy opts (sampledA, sampledB) = do
     -- TODO: This creates some pretty terrible error messages, as one
     -- TODO: simulate channel is checked at a time.
-    trimmedA <- expectN (Proxy @a) opts sampledA
-    trimmedB <- expectN (Proxy @b) opts sampledB
+    trimmedA <- trimN (Proxy @a) opts sampledA
+    trimmedB <- trimN (Proxy @b) opts sampledB
     pure (trimmedA, trimmedB)
+
+  getExpectType ::
+    Proxy (a, b) ->
+    (SimulateFwdType a, SimulateFwdType b) ->
+    (ExpectType a, ExpectType b)
+  getExpectType Proxy (simFwdA, simFwdB) =
+    let
+      expectFwdA = getExpectType (Proxy @a) simFwdA
+      expectFwdB = getExpectType (Proxy @b) simFwdB
+     in
+      (expectFwdA, expectFwdB)
 
 -- XXX: We only generate up to 9 tuples instead of maxTupleSize because NFData
 -- instances are only available up to 9-tuples.
