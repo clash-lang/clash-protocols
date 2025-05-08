@@ -5,6 +5,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-missing-fields #-}
+{-# OPTIONS_GHC -fconstraint-solver-iterations=10 #-}
 
 {- |
 Defines ReadAddress channel of full AXI4 protocol with port names corresponding
@@ -190,7 +191,7 @@ data
 newtype S2M_ReadAddress = S2M_ReadAddress
   {_arready :: Bool}
   deriving stock (Show, Generic)
-  deriving anyclass (C.NFDataX)
+  deriving anyclass (C.NFDataX, C.BitPack)
 
 {- | Shorthand for a "well-behaved" read address config,
 so that we don't need to write out a bunch of type constraints later.
@@ -231,6 +232,14 @@ type KnownAxi4ReadAddressConfig conf =
   , C.NFDataX (ArCacheType (ARKeepCache conf))
   , C.NFDataX (PermissionsType (ARKeepPermissions conf))
   , C.NFDataX (QosType (ARKeepQos conf))
+  , C.BitPack (RegionType (ARKeepRegion conf))
+  , C.BitPack (BurstLengthType (ARKeepBurstLength conf))
+  , C.BitPack (SizeType (ARKeepSize conf))
+  , C.BitPack (BurstType (ARKeepBurst conf))
+  , C.BitPack (LockType (ARKeepLock conf))
+  , C.BitPack (ArCacheType (ARKeepCache conf))
+  , C.BitPack (PermissionsType (ARKeepPermissions conf))
+  , C.BitPack (QosType (ARKeepQos conf))
   , NFData (RegionType (ARKeepRegion conf))
   , NFData (BurstLengthType (ARKeepBurstLength conf))
   , NFData (SizeType (ARKeepSize conf))

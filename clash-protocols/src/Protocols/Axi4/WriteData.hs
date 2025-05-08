@@ -106,7 +106,7 @@ data
 -- | See Table A2-3 "Write data channel signals"
 newtype S2M_WriteData = S2M_WriteData {_wready :: Bool}
   deriving stock (Show, Generic)
-  deriving anyclass (C.NFDataX)
+  deriving anyclass (C.NFDataX, C.BitPack)
 
 {- | Shorthand for a "well-behaved" write data config,
 so that we don't need to write out a bunch of type constraints later.
@@ -117,6 +117,7 @@ type KnownAxi4WriteDataConfig conf =
   , C.KnownNat (WNBytes conf)
   , Show (StrobeDataType (WKeepStrobe conf))
   , C.NFDataX (StrobeDataType (WKeepStrobe conf))
+  , C.BitPack (StrobeDataType (WKeepStrobe conf))
   )
 
 deriving instance
