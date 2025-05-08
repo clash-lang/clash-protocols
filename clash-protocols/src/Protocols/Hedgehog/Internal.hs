@@ -21,7 +21,6 @@ import Prelude
 
 -- clash-protocols
 import Protocols
-import qualified Protocols.Df as Df
 import Protocols.Hedgehog.Types
 import Protocols.Internal.TH
 
@@ -59,12 +58,12 @@ instance (TestType a, C.KnownDomain dom) => Test (Df dom a) where
     (HasCallStack, H.MonadTest m) =>
     Proxy (Df dom a) ->
     ExpectOptions ->
-    [Df.Data a] ->
+    [Maybe a] ->
     m [a]
   expectN Proxy (ExpectOptions{eoSampleMax, eoStopAfterEmpty}) sampled = do
     go eoSampleMax eoStopAfterEmpty sampled
    where
-    go :: (HasCallStack) => Int -> Int -> [Df.Data a] -> m [a]
+    go :: (HasCallStack) => Int -> Int -> [Maybe a] -> m [a]
     go _timeout _n [] =
       -- This really should not happen, protocols should produce data indefinitely
       error "unexpected end of signal"
@@ -80,10 +79,10 @@ instance (TestType a, C.KnownDomain dom) => Test (Df dom a) where
     go _ 0 _ =
       -- Saw enough valid samples, return to user
       pure []
-    go sampleTimeout _emptyTimeout (Df.Data a : as) =
+    go sampleTimeout _emptyTimeout (Just a : as) =
       -- Valid sample
       (a :) <$> go (sampleTimeout - 1) eoStopAfterEmpty as
-    go sampleTimeout emptyTimeout (Df.NoData : as) =
+    go sampleTimeout emptyTimeout (Nothing : as) =
       -- Empty sample
       go sampleTimeout (emptyTimeout - 1) as
 

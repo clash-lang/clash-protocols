@@ -34,7 +34,6 @@ import Test.Tasty.TH (testGroupGenerator)
 
 -- clash-protocols (me!)
 import Protocols
-import qualified Protocols.Df as Df
 import qualified Protocols.DfConv as DfConv
 import Protocols.Hedgehog
 import Protocols.Internal
@@ -181,7 +180,7 @@ prop_select =
   ckt ::
     (C.HiddenClockResetEnable dom) =>
     Circuit (C.Vec 3 (Df dom Int), Df dom (C.Index 3)) (Df dom Int)
-  ckt = DfConv.select (Proxy @(Df _ Int), (Proxy @(Df _ (C.Index 3)))) (Proxy @(Df _ Int))
+  ckt = DfConv.select (Proxy @(Df _ Int), Proxy @(Df _ (C.Index 3))) (Proxy @(Df _ Int))
 
   goModel :: C.Vec 3 [Int] -> C.Index 3 -> (C.Vec 3 [Int], Int)
   goModel vec ix = let (i : is) = vec C.!! ix in (C.replace ix is vec, i)
@@ -220,7 +219,7 @@ prop_test_bench_id =
           Proxy
           Proxy
           (repeat True)
-          (repeat (Df.Data 0))
+          (repeat (Just 0))
           ckt
     )
  where
@@ -241,7 +240,7 @@ prop_test_bench_rev_id =
         DfConv.dfConvTestBenchRev
           Proxy
           Proxy
-          (repeat (Df.Data 0))
+          (repeat (Just 0))
           (repeat True)
           ckt
     )

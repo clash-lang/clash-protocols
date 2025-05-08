@@ -112,7 +112,7 @@ import Protocols.Axi4.ReadData
 import Protocols.Axi4.WriteAddress
 import Protocols.Axi4.WriteData
 import Protocols.Axi4.WriteResponse
-import Protocols.Df (Data (..), Df)
+import Protocols.Df (Df)
 import qualified Protocols.Df as Df
 import Protocols.Internal
 import qualified Protocols.Vec as Vec
@@ -151,8 +151,8 @@ class (Protocol df) => DfConv df where
   -- pipelining, etc. so that a circuit connected to the 'Df' end doesn't have
   -- to worry about all that. There are two Df channels, one for fwd data and
   -- one for bwd data, so data can be sent both ways at once. This circuit is
-  -- expected to follow all of the conventions of 'Df'; for example, 'Df.Data'
-  -- should stay the same between clock cycles unless acknowledged.
+  -- expected to follow all of the conventions of 'Df'; for example, data on the
+  -- fwd channel should stay the same between clock cycles unless acknowledged.
   toDfCircuit ::
     (HiddenClockResetEnable (Dom df)) =>
     Proxy df ->
@@ -174,10 +174,9 @@ class (Protocol df) => DfConv df where
   type FwdPayload df = ()
 
 {- | Helper function to make it easier to implement 'toDfCircuit' in 'DfConv'.
-'Ack's are automatically converted to/from 'Bool's, and 'Df.Data's to/from
-'Maybe'. A default @otpMsg@ value is given for if reset is currently on. The
-'State' machine is run every clock cycle. Parameters: initial state, default
-@otpMsg@, and 'State' machine function
+'Ack's are automatically converted to/from 'Bool's. A default @otpMsg@ value is
+given for if reset is currently on. The 'State' machine is run every clock cycle.
+Parameters: initial state, default @otpMsg@, and 'State' machine function
 -}
 toDfCircuitHelper ::
   ( HiddenClockResetEnable dom
@@ -213,21 +212,20 @@ toDfCircuitHelper _ s0 blankOtp stateFn =
     let rstLow = unsafeToActiveHigh reset
      in mealy transFn s0 ((,) <$> rstLow <*> inp)
 
-  transFn _ (True, _) = (s0, ((Ack False, NoData), blankOtp))
+  transFn _ (True, _) = (s0, ((Ack False, Nothing), blankOtp))
   transFn s (False, ((toOtp, Ack inpAck), inp)) =
     let
       ((otp, inputted, otpAck), s') =
         runState
-          (stateFn inp inpAck (Df.dataToMaybe toOtp))
+          (stateFn inp inpAck toOtp)
           s
      in
-      (s', ((Ack otpAck, Df.maybeToData inputted), otp))
+      (s', ((Ack otpAck, inputted), otp))
 
 {- | Helper function to make it easier to implement 'fromDfCircuit' in 'DfConv'.
-'Ack's are automatically converted to/from 'Bool's, and 'Df.Data's to/from
-'Maybe'. A default @otpMsg@ value is given for if reset is currently on. The
-'State' machine is run every clock cycle. Parameters: initial state, default
-@otpMsg@, and 'State' machine function
+'Ack's are automatically converted to/from 'Bool's. A default @otpMsg@ value is
+given for if reset is currently on. The 'State' machine is run every clock cycle.
+Parameters: initial state, default @otpMsg@, and 'State' machine function
 -}
 fromDfCircuitHelper ::
   ( HiddenClockResetEnable dom
@@ -280,7 +278,7 @@ instance (NFDataX dat) => DfConv (Df dom dat) where
   type FwdPayload (Df dom dat) = dat
   toDfCircuit _ = Circuit (uncurry f)
    where
-    f ~(a, _) c = ((c, P.pure NoData), a)
+    f ~(a, _) c = ((c, P.pure Nothing), a)
   fromDfCircuit _ = Circuit (uncurry f)
    where
     f a ~(b, _) = (b, (a, P.pure (Ack False)))
@@ -372,7 +370,7 @@ instance
       (addrReceived, dataReceived) <- get
       put (addrReceived, dataReceived || _wready dataAck)
       P.pure
-        $ if (not addrReceived || dataReceived)
+        $ if not addrReceived || dataReceived
           then (M2S_NoWriteData, False)
           else
             ( M2S_WriteData
@@ -550,7 +548,7 @@ instance
             )
 
     succResizing :: (KnownNat n) => Index n -> Index (n + 1)
-    succResizing n = (resize n) + 1
+    succResizing n = resize n + 1
 
     sendData dfDatIn dataAck = do
       (burstLenLeft, readId) <- get
@@ -576,7 +574,7 @@ dfToDfConvInp ::
   ) =>
   Proxy df ->
   Circuit df (Df (Dom df) (FwdPayload df))
-dfToDfConvInp = mapCircuit id id P.fst (,P.pure NoData) . fromDfCircuit
+dfToDfConvInp = mapCircuit id id P.fst (,P.pure Nothing) . fromDfCircuit
 
 -- | Convert 'DfConv' into a /one-way/ 'Df' port, at the data output end
 dfToDfConvOtp ::
@@ -888,7 +886,7 @@ catMaybes ::
   Circuit dfA dfB
 catMaybes dfA dfB =
   fromDfCircuit dfA
-    |> tupCircuits (Df.catMaybes) idC
+    |> tupCircuits Df.catMaybes idC
     |> toDfCircuit dfB
 
 -- | Like 'Data.Maybe.mapMaybe'
@@ -1392,7 +1390,7 @@ registerFwd ::
   Circuit dfA dfB
 registerFwd dfA dfB =
   fromDfCircuit dfA
-    |> tupCircuits (Df.registerFwd) idC
+    |> tupCircuits Df.registerFwd idC
     |> toDfCircuit dfB
 
 {- | Place register on /backward/ part of a circuit. This is implemented using
@@ -1412,7 +1410,7 @@ registerBwd ::
   Circuit dfA dfB
 registerBwd dfA dfB =
   fromDfCircuit dfA
-    |> tupCircuits (Df.registerBwd) idC
+    |> tupCircuits Df.registerBwd idC
     |> toDfCircuit dfB
 
 -- | A fifo buffer with user-provided depth. Uses blockram to store data
@@ -1435,7 +1433,6 @@ fifo dfA dfB fifoDepth =
   fromDfCircuit dfA
     |> tupCircuits (Df.fifo fifoDepth) idC
     |> toDfCircuit dfB
- where
 
 {- | Emit values given in list. Emits no data while reset is asserted. Not
 synthesizable.
@@ -1524,7 +1521,7 @@ simulate ::
   [Maybe (FwdPayload dfA)] ->
   -- | Outputs
   [Maybe (FwdPayload dfB)]
-simulate dfA dfB conf circ inputs = Df.simulate conf circ' inputs
+simulate dfA dfB conf circ = Df.simulate conf circ'
  where
   circ' clk rst en =
     withClockResetEnable clk rst en (dfToDfConvOtp dfA)
@@ -1534,7 +1531,7 @@ simulate dfA dfB conf circ inputs = Df.simulate conf circ' inputs
 {- | Given behavior along the backward channel, turn an arbitrary 'DfConv'
 circuit into an easily-testable 'Df' circuit representing the forward
 channel. Behavior along the backward channel is specified by a @[Bool]@
-(a list of acknowledges to provide), and a @[Data (BwdPayload dfB)]@ (a list
+(a list of acknowledges to provide), and a @[Maybe (BwdPayload dfB)]@ (a list
 of data values to feed in).
 -}
 dfConvTestBench ::
@@ -1549,7 +1546,7 @@ dfConvTestBench ::
   Proxy dfA ->
   Proxy dfB ->
   [Bool] ->
-  [Data (BwdPayload dfB)] ->
+  [Maybe (BwdPayload dfB)] ->
   Circuit dfA dfB ->
   Circuit
     (Df (Dom dfA) (FwdPayload dfA))
@@ -1577,7 +1574,7 @@ dfConvTestBench dfA dfB bwdAcks bwdPayload circ =
 {- | Given behavior along the forward channel, turn an arbitrary 'DfConv'
 circuit into an easily-testable 'Df' circuit representing the backward
 channel. Behavior along the forward channel is specified by a
-@[Data (FwdPayload dfA)]@ (a list of data values to feed in), and a @[Bool]@
+@[Maybe (FwdPayload dfA)]@ (a list of data values to feed in), and a @[Bool]@
 (a list of acknowledges to provide).
 -}
 dfConvTestBenchRev ::
@@ -1591,7 +1588,7 @@ dfConvTestBenchRev ::
   ) =>
   Proxy dfA ->
   Proxy dfB ->
-  [Data (FwdPayload dfA)] ->
+  [Maybe (FwdPayload dfA)] ->
   [Bool] ->
   Circuit dfA dfB ->
   Circuit

@@ -333,11 +333,11 @@ To figure out what input you need to supply, either solve the type
 
 >>> :kind! (forall dom a. SimulateFwdType (Df dom a))
 ...
-= [Protocols.Df.Data a]
+= [Maybe a]
 
 This would mean a @Circuit (Df dom a) (Df dom b)@ would need
-@[Data a]@ as the last argument of 'simulateC' and would result in
-@[Data b]@. Note that for this particular type you can neither supply
+@[Maybe a]@ as the last argument of 'simulateC' and would result in
+@[Maybe b]@. Note that for this particular type you can neither supply
 stalls nor introduce backpressure. If you want to to this use 'Df.stall'.
 -}
 simulateC ::

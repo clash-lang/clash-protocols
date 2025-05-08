@@ -10,7 +10,6 @@ module Tests.Protocols.Df where
 -- base
 import Data.Coerce (coerce)
 import Data.Foldable (fold)
-import Data.List (mapAccumL)
 import Data.Maybe (catMaybes, fromMaybe)
 import GHC.Stack (HasCallStack)
 import Prelude
@@ -25,7 +24,7 @@ import qualified Data.HashMap.Strict as HashMap
 import qualified Data.HashSet as HashSet
 
 -- extra
-import Data.List (partition, transpose)
+import Data.List (mapAccumL, partition, transpose)
 
 -- deepseq
 import Control.DeepSeq (NFData)
@@ -82,14 +81,12 @@ genSmallPlusInt = coerce <$> genSmallInt
 genData :: Gen a -> Gen [a]
 genData genA = do
   n <- genSmallInt
-  dat <- Gen.list (Range.singleton n) genA
-  pure dat
+  Gen.list (Range.singleton n) genA
 
 genVecData :: (C.KnownNat n, 1 <= n) => Gen a -> Gen (C.Vec n [a])
 genVecData genA = do
   n <- genSmallInt
-  dat <- genVec (Gen.list (Range.singleton n) genA)
-  pure dat
+  genVec (Gen.list (Range.singleton n) genA)
 
 -- Same as 'idWithModel', but specialized on 'Df'
 idWithModelDf ::

@@ -83,11 +83,7 @@ synthesis domain the protocol will use. This is the same /dom/ as used in
 send. Again, this is similar to the /a/ in /Signal dom a/.
 
 As said previously, we'd like the sender to either send /no data/ or
-/some data/. We can capture this in a data type very similar to /Maybe/:
-
-@
-  data Data a = NoData | Data a
-@
+/some data/. We can capture this in a /Maybe/.
 
 On the way back, we'd like to either acknowledge or not acknowledge sent
 data. Similar to /Bool/ we define:
@@ -101,7 +97,7 @@ With these three definitions we're ready to make an instance for /Fwd/ and
 
 @
 instance Protocol (Df dom a) where
-  type Fwd (Df dom a) = Signal dom (Data a)
+  type Fwd (Df dom a) = Signal dom (Maybe a)
   type Bwd (Df dom a) = Signal dom Ack
 @
 
@@ -116,7 +112,7 @@ instantiated with our types. The following:
 
 @
                            +-----------+
-      Signal dom (Data a)  |           |  Signal dom (Data b)
+      Signal dom (Maybe a)  |           |  Signal dom (Maybe b)
  +------------------------>+           +------------------------->
                            |           |
                            |           |

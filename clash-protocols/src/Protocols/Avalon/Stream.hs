@@ -172,13 +172,13 @@ instance
 
   toDfCircuit proxy = DfConv.toDfCircuitHelper proxy s0 blankOtp stateFn
    where
-    s0 = C.repeat @((ReadyLatency conf) + 1) False
+    s0 = C.repeat @(ReadyLatency conf + 1) False
     blankOtp = Nothing
     stateFn (AvalonStreamS2M thisAck) _ otpItem = do
       modify (thisAck +>>)
       ackQueue <- get
       pure
-        ( if (Maybe.isJust otpItem && C.last ackQueue) then otpItem else Nothing
+        ( if Maybe.isJust otpItem && C.last ackQueue then otpItem else Nothing
         , Nothing
         , C.last ackQueue
         )
@@ -238,8 +238,7 @@ instance
       $ DfConv.drive Proxy conf vals
   sampleC conf ckt =
     withClockResetEnable clockGen resetGen enableGen
-      $ DfConv.sample Proxy conf
-      $ ckt
+      $ DfConv.sample Proxy conf ckt
 
 instance
   ( ReadyLatency conf ~ 0
@@ -253,10 +252,7 @@ instance
   ) =>
   Test (AvalonStream dom conf dataType)
   where
-  expectN Proxy options sampled =
-    expectN (Proxy @(Df.Df dom _)) options
-      $ Df.maybeToData
-      <$> sampled
+  expectN Proxy = expectN (Proxy @(Df.Df dom _))
 
 instance IdleCircuit (AvalonStream dom conf dataType) where
   idleFwd _ = pure Nothing

@@ -19,7 +19,6 @@ carries data, no metadata. For documentation see:
 module Protocols.Df (
   -- * Types
   Df,
-  Data (..),
 
   -- * Operations on Df protocol
   empty,
@@ -82,13 +81,7 @@ module Protocols.Df (
 
   -- * Internals
   forceResetSanity,
-  dataToMaybe,
-  maybeToData,
-  hasData,
-  noData,
-  fromData,
-  toData,
-  dataDefault,
+  toMaybe,
 ) where
 
 -- base
@@ -96,8 +89,6 @@ module Protocols.Df (
 import           Control.Applicative (Applicative(liftA2))
 #endif
 import Control.Applicative (Alternative ((<|>)))
-import Control.DeepSeq (NFData)
-import GHC.Generics (Generic)
 import GHC.Stack (HasCallStack)
 import Prelude hiding (
   const,
@@ -141,17 +132,12 @@ import Protocols.Internal
 >>> import qualified Data.Bifunctor as B
 -}
 
-{- | Like 'Protocols.Df', but without metadata.
-
-__N.B.__: For performance reasons 'Protocols.Data' is strict on
-its data field. That is, if 'Protocols.Data' is evaluated to WHNF,
-its fields will be evaluated to WHNF too.
--}
+-- | Simple unidirectional valid-ready protocol.
 data Df (dom :: C.Domain) (a :: Type)
 
 instance Protocol (Df dom a) where
-  -- \| Forward part of simple dataflow: @Signal dom (Data meta a)@
-  type Fwd (Df dom a) = Signal dom (Data a)
+  -- \| Forward part of simple dataflow: @Signal dom (Maybe a)@
+  type Fwd (Df dom a) = Signal dom (Maybe a)
 
   -- \| Backward part of simple dataflow: @Signal dom Bool@
   type Bwd (Df dom a) = Signal dom Ack
@@ -159,77 +145,17 @@ instance Protocol (Df dom a) where
 instance Backpressure (Df dom a) where
   boolsToBwd _ = C.fromList_lazy . Coerce.coerce
 
-{- | Data sent over forward channel of 'Df'. Note that this data type is strict
-on its data field.
--}
-data Data a
-  = -- | Send no data
-    NoData
-  | -- | Send /a/
-    Data !a
-  deriving (Functor, Generic, C.NFDataX, C.ShowX, Eq, NFData, Show, C.Bundle)
-
-instance Applicative Data where
-  pure = Data
-
-  liftA2 f (Data a) (Data b) = Data (f a b)
-  liftA2 _ _ _ = NoData
-
-instance Alternative Data where
-  empty = NoData
-
-  Data a <|> _ = Data a
-  _ <|> b = b
-
-instance Monad Data where
-  (>>=) :: Data a -> (a -> Data b) -> Data b
-  NoData >>= _f = NoData
-  Data a >>= f = f a
-
 instance IdleCircuit (Df dom a) where
-  idleFwd _ = C.pure NoData
+  idleFwd _ = C.pure Nothing
   idleBwd _ = C.pure (Ack False)
 
--- | Convert 'Data' to 'Maybe'. Produces 'Just' on 'Data', 'Nothing' on 'NoData'.
-dataToMaybe :: Data a -> Maybe a
-dataToMaybe NoData = Nothing
-dataToMaybe (Data a) = Just a
-
--- | Convert 'Maybe' to 'Data'. Produces 'Data' on 'Just', 'NoData' on 'Nothing'.
-maybeToData :: Maybe a -> Data a
-maybeToData Nothing = NoData
-maybeToData (Just a) = Data a
-
--- | True if `Data` contains a value.
-hasData :: Data a -> Bool
-hasData NoData = False
-hasData (Data _) = True
-
--- | True if `Data` contains no value.
-noData :: Data a -> Bool
-noData NoData = True
-noData (Data _) = False
-
--- | Extract value from `Data`, Bottom on `NoData`.
-fromData :: (HasCallStack, C.NFDataX a) => Data a -> a
-fromData NoData = C.deepErrorX "fromData: NoData"
-fromData (Data a) = a
-
--- | Construct a `Data` if bool is True, `NoData` otherwise.
-toData :: Bool -> a -> Data a
-toData False _ = NoData
-toData True a = Data a
-
-{- |
-  If the t'Data' is v'NoData', it returns the given value; otherwise,
-  it returns the value contained in the v'Data'.
--}
-dataDefault :: a -> Data a -> a
-dataDefault a NoData = a
-dataDefault _ (Data a) = a
+-- | Construct a `Just` if bool is True, `Nothing` otherwise.
+toMaybe :: Bool -> a -> Maybe a
+toMaybe False _ = Nothing
+toMaybe True a = Just a
 
 instance (C.KnownDomain dom, C.NFDataX a, C.ShowX a, Show a) => Simulate (Df dom a) where
-  type SimulateFwdType (Df dom a) = [Data a]
+  type SimulateFwdType (Df dom a) = [Maybe a]
   type SimulateBwdType (Df dom a) = [Ack]
   type SimulateChannels (Df dom a) = 1
 
@@ -243,11 +169,11 @@ instance (C.KnownDomain dom, C.NFDataX a, C.ShowX a, Show a) => Simulate (Df dom
 instance (C.KnownDomain dom, C.NFDataX a, C.ShowX a, Show a) => Drivable (Df dom a) where
   type ExpectType (Df dom a) = [a]
 
-  toSimulateType Proxy = P.map Data
-  fromSimulateType Proxy = Maybe.mapMaybe dataToMaybe
+  toSimulateType Proxy = P.map Just
+  fromSimulateType Proxy = Maybe.catMaybes
 
-  driveC conf vals = drive conf (dataToMaybe <$> vals)
-  sampleC conf ckt = maybeToData <$> sample conf ckt
+  driveC = drive
+  sampleC = sample
 
 {- | Force a /nack/ on the backward channel and /no data/ on the forward
 channel if reset is asserted.
@@ -329,11 +255,11 @@ compander ::
   Circuit (Df dom i) (Df dom o)
 compander s0 f = forceResetSanity |> Circuit (C.unbundle . go . C.bundle)
  where
-  go :: Signal dom (Data i, Ack) -> Signal dom (Ack, Data o)
+  go :: Signal dom (Maybe i, Ack) -> Signal dom (Ack, Maybe o)
   go = C.mealy f' s0
-  f' :: s -> (Data i, Ack) -> (s, (Ack, Data o))
-  f' s (NoData, _) = (s, (Ack False, NoData))
-  f' s (Data i, Ack ack) = (s'', (Ack ackBack, maybe NoData Data o))
+  f' :: s -> (Maybe i, Ack) -> (s, (Ack, Maybe o))
+  f' s (Nothing, _) = (s, (Ack False, Nothing))
+  f' s (Just i, Ack ack) = (s'', (Ack ackBack, o))
    where
     (s', o, doneWithInput) = f s i
     -- We only care about the downstream ack if we're sending them something
@@ -399,17 +325,17 @@ const b =
     ( P.const
         ( Ack
             <$> C.unsafeToActiveLow C.hasReset
-        , P.pure (Data b)
+        , P.pure (Just b)
         )
     )
 
 -- | Never produce a value.
 empty :: Circuit () (Df dom a)
-empty = Circuit (P.const ((), P.pure NoData))
+empty = Circuit (P.const ((), P.pure Nothing))
 
 -- | Drive a constant value composed of /a/.
 pure :: a -> Circuit () (Df dom a)
-pure a = Circuit (P.const ((), P.pure (Data a)))
+pure a = Circuit (P.const ((), P.pure (Just a)))
 
 -- | Always acknowledge and ignore values.
 consume :: (C.HiddenReset dom) => Circuit (Df dom a) ()
@@ -436,9 +362,9 @@ Example:
 catMaybes :: Circuit (Df dom (Maybe a)) (Df dom a)
 catMaybes = Circuit (C.unbundle . fmap go . C.bundle)
  where
-  go (NoData, _) = (Ack False, NoData)
-  go (Data Nothing, _) = (Ack True, NoData)
-  go (Data (Just a), ack) = (ack, Data a)
+  go (Nothing, _) = (Ack False, Nothing)
+  go (Just Nothing, _) = (Ack True, Nothing)
+  go (Just (Just a), ack) = (ack, Just a)
 
 -- | Like 'Data.Maybe.mapMaybe', but over payload (/a/) of a Df stream.
 mapMaybe :: (a -> Maybe b) -> Circuit (Df dom a) (Df dom b)
@@ -458,10 +384,10 @@ filter f = filterS (C.pure f)
 filterS :: forall dom a. Signal dom (a -> Bool) -> Circuit (Df dom a) (Df dom a)
 filterS fS = Circuit (C.unbundle . liftA2 go fS . C.bundle)
  where
-  go _ (NoData, _) = (Ack False, NoData)
-  go f (Data d, ack)
-    | f d = (ack, Data d)
-    | otherwise = (Ack True, NoData)
+  go _ (Nothing, _) = (Ack False, Nothing)
+  go f (Just d, ack)
+    | f d = (ack, Just d)
+    | otherwise = (Ack True, Nothing)
 
 -- | Like 'Data.Either.Combinators.mapLeft', but over payload of a 'Df' stream.
 mapLeft :: (a -> b) -> Circuit (Df dom (Either a c)) (Df dom (Either b c))
@@ -513,8 +439,8 @@ zipWithS ::
 zipWithS fS =
   Circuit (B.first C.unbundle . C.unbundle . liftA2 go fS . C.bundle . B.first C.bundle)
  where
-  go f ((Data a, Data b), ack) = ((ack, ack), Data (f a b))
-  go _ _ = ((Ack False, Ack False), NoData)
+  go f ((Just a, Just b), ack) = ((ack, ack), Just (f a b))
+  go _ _ = ((Ack False, Ack False), Nothing)
 
 -- | Like 'P.zip', but over two 'Df' streams.
 zip :: forall a b dom. Circuit (Df dom a, Df dom b) (Df dom (a, b))
@@ -538,10 +464,10 @@ partitionS ::
 partitionS fS =
   Circuit (B.second C.unbundle . C.unbundle . liftA2 go fS . C.bundle . B.second C.bundle)
  where
-  go f (Data a, (ackT, ackF))
-    | f a = (ackT, (Data a, NoData))
-    | otherwise = (ackF, (NoData, Data a))
-  go _ _ = (Ack False, (NoData, NoData))
+  go f (Just a, (ackT, ackF))
+    | f a = (ackT, (Just a, Nothing))
+    | otherwise = (ackF, (Nothing, Just a))
+  go _ _ = (Ack False, (Nothing, Nothing))
 
 {- | Route a 'Df' stream to another corresponding to the index
 
@@ -560,12 +486,12 @@ route =
   Circuit (B.second C.unbundle . C.unbundle . fmap go . C.bundle . B.second C.bundle)
  where
   -- go :: (Data (C.Index n, a), C.Vec n (Ack a)) -> (Ack (C.Index n, a), C.Vec n (Data a))
-  go (Data (i, a), acks) =
+  go (Just (i, a), acks) =
     ( acks C.!! i
-    , C.replace i (Data a) (C.repeat NoData)
+    , C.replace i (Just a) (C.repeat Nothing)
     )
   go _ =
-    (Ack False, C.repeat NoData)
+    (Ack False, C.repeat Nothing)
 
 {- | Select data from the channel indicated by the 'Df' stream carrying
 @Index n@.
@@ -613,13 +539,13 @@ selectN =
   go c0 ((dats, datI), Ack iAck)
     -- Select zero samples: don't send any data to RHS, acknowledge index stream
     -- but no data stream.
-    | Data (_, 0) <- datI =
-        (c0, ((nacks, Ack True), NoData))
+    | Just (_, 0) <- datI =
+        (c0, ((nacks, Ack True), Nothing))
     -- Acknowledge data if RHS acknowledges ours. Acknowledge index stream if
     -- we're done.
-    | Data (streamI, nSelect) <- datI
+    | Just (streamI, nSelect) <- datI
     , let dat = dats C.!! streamI
-    , Data d <- dat =
+    , Just d <- dat =
         let
           c1 = if iAck then succ c0 else c0
           oAckIndex = c1 == C.extend nSelect
@@ -629,12 +555,12 @@ selectN =
           ( c2
           ,
             ( (datAcks, Ack oAckIndex)
-            , Data d
+            , Just d
             )
           )
     -- No index from LHS, nothing to do
     | otherwise =
-        (c0, ((nacks, Ack False), NoData))
+        (c0, ((nacks, Ack False), Nothing))
    where
     nacks = C.repeat (Ack False)
 
@@ -680,16 +606,16 @@ selectUntilS fS =
   nacks = C.repeat (Ack False)
 
   go f ((dats, dat), Ack ack)
-    | Data i <- dat
-    , Data d <- dats C.!! i =
+    | Just i <- dat
+    , Just d <- dats C.!! i =
         (
           ( C.replace i (Ack ack) nacks
           , Ack (f d && ack)
           )
-        , Data d
+        , Just d
         )
     | otherwise =
-        ((nacks, Ack False), NoData)
+        ((nacks, Ack False), Nothing)
 
 {- | Copy data of a single 'Df' stream to multiple. LHS will only receive
 an acknowledgement when all RHS receivers have acknowledged data.
@@ -708,13 +634,13 @@ fanout = forceResetSanity |> goC
 
   f acked (dat, acks) =
     case dat of
-      NoData -> (acked, (Ack False, C.repeat NoData))
-      Data _ ->
+      Nothing -> (acked, (Ack False, C.repeat Nothing))
+      Just _ ->
         -- Data on input
         let
           -- Send data to "clients" that have not acked yet
           valids_ = C.map not acked
-          dats = C.map (bool NoData dat) valids_
+          dats = C.map (bool Nothing dat) valids_
 
           -- Store new acks, send ack if all "clients" have acked
           acked1 = C.zipWith (||) acked (C.map (\(Ack a) -> a) acks)
@@ -755,10 +681,10 @@ bundleVec ::
 bundleVec =
   Circuit (B.first C.unbundle . C.unbundle . fmap go . C.bundle . B.first C.bundle)
  where
-  go (iDats0, iAck) = (C.repeat oAck, maybeToData dat)
+  go (iDats0, iAck) = (C.repeat oAck, dat)
    where
     oAck = maybe (Ack False) (P.const iAck) dat
-    dat = traverse dataToMaybe iDats0
+    dat = sequenceA iDats0
 
 -- | Split up a 'Df' stream of a vector into multiple independent 'Df' streams.
 unbundleVec ::
@@ -771,20 +697,19 @@ unbundleVec =
   initState :: C.Vec n Bool
   initState = C.repeat False
 
-  go _ (NoData, _) = (initState, (Ack False, C.repeat NoData))
-  go acked (Data payloadVec, acks) =
+  go _ (Nothing, _) = (initState, (Ack False, C.repeat Nothing))
+  go acked (Just payloadVec, acks) =
     let
       -- Send data to "clients" that have not acked yet
       valids_ = C.map not acked
-      dats0 = C.zipWith (\d -> bool Nothing (Just d)) payloadVec valids_
-      dats1 = C.map maybeToData dats0
+      dats = C.zipWith (bool Nothing . Just) payloadVec valids_
 
       -- Store new acks, send ack if all "clients" have acked
       acked1 = C.zipWith (||) acked (C.map (\(Ack a) -> a) acks)
       ack = C.fold @(n C.- 1) (&&) acked1
      in
       ( if ack then initState else acked1
-      , (Ack ack, dats1)
+      , (Ack ack, dats)
       )
 
 {- | Distribute data across multiple components on the RHS. Useful if you want
@@ -802,15 +727,14 @@ roundrobin =
         . B.second C.bundle
     )
  where
-  go i0 (NoData, _) = (i0, (Ack False, C.repeat NoData))
-  go i0 (Data dat, acks) =
+  go i0 (Nothing, _) = (i0, (Ack False, C.repeat Nothing))
+  go i0 (Just dat, acks) =
     let
-      datOut0 = C.replace i0 (Just dat) (C.repeat Nothing)
-      datOut1 = C.map maybeToData datOut0
+      datOut = C.replace i0 (Just dat) (C.repeat Nothing)
       i1 = if ack then C.satSucc C.SatWrap i0 else i0
       Ack ack = acks C.!! i0
      in
-      (i1, (Ack ack, datOut1))
+      (i1, (Ack ack, datOut))
 
 -- | Collect modes for dataflow arbiters.
 data CollectMode
@@ -838,45 +762,45 @@ roundrobinCollect NoSkip =
   Circuit (B.first C.unbundle . C.mealyB go minBound . B.first C.bundle)
  where
   go (i :: C.Index n) (dats, Ack ack) =
-    case (dats C.!! i) of
-      Data d ->
+    case dats C.!! i of
+      Just d ->
         ( if ack then C.satSucc C.SatWrap i else i
         ,
           ( C.replace i (Ack ack) (C.repeat (Ack False))
-          , Data d
+          , Just d
           )
         )
-      NoData ->
-        (i, (C.repeat (Ack False), NoData))
+      Nothing ->
+        (i, (C.repeat (Ack False), Nothing))
 roundrobinCollect Skip =
   Circuit (B.first C.unbundle . C.mealyB go minBound . B.first C.bundle)
  where
   go (i :: C.Index n) (dats, Ack ack) =
-    case (dats C.!! i) of
-      Data d ->
+    case dats C.!! i of
+      Just d ->
         ( if ack then C.satSucc C.SatWrap i else i
         ,
           ( C.replace i (Ack ack) (C.repeat (Ack False))
-          , Data d
+          , Just d
           )
         )
-      NoData ->
-        (C.satSucc C.SatWrap i, (C.repeat (Ack False), NoData))
+      Nothing ->
+        (C.satSucc C.SatWrap i, (C.repeat (Ack False), Nothing))
 roundrobinCollect Parallel =
-  Circuit (B.first C.unbundle . C.mealyB go NoData . B.first C.bundle)
+  Circuit (B.first C.unbundle . C.mealyB go Nothing . B.first C.bundle)
  where
   go im (fwds, bwd@(Ack ack)) = (nextIm, (bwds, fwd))
    where
     nextSrc = C.fold @(n C.- 1) (<|>) (C.zipWith (<$) C.indicesI fwds)
-    i = dataDefault (dataDefault maxBound nextSrc) im
+    i = Maybe.fromMaybe (Maybe.fromMaybe maxBound nextSrc) im
 
     bwds = C.replace i bwd (C.repeat (Ack False))
     fwd = fwds C.!! i
 
     nextIm =
-      if noData fwd || not ack
-        then nextSrc
-        else im
+      if Maybe.isJust fwd && ack
+        then im
+        else nextSrc
 
 -- | Place register on /forward/ part of a circuit. This adds combinational delay on the /backward/ path.
 registerFwd ::
@@ -884,11 +808,11 @@ registerFwd ::
   (C.NFDataX a, C.HiddenClockResetEnable dom) =>
   Circuit (Df dom a) (Df dom a)
 registerFwd =
-  forceResetSanity |> Circuit (C.mealyB go NoData)
+  forceResetSanity |> Circuit (C.mealyB go Nothing)
  where
   go s0 (iDat, Ack iAck) = (s1, (Ack oAck, s0))
    where
-    oAck = Maybe.isNothing (dataToMaybe s0) || iAck
+    oAck = Maybe.isNothing s0 || iAck
     s1 = if oAck then iDat else s0
 
 -- | Place register on /backward/ part of a circuit. This adds combinational delay on the /forward/ path.
@@ -902,10 +826,10 @@ registerBwd =
   go (iDat, iAck) = (Ack <$> oAck, oDat)
    where
     oAck = C.regEn True valid (Coerce.coerce <$> iAck)
-    valid = (hasData <$> iDat) C..||. (fmap not oAck)
-    iDatX0 = fromData <$> iDat
+    valid = (Maybe.isJust <$> iDat) C..||. fmap not oAck
+    iDatX0 = C.fromJustX <$> iDat
     iDatX1 = C.regEn (C.errorX "registerBwd") oAck iDatX0
-    oDat = toData <$> valid <*> (C.mux oAck iDatX0 iDatX1)
+    oDat = toMaybe <$> valid <*> C.mux oAck iDatX0 iDatX1
 
 -- Fourmolu only allows CPP conditions on complete top-level definitions. This
 -- function is not exported.
@@ -965,11 +889,11 @@ fifo fifoDepth = Circuit $ C.hideReset circuitFunction
             )
 
   -- when reset is on, set state to initial state and output blank outputs
-  machineAsFunction _ (_, True, _, _) = (s0, (0, Nothing, Ack False, NoData))
+  machineAsFunction _ (_, True, _, _) = (s0, (0, Nothing, Ack False, Nothing))
   machineAsFunction (rAddr0, wAddr0, amtLeft0) (brRead0, False, pushData, Ack popped) =
     let
       -- potentially push an item onto blockram
-      maybePush = if amtLeft0 > 0 then dataToMaybe pushData else Nothing
+      maybePush = if amtLeft0 > 0 then pushData else Nothing
       brWrite = (wAddr0,) <$> maybePush
       -- adjust write address and amount left
       --   (output state machine doesn't see amountLeft')
@@ -987,7 +911,7 @@ fifo fifoDepth = Circuit $ C.hideReset circuitFunction
       brReadAddr = rAddr1
       -- return our new state and outputs
       otpAck = Maybe.isJust maybePush
-      otpDat = if amtLeft2 < maxBound then Data brRead1 else NoData
+      otpDat = if amtLeft2 < maxBound then Just brRead1 else Nothing
      in
       ((rAddr1, wAddr1, amtLeft3), (brReadAddr, brWrite, Ack otpAck, otpDat))
 
@@ -1020,13 +944,13 @@ drive SimulationConfig{resetCycles} s0 =
  where
   go _ resetN ~(ack : acks)
     | resetN > 0 =
-        NoData : (ack `C.seqX` go s0 (resetN - 1) acks)
+        Nothing : (ack `C.seqX` go s0 (resetN - 1) acks)
   go [] _ ~(ack : acks) =
-    NoData : (ack `C.seqX` go [] 0 acks)
+    Nothing : (ack `C.seqX` go [] 0 acks)
   go (Nothing : is) _ ~(ack : acks) =
-    NoData : (ack `C.seqX` go is 0 acks)
+    Nothing : (ack `C.seqX` go is 0 acks)
   go (Just dat : is) _ ~(Ack ack : acks) =
-    Data dat : go (if ack then is else Just dat : is) 0 acks
+    Just dat : go (if ack then is else Just dat : is) 0 acks
 
 {- | Sample protocol to a list of values. Drops values while reset is asserted.
 Not synthesizable.
@@ -1040,15 +964,14 @@ sample ::
   Circuit () (Df dom b) ->
   [Maybe b]
 sample SimulationConfig{..} c =
-  fmap dataToMaybe $
-    P.take timeoutAfter $
-      CE.sample_lazy $
-        ignoreWhileInReset $
-          P.snd $
-            toSignals c ((), Ack <$> rst_n)
+  P.take timeoutAfter $
+    CE.sample_lazy $
+      ignoreWhileInReset $
+        P.snd $
+          toSignals c ((), Ack <$> rst_n)
  where
   ignoreWhileInReset s =
-    (uncurry (bool NoData))
+    uncurry (bool Nothing)
       <$> C.bundle (s, rst_n)
 
   rst_n = C.fromList (replicate resetCycles False <> repeat True)
@@ -1091,10 +1014,10 @@ stall SimulationConfig{..} stallAck stalls =
     [StallAck] ->
     [Int] ->
     Int ->
-    Signal dom (Data a) ->
+    Signal dom (Maybe a) ->
     Signal dom Ack ->
     ( Signal dom Ack
-    , Signal dom (Data a)
+    , Signal dom (Maybe a)
     )
   go [] ss rs fwd bwd =
     go stallAcks ss rs fwd bwd
@@ -1102,19 +1025,19 @@ stall SimulationConfig{..} stallAck stalls =
     | resetN > 0 =
         B.bimap (b :-) (f :-) (go sas stalls (resetN - 1) fwd bwd)
   go (sa : sas) [] _ (f :- fwd) ~(b :- bwd) =
-    B.bimap (toStallAck (dataToMaybe f) b sa :-) (f :-) (go sas [] 0 fwd bwd)
-  go (sa : sas) ss _ (NoData :- fwd) ~(b :- bwd) =
+    B.bimap (toStallAck f b sa :-) (f :-) (go sas [] 0 fwd bwd)
+  go (sa : sas) ss _ (Nothing :- fwd) ~(b :- bwd) =
     -- Left hand side does not send data, simply replicate that behavior. Right
     -- hand side might send an arbitrary acknowledgement, so we simply pass it
     -- through.
-    B.bimap (toStallAck Nothing b sa :-) (NoData :-) (go sas ss 0 fwd bwd)
+    B.bimap (toStallAck Nothing b sa :-) (Nothing :-) (go sas ss 0 fwd bwd)
   go (_sa : sas) (s : ss) _ (f0 :- fwd) ~(Ack b0 :- bwd) =
     let
       -- Stall as long as s > 0. If s ~ 0, we wait for the RHS to acknowledge
       -- the data. As long as RHS does not acknowledge the data, we keep sending
       -- the same data.
       (f1, b1, s1) = case compare 0 s of
-        LT -> (NoData, Ack False, pred s : ss) -- s > 0
+        LT -> (Nothing, Ack False, pred s : ss) -- s > 0
         EQ -> (f0, Ack b0, if b0 then ss else s : ss) -- s ~ 0
         GT -> error ("Unexpected negative stall: " <> show s) -- s < 0
      in

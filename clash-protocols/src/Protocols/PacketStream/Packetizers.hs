@@ -19,7 +19,6 @@ module Protocols.PacketStream.Packetizers (
 import Clash.Prelude
 
 import Protocols
-import qualified Protocols.Df as Df
 import Protocols.PacketStream.Base
 
 import Clash.Sized.Vector.Extra (takeLe)
@@ -366,11 +365,11 @@ packetizeFromDfT ::
   -- | Mapping from `Df` input to the header that will be packetized
   (a -> header) ->
   DfPacketizerState metaOut headerBytes dataWidth ->
-  (Df.Data a, PacketStreamS2M) ->
+  (Maybe a, PacketStreamS2M) ->
   ( DfPacketizerState metaOut headerBytes dataWidth
   , (Ack, Maybe (PacketStreamM2S dataWidth metaOut))
   )
-packetizeFromDfT toMetaOut toHeader DfIdle (Df.Data dataIn, bwdIn) = (nextStOut, (Ack False, Just outPkt))
+packetizeFromDfT toMetaOut toHeader DfIdle (Just dataIn, bwdIn) = (nextStOut, (Ack False, Just outPkt))
  where
   (dataOut, hdrBuf) = splitAt (SNat @dataWidth) (bitCoerce (toHeader dataIn))
   outPkt = PacketStreamM2S dataOut Nothing (toMetaOut dataIn) False
@@ -378,7 +377,7 @@ packetizeFromDfT toMetaOut toHeader DfIdle (Df.Data dataIn, bwdIn) = (nextStOut,
 
 -- fwdIn is always Data in this state, because we assert backpressure in Idle before we go here
 -- Thus, we don't need to store the metadata in the state.
-packetizeFromDfT toMetaOut _ st@DfInsert{..} (Df.Data dataIn, bwdIn) = (nextStOut, (bwdOut, Just outPkt))
+packetizeFromDfT toMetaOut _ st@DfInsert{..} (Just dataIn, bwdIn) = (nextStOut, (bwdOut, Just outPkt))
  where
   (dataOut, newHdrBuf) =
     splitAt (SNat @dataWidth) (_dfHdrBuf ++ repeat @dataWidth (nullByte "packetizeFromDfT"))
@@ -391,7 +390,7 @@ packetizeFromDfT toMetaOut _ st@DfInsert{..} (Df.Data dataIn, bwdIn) = (nextStOu
   bwdOut = Ack (_ready bwdIn && _dfCounter == maxBound)
   nextSt = if _dfCounter == maxBound then DfIdle else DfInsert (succ _dfCounter) newHdrBuf
   nextStOut = if _ready bwdIn then nextSt else st
-packetizeFromDfT _ _ s (Df.NoData, bwdIn) = (s, (Ack (_ready bwdIn), Nothing))
+packetizeFromDfT _ _ s (Nothing, bwdIn) = (s, (Ack (_ready bwdIn), Nothing))
 
 {- |
 Starts a packet stream upon receiving some data over a `Df` channel.
@@ -425,8 +424,8 @@ packetizeFromDfC toMetaOut toHeader = case strictlyPositiveDivRu @headerBytes @d
     -- the entire payload in one clock cycle.
     SNatLE -> Circuit (unbundle . fmap go . bundle)
      where
-      go (Df.NoData, _) = (Ack False, Nothing)
-      go (Df.Data dataIn, bwdIn) = (Ack (_ready bwdIn), Just outPkt)
+      go (Nothing, _) = (Ack False, Nothing)
+      go (Just dataIn, bwdIn) = (Ack (_ready bwdIn), Just outPkt)
        where
         outPkt = PacketStreamM2S dataOut (Just l) (toMetaOut dataIn) False
         dataOut =
