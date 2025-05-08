@@ -547,6 +547,6 @@ tupCircuits (Circuit f) (Circuit g) = Circuit (reorder . (f *** g) . reorder)
 
 -- | Can be inserted between a manager and subordinate to monitor their interaction
 circuitMonitor ::
-  (Protocol p, Fwd p ~ Signal dom fwd, Bwd p ~ Signal dom bwd) =>
+  (Protocol p, Fwd p ~ C.Signal dom fwd, Bwd p ~ C.Signal dom bwd) =>
   Circuit p (p, CSignal dom (fwd, bwd))
-circuitMonitor = Circuit (\ ~(fwd, (bwd, _)) -> (bwd, (fwd, bundle (fwd, bwd))))
+circuitMonitor = Circuit (\ ~(fwd, (bwd, _)) -> (bwd, (fwd, C.bundle (fwd, bwd))))
