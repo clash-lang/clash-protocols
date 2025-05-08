@@ -56,9 +56,7 @@ class
   ) =>
   Test a
   where
-  -- | Trim each channel to the lengths given as the third argument. See
-  -- result documentation for failure modes.
-  expectN ::
+  trimN ::
     (HasCallStack, H.MonadTest m) =>
     Proxy a ->
     -- | Options, see 'ExpectOptions'
@@ -76,4 +74,19 @@ class
     -- TODO:
     --   Should probably return a 'Vec (SimulateChannels) Failures'
     --   in order to produce pretty reports.
-    m (ExpectType a)
+    m (SimulateFwdType a)
+
+  -- | Convert the raw `SimulateFwdType` samples to timeless `ExpectType` datapoints
+  getExpectType :: Proxy a -> SimulateFwdType a -> ExpectType a
+
+-- | Shorthand for applying `getExpectType` to the result of `trimN`.
+expectN ::
+  (Test a, HasCallStack, H.MonadTest m) =>
+  -- | Protocol to test
+  Proxy a ->
+  -- | Options, see 'ExpectOptions'
+  ExpectOptions ->
+  -- | Raw sampled data
+  SimulateFwdType a ->
+  m (ExpectType a)
+expectN proxy eOps fwd = getExpectType proxy <$> trimN proxy eOps fwd

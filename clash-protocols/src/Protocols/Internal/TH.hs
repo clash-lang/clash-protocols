@@ -191,19 +191,37 @@ testTupleInstance :: Int -> DecsQ
 testTupleInstance n =
   [d|
     instance ($instCtx) => Test $instTy where
-      expectN Proxy $(varP $ mkName "opts") $(tupP sampledPats) = $(doE stmts)
+      trimN Proxy $(varP $ mkName "opts") $(tupP sampledPats) = $(doE trimNStmts)
+      getExpectType (Proxy :: Proxy $tupleTy) $(tupP simFwdTypPats) = $(letE expectTypeDecs expectTypeExpr)
     |]
  where
+  -- Reusable declarations
   circStrings = map (\i -> "c" <> show i) [1 .. n]
   circTys = map (varT . mkName) circStrings
   instCtx = foldl appT (tupleT n) $ map (\ty -> [t|Test $ty|]) circTys
   instTy = foldl appT (tupleT n) circTys
 
-  sampledPats = map (varP . mkName . ("sampled" <>)) circStrings
-  sampledExprs = map (varE . mkName . ("sampled" <>)) circStrings
-  trimmedPats = map (varP . mkName . ("trimmed" <>)) circStrings
-  trimmedExprs = map (varE . mkName . ("trimmed" <>)) circStrings
+  -- Utility functions
+  namedPats name = map (varP . mkName . (name <>)) circStrings
+  namedExprs name = map (varE . mkName . (name <>)) circStrings
 
-  mkTrimStmt trim ty sam = bindS trim [e|expectN (Proxy @($ty)) opts $sam|]
+  -- trimN declarations
+  sampledPats = namedPats "sampled"
+  trimmedPats = namedPats "trimmed"
+  sampledExprs = namedExprs "sampled"
+  trimmedExprs = namedExprs "trimmed"
+
+  mkTrimStmt result ty sam = bindS result [e|trimN (Proxy @($ty)) opts $sam|]
   expectResult = noBindS [e|pure $(tupE trimmedExprs)|]
-  stmts = zipWith3 mkTrimStmt trimmedPats circTys sampledExprs <> [expectResult]
+  trimNStmts = zipWith3 mkTrimStmt trimmedPats circTys sampledExprs <> [expectResult]
+
+  -- getExpectType declarations
+  tupleTy = foldl appT (tupleT (length circTys)) circTys
+  simFwdTypPats = namedPats "simFwdType"
+  simFwdTypExprs = namedExprs "simFwdType"
+  expectTypePats = namedPats "expectType"
+  expectTypeExprs = namedExprs "expectType"
+
+  mkExpectTypeDec name ty expr = valD name (fmap NormalB [e|getExpectType (Proxy @($ty)) $expr|]) []
+  expectTypeDecs = zipWith3 mkExpectTypeDec expectTypePats circTys simFwdTypExprs
+  expectTypeExpr = tupE expectTypeExprs

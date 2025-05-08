@@ -252,7 +252,8 @@ instance
   ) =>
   Test (AvalonStream dom conf dataType)
   where
-  expectN Proxy = expectN (Proxy @(Df.Df dom _))
+  trimN Proxy options sampled = trimN (Proxy @(Df.Df dom _)) options sampled
+  getExpectType _ = Maybe.catMaybes
 
 instance IdleCircuit (AvalonStream dom conf dataType) where
   idleFwd _ = pure Nothing

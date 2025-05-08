@@ -288,8 +288,9 @@ instance
   ) =>
   Test (PacketStream dom dataWidth meta)
   where
-  expectN Proxy options sampled =
-    expectN (Proxy @(Df.Df dom _)) options sampled
+  trimN Proxy options sampled =
+    trimN (Proxy @(Df.Df dom _)) options sampled
+  getExpectType Proxy = getExpectType (Proxy @(Df.Df dom _))
 
 {- |
 Undefined PacketStream null byte. Will throw an error if evaluated. The source
