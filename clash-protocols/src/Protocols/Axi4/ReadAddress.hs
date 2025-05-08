@@ -187,6 +187,13 @@ data
       }
   deriving (Generic)
 
+deriving instance
+  (KnownAxi4ReadAddressConfig conf, C.NFDataX user) => C.NFDataX (M2S_ReadAddress conf user)
+deriving instance
+  (KnownAxi4ReadAddressConfig conf, C.BitPack user) => C.BitPack (M2S_ReadAddress conf user)
+deriving instance
+  (KnownAxi4ReadAddressConfig conf, Show userType) => Show (M2S_ReadAddress conf userType)
+
 -- | See Table A2-5 "Read address channel signals"
 newtype S2M_ReadAddress = S2M_ReadAddress
   {_arready :: Bool}
@@ -257,18 +264,6 @@ type KnownAxi4ReadAddressConfig conf =
   , Eq (PermissionsType (ARKeepPermissions conf))
   , Eq (QosType (ARKeepQos conf))
   )
-
-deriving instance
-  ( KnownAxi4ReadAddressConfig conf
-  , Show userType
-  ) =>
-  Show (M2S_ReadAddress conf userType)
-
-deriving instance
-  ( KnownAxi4ReadAddressConfig conf
-  , C.NFDataX userType
-  ) =>
-  C.NFDataX (M2S_ReadAddress conf userType)
 
 {- | Mainly for use in @DfConv@.
 
