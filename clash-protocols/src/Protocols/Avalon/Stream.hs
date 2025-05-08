@@ -252,7 +252,6 @@ instance
   ) =>
   Test (AvalonStream dom conf dataType)
   where
-  expectToLengths Proxy = pure . P.length
   expectN Proxy = expectN (Proxy @(Df.Df dom _))
 
 instance IdleCircuit (AvalonStream dom conf dataType) where

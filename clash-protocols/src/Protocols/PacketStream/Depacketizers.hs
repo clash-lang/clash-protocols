@@ -21,7 +21,6 @@ import Clash.Prelude
 import Clash.Sized.Vector.Extra
 
 import Protocols
-import qualified Protocols.Df as Df
 import Protocols.PacketStream.Base
 
 import Data.Constraint (Dict (Dict))
@@ -282,8 +281,8 @@ depacketizeToDfT ::
   (header -> meta -> a) ->
   DfDepacketizerState headerBytes dataWidth ->
   (Maybe (PacketStreamM2S dataWidth meta), Ack) ->
-  (DfDepacketizerState headerBytes dataWidth, (PacketStreamS2M, Df.Data a))
-depacketizeToDfT _ DfParse{..} (Just (PacketStreamM2S{..}), _) = (nextStOut, (PacketStreamS2M readyOut, Df.NoData))
+  (DfDepacketizerState headerBytes dataWidth, (PacketStreamS2M, Maybe a))
+depacketizeToDfT _ DfParse{..} (Just (PacketStreamM2S{..}), _) = (nextStOut, (PacketStreamS2M readyOut, Nothing))
  where
   nextAborted = _dfAborted || _abort
   nextParseBuf = fst (shiftInAtN _dfParseBuf _data)
@@ -312,12 +311,12 @@ depacketizeToDfT toOut st@DfConsumePadding{..} (Just (PacketStreamM2S{..}), Ack 
 
   (nextSt, fwdOut) =
     if isJust _last
-      then (def, if nextAborted then Df.NoData else Df.Data outDf)
-      else (st{_dfAborted = nextAborted}, Df.NoData)
+      then (def, if nextAborted then Nothing else Just outDf)
+      else (st{_dfAborted = nextAborted}, Nothing)
 
-  readyOut = isNothing (Df.dataToMaybe fwdOut) || readyIn
+  readyOut = isNothing fwdOut || readyIn
   nextStOut = if readyOut then nextSt else st
-depacketizeToDfT _ st (Nothing, Ack readyIn) = (st, (PacketStreamS2M readyIn, Df.NoData))
+depacketizeToDfT _ st (Nothing, Ack readyIn) = (st, (PacketStreamS2M readyIn, Nothing))
 
 {- |
 Reads bytes at the start of each packet into a header structure, and
