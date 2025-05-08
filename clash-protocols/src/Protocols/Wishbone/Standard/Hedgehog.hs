@@ -53,17 +53,31 @@ import Protocols hiding (circuit, stallC)
 import Protocols.Hedgehog
 import Protocols.Wishbone
 import Prelude as P hiding (cycle)
+import Control.DeepSeq (NFData)
 
 -- | Datatype representing a single transaction request sent from a Wishbone Master to a Wishbone Slave
 data WishboneMasterRequest addressWidth dat
   = Read (BitVector addressWidth) (BitVector (BitSize dat `DivRU` 8))
   | Write (BitVector addressWidth) (BitVector (BitSize dat `DivRU` 8)) dat
+  deriving stock (C.Generic)
+  deriving anyclass (NFData, C.BitPack)
+
+deriving instance
+  (KnownNat addressWidth, KnownNat (BitSize a), C.NFDataX a) =>
+  (C.NFDataX (WishboneMasterRequest addressWidth a))
 
 deriving instance
   (KnownNat addressWidth, KnownNat (BitSize a), Show a) =>
   (Show (WishboneMasterRequest addressWidth a))
 
---
+deriving instance
+  (KnownNat addressWidth, KnownNat (BitSize a), ShowX a) =>
+  (ShowX (WishboneMasterRequest addressWidth a))
+
+deriving instance
+  (KnownNat addressWidth, KnownNat (BitSize a), Eq a) =>
+  (Eq (WishboneMasterRequest addressWidth a))
+
 -- Validation for (lenient) spec compliance
 --
 
