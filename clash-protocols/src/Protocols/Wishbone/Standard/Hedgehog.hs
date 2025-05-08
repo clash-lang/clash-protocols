@@ -515,4 +515,4 @@ observeComposedWishboneCircuit ::
 observeComposedWishboneCircuit (Circuit master) (Circuit slave) =
   let ~((), m2s) = master ((), s2m)
       ~(s2m, ()) = slave (m2s, ())
-   in (sample_lazy n m2s, sample_lazy n s2m)
+   in (sample_lazy m2s, sample_lazy s2m)
