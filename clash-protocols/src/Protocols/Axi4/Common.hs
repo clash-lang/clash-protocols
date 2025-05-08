@@ -1,8 +1,4 @@
-{-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
-{-# LANGUAGE UndecidableInstances #-}
--- NFDataX and ShowX for T3 and T4
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 {- |
 Types and utilities shared between AXI4, AXI4-Lite, and AXI3.
@@ -20,40 +16,7 @@ import GHC.TypeNats (Nat)
 import Clash.Prelude (type (-), type (^))
 import qualified Clash.Prelude as C
 
--- strict-tuple
-import Data.Tuple.Strict (T3, T4)
-
 import Protocols.Internal
-
-deriving instance
-  ( C.NFDataX a
-  , C.NFDataX b
-  , C.NFDataX c
-  ) =>
-  C.NFDataX (T3 a b c)
-
-deriving instance
-  ( C.NFDataX a
-  , C.NFDataX b
-  , C.NFDataX c
-  , C.NFDataX d
-  ) =>
-  C.NFDataX (T4 a b c d)
-
-deriving instance
-  ( C.ShowX a
-  , C.ShowX b
-  , C.ShowX c
-  ) =>
-  C.ShowX (T3 a b c)
-
-deriving instance
-  ( C.ShowX a
-  , C.ShowX b
-  , C.ShowX c
-  , C.ShowX d
-  ) =>
-  C.ShowX (T4 a b c d)
 
 -- | Enables or disables 'BurstMode'
 type BurstType (keep :: Bool) = KeepType keep BurstMode
@@ -61,8 +24,11 @@ type BurstType (keep :: Bool) = KeepType keep BurstMode
 -- | Enables or disables burst length
 type BurstLengthType (keep :: Bool) = KeepType keep (C.Index (2 ^ 8))
 
--- | Enables or disables 'Cache'
-type CacheType (keep :: Bool) = KeepType keep Cache
+-- | Enables or disables the 'ArCache' for Write Address operations
+type AwCacheType (keep :: Bool) = KeepType keep AwCache
+
+-- | Enables or disables the 'ArCache' for Read Address operations
+type ArCacheType (keep :: Bool) = KeepType keep ArCache
 
 -- | Enables or disables a boolean indicating whether a transaction is done
 type LastType (keep :: Bool) = KeepType keep Bool
@@ -70,9 +36,8 @@ type LastType (keep :: Bool) = KeepType keep Bool
 -- | Enables or disables 'AtomicAccess'
 type LockType (keep :: Bool) = KeepType keep AtomicAccess
 
--- | Enables or disables 'Privileged', 'Secure', and 'InstructionOrData'
-type PermissionsType (keep :: Bool) =
-  KeepType keep (T3 Privileged Secure InstructionOrData)
+-- | Enables or disables 'Permissions'
+type PermissionsType (keep :: Bool) = KeepType keep Permissions
 
 -- | Enables or disables 'Qos'
 type QosType (keep :: Bool) = KeepType keep Qos
@@ -177,7 +142,7 @@ data BurstMode
     --
     -- This burst type is used for cache line accesses.
     BmWrap
-  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq)
+  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq, C.BitPack)
 
 {- | The maximum number of bytes to transfer in each data transfer, or beat,
 in a burst.
@@ -191,7 +156,7 @@ data BurstSize
   | Bs32
   | Bs64
   | Bs128
-  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq)
+  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq, C.BitPack)
 
 -- | Convert burst size to a numeric value
 burstSizeToNum :: (Num a) => BurstSize -> a
@@ -207,22 +172,29 @@ burstSizeToNum = \case
 
 -- | Whether a transaction is bufferable
 data Bufferable = NonBufferable | Bufferable
-  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq)
+  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq, C.BitPack)
 
 {- | When set to "LookupCache", it is recommended that this transaction is
 allocated in the cache for performance reasons.
 -}
 data Allocate = NoLookupCache | LookupCache
-  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq)
+  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq, C.BitPack)
 
 {- | When set to "OtherLookupCache", it is recommended that this transaction is
 allocated in the cache for performance reasons.
 -}
 data OtherAllocate = OtherNoLookupCache | OtherLookupCache
-  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq)
+  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq, C.BitPack)
 
--- | See Table A4-3 AWCACHE bit allocations
-type Cache = T4 Bufferable Modifiable OtherAllocate Allocate
+{- | Memory attributes. Note that the 'Allocate' and 'OtherAllocate' bits are
+in different posistions for read and write requests.
+-}
+type AwCache = (Bufferable, Modifiable, OtherAllocate, Allocate)
+
+{- | Memory attributes. Note that the 'Allocate' and 'OtherAllocate' bits are
+in different posistions for read and write requests.
+-}
+type ArCache = (Bufferable, Modifiable, Allocate, OtherAllocate)
 
 -- | Status of the write transaction.
 data Resp
@@ -238,19 +210,19 @@ data Resp
   | -- | Decode error. Generated, typically by an interconnect component, to
     -- indicate that there is no slave at the transaction address.
     RDecodeError
-  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq)
+  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq, C.BitPack)
 
 -- | Whether a resource is accessed with exclusive access or not
 data AtomicAccess
   = NonExclusiveAccess
   | ExclusiveAccess
-  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq)
+  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq, C.BitPack)
 
 -- | Whether transaction can be modified
 data Modifiable
   = Modifiable
   | NonModifiable
-  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq)
+  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq, C.BitPack)
 
 {- | An AXI master might support Secure and Non-secure operating states, and
 extend this concept of security to memory access.
@@ -258,7 +230,7 @@ extend this concept of security to memory access.
 data Secure
   = Secure
   | NonSecure
-  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq)
+  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq, C.BitPack)
 
 {- | An AXI master might support more than one level of operating privilege,
 and extend this concept of privilege to memory access.
@@ -266,7 +238,7 @@ and extend this concept of privilege to memory access.
 data Privileged
   = NotPrivileged
   | Privileged
-  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq)
+  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq, C.BitPack)
 
 {- | Whether the transaction is an instruction access or a data access. The AXI
 protocol defines this indication as a hint. It is not accurate in all cases,
@@ -278,4 +250,7 @@ instruction access.
 data InstructionOrData
   = Data
   | Instruction
-  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq)
+  deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq, C.BitPack)
+
+-- | Enables or disables 'Privileged', 'Secure', and 'InstructionOrData'
+type Permissions = (Privileged, Secure, InstructionOrData)

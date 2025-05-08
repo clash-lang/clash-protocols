@@ -18,9 +18,6 @@ import Hedgehog
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
--- strict-tuple
-import Data.Tuple.Strict (T3 (..), T4 (..))
-
 -- tasty
 import Test.Tasty
 import Test.Tasty.Hedgehog (HedgehogTestLimit (HedgehogTestLimit))
@@ -111,7 +108,7 @@ prop_axi4_convert_write_id =
           )
       <*> (toKeepType <$> (pure NonExclusiveAccess C.<|> pure ExclusiveAccess))
       <*> ( toKeepType
-              <$> ( T4
+              <$> ( (,,,)
                       <$> (pure NonBufferable C.<|> pure Bufferable)
                       <*> (pure NonModifiable C.<|> pure Modifiable)
                       <*> (pure OtherNoLookupCache C.<|> pure OtherLookupCache)
@@ -119,7 +116,7 @@ prop_axi4_convert_write_id =
                   )
           )
       <*> ( toKeepType
-              <$> ( T3
+              <$> ( (,,)
                       <$> (pure Privileged C.<|> pure NotPrivileged)
                       <*> (pure Secure C.<|> pure NonSecure)
                       <*> (pure Instruction C.<|> pure Data)
@@ -178,18 +175,16 @@ prop_axi4_convert_write_id_rev =
         , _awilock = toKeepType NonExclusiveAccess
         , _awicache =
             toKeepType
-              ( T4
-                  NonBufferable
-                  NonModifiable
-                  OtherNoLookupCache
-                  NoLookupCache
+              ( NonBufferable
+              , NonModifiable
+              , OtherNoLookupCache
+              , NoLookupCache
               )
         , _awiprot =
             toKeepType
-              ( T3
-                  Privileged
-                  Secure
-                  Instruction
+              ( Privileged
+              , Secure
+              , Instruction
               )
         , _awiqos = toKeepType 0
         , _awiuser = 0
@@ -246,15 +241,15 @@ prop_axi4_convert_read_id =
       <*> (toKeepType <$> (pure BmFixed C.<|> pure BmIncr C.<|> pure BmWrap))
       <*> (toKeepType <$> (pure NonExclusiveAccess C.<|> pure ExclusiveAccess))
       <*> ( toKeepType
-              <$> ( T4
+              <$> ( (,,,)
                       <$> (pure NonBufferable C.<|> pure Bufferable)
                       <*> (pure NonModifiable C.<|> pure Modifiable)
-                      <*> (pure OtherNoLookupCache C.<|> pure OtherLookupCache)
                       <*> (pure NoLookupCache C.<|> pure LookupCache)
+                      <*> (pure OtherNoLookupCache C.<|> pure OtherLookupCache)
                   )
           )
       <*> ( toKeepType
-              <$> ( T3
+              <$> ( (,,)
                       <$> (pure Privileged C.<|> pure NotPrivileged)
                       <*> (pure Secure C.<|> pure NonSecure)
                       <*> (pure Instruction C.<|> pure Data)
@@ -312,18 +307,16 @@ prop_axi4_convert_read_id_rev =
       , _arilock = toKeepType NonExclusiveAccess
       , _aricache =
           toKeepType
-            ( T4
-                NonBufferable
-                NonModifiable
-                OtherNoLookupCache
-                NoLookupCache
+            ( NonBufferable
+            , NonModifiable
+            , NoLookupCache
+            , OtherNoLookupCache
             )
       , _ariprot =
           toKeepType
-            ( T3
-                Privileged
-                Secure
-                Instruction
+            ( Privileged
+            , Secure
+            , Instruction
             )
       , _ariqos = toKeepType 0
       , _ariuser = 0
