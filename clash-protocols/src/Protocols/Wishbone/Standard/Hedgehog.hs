@@ -36,6 +36,7 @@ module Protocols.Wishbone.Standard.Hedgehog (
   wishbonePropWithModel,
   validatorCircuit,
   validatorCircuitLenient,
+  observeComposedWishboneCircuit,
 )
 where
 
@@ -479,7 +480,7 @@ wishbonePropWithModel eOpts model circuit0 inputGen st = do
     resets = 5
     driver = driveStandard @dom (defExpectOptions{eoResetCycles = resets}) (P.zip input reqStalls)
     circuit1 = validatorCircuit |> circuit0
-    (_, s2m) = observeComposedWishboneCircuit (eoSampleMax eOpts) driver circuit1
+    s2m = P.take (eoSampleMax eOpts) $ snd $ observeComposedWishboneCircuit driver circuit1
 
   matchModel 0 s2m input st === Right ()
  where
@@ -501,15 +502,17 @@ wishbonePropWithModel eOpts model circuit0 inputGen st = do
             | retry s = req : reqs0
             | otherwise = reqs0
 
+{- | Given a wishbone manager and wishbone subordinate, connect them and
+sample their forward and backward channel lazily.
+-}
 observeComposedWishboneCircuit ::
   (KnownDomain dom) =>
-  Int ->
   Circuit () (Wishbone dom mode addressWidth a) ->
   Circuit (Wishbone dom mode addressWidth a) () ->
   ( [WishboneM2S addressWidth (BitSize a `DivRU` 8) a]
   , [WishboneS2M a]
   )
-observeComposedWishboneCircuit n (Circuit master) (Circuit slave) =
+observeComposedWishboneCircuit (Circuit master) (Circuit slave) =
   let ~((), m2s) = master ((), s2m)
       ~(s2m, ()) = slave (m2s, ())
-   in (sampleN_lazy n m2s, sampleN_lazy n s2m)
+   in (sample_lazy m2s, sample_lazy s2m)
