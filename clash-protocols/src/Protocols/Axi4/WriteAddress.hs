@@ -187,7 +187,7 @@ data
 -- | See Table A2-2 "Write address channel signals"
 newtype S2M_WriteAddress = S2M_WriteAddress {_awready :: Bool}
   deriving stock (Show, Generic)
-  deriving anyclass (C.NFDataX)
+  deriving anyclass (C.NFDataX, C.BitPack)
 
 {- | Shorthand for a "well-behaved" write address config,
 so that we don't need to write out a bunch of type constraints later.
@@ -228,6 +228,14 @@ type KnownAxi4WriteAddressConfig conf =
   , C.NFDataX (AwCacheType (AWKeepCache conf))
   , C.NFDataX (PermissionsType (AWKeepPermissions conf))
   , C.NFDataX (QosType (AWKeepQos conf))
+  , C.BitPack (RegionType (AWKeepRegion conf))
+  , C.BitPack (BurstLengthType (AWKeepBurstLength conf))
+  , C.BitPack (SizeType (AWKeepSize conf))
+  , C.BitPack (BurstType (AWKeepBurst conf))
+  , C.BitPack (LockType (AWKeepLock conf))
+  , C.BitPack (AwCacheType (AWKeepCache conf))
+  , C.BitPack (PermissionsType (AWKeepPermissions conf))
+  , C.BitPack (QosType (AWKeepQos conf))
   , NFData (RegionType (AWKeepRegion conf))
   , NFData (BurstLengthType (AWKeepBurstLength conf))
   , NFData (SizeType (AWKeepSize conf))

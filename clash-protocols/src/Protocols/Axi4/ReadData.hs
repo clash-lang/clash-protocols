@@ -112,7 +112,7 @@ data
 -- | See Table A2-6 "Read data channel signals"
 newtype M2S_ReadData = M2S_ReadData {_rready :: Bool}
   deriving stock (Show, Generic)
-  deriving anyclass (C.NFDataX)
+  deriving anyclass (C.NFDataX, C.BitPack)
 
 {- | Shorthand for a "well-behaved" read data config,
 so that we don't need to write out a bunch of type constraints later.
@@ -123,6 +123,7 @@ type KnownAxi4ReadDataConfig conf =
   , C.KnownNat (RIdWidth conf)
   , Show (ResponseType (RKeepResponse conf))
   , C.NFDataX (ResponseType (RKeepResponse conf))
+  , C.BitPack (ResponseType (RKeepResponse conf))
   )
 
 deriving instance

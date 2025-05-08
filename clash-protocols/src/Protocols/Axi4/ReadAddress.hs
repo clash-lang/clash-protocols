@@ -5,6 +5,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-missing-fields #-}
+{-# OPTIONS_GHC -fconstraint-solver-iterations=10 #-}
 
 {- |
 Defines ReadAddress channel of full AXI4 protocol with port names corresponding
@@ -186,11 +187,18 @@ data
       }
   deriving (Generic)
 
+deriving instance
+  (KnownAxi4ReadAddressConfig conf, C.NFDataX user) => C.NFDataX (M2S_ReadAddress conf user)
+deriving instance
+  (KnownAxi4ReadAddressConfig conf, C.BitPack user) => C.BitPack (M2S_ReadAddress conf user)
+deriving instance
+  (KnownAxi4ReadAddressConfig conf, Show userType) => Show (M2S_ReadAddress conf userType)
+
 -- | See Table A2-5 "Read address channel signals"
 newtype S2M_ReadAddress = S2M_ReadAddress
   {_arready :: Bool}
   deriving stock (Show, Generic)
-  deriving anyclass (C.NFDataX)
+  deriving anyclass (C.NFDataX, C.BitPack)
 
 {- | Shorthand for a "well-behaved" read address config,
 so that we don't need to write out a bunch of type constraints later.
@@ -231,6 +239,14 @@ type KnownAxi4ReadAddressConfig conf =
   , C.NFDataX (ArCacheType (ARKeepCache conf))
   , C.NFDataX (PermissionsType (ARKeepPermissions conf))
   , C.NFDataX (QosType (ARKeepQos conf))
+  , C.BitPack (RegionType (ARKeepRegion conf))
+  , C.BitPack (BurstLengthType (ARKeepBurstLength conf))
+  , C.BitPack (SizeType (ARKeepSize conf))
+  , C.BitPack (BurstType (ARKeepBurst conf))
+  , C.BitPack (LockType (ARKeepLock conf))
+  , C.BitPack (ArCacheType (ARKeepCache conf))
+  , C.BitPack (PermissionsType (ARKeepPermissions conf))
+  , C.BitPack (QosType (ARKeepQos conf))
   , NFData (RegionType (ARKeepRegion conf))
   , NFData (BurstLengthType (ARKeepBurstLength conf))
   , NFData (SizeType (ARKeepSize conf))
@@ -248,18 +264,6 @@ type KnownAxi4ReadAddressConfig conf =
   , Eq (PermissionsType (ARKeepPermissions conf))
   , Eq (QosType (ARKeepQos conf))
   )
-
-deriving instance
-  ( KnownAxi4ReadAddressConfig conf
-  , Show userType
-  ) =>
-  Show (M2S_ReadAddress conf userType)
-
-deriving instance
-  ( KnownAxi4ReadAddressConfig conf
-  , C.NFDataX userType
-  ) =>
-  C.NFDataX (M2S_ReadAddress conf userType)
 
 {- | Mainly for use in @DfConv@.
 
