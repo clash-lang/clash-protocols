@@ -78,6 +78,15 @@ deriving instance
   (KnownNat addressWidth, KnownNat (BitSize a), Eq a) =>
   (Eq (WishboneMasterRequest addressWidth a))
 
+-- | Datatype representing a single transaction response sent from a Wishbone Slave to a Wishbone Master
+data WishboneSlaveResponse dat =
+  ReadSuccess dat |
+  WriteSuccess |
+  Error |
+  Stall |
+  Retry
+  deriving (Generic, NFData, NFDataX, Show, ShowX, Eq)
+
 -- Validation for (lenient) spec compliance
 --
 
