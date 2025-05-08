@@ -3,6 +3,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 -- TODO: Fix warnings introduced by GHC 9.2 w.r.t. incomplete lazy pattern matches
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
+{-# OPTIONS_GHC -fconstraint-solver-iterations=10 #-}
 
 {- |
 Types and functions to aid with testing Wishbone circuits.
@@ -42,6 +43,7 @@ where
 
 import Clash.Prelude as C hiding (cycle, indices, not, (&&), (||))
 import Clash.Signal.Internal (Signal ((:-)))
+import Control.DeepSeq (NFData)
 import Data.Bifunctor qualified as B
 import GHC.Stack (HasCallStack)
 import Hedgehog ((===))
@@ -57,12 +59,25 @@ import Prelude as P hiding (cycle)
 data WishboneMasterRequest addressWidth dat
   = Read (BitVector addressWidth) (BitVector (BitSize dat `DivRU` 8))
   | Write (BitVector addressWidth) (BitVector (BitSize dat `DivRU` 8)) dat
+  deriving stock (C.Generic)
+  deriving anyclass (NFData, C.BitPack)
+
+deriving instance
+  (KnownNat addressWidth, KnownNat (BitSize a), C.NFDataX a) =>
+  (C.NFDataX (WishboneMasterRequest addressWidth a))
 
 deriving instance
   (KnownNat addressWidth, KnownNat (BitSize a), Show a) =>
   (Show (WishboneMasterRequest addressWidth a))
 
---
+deriving instance
+  (KnownNat addressWidth, KnownNat (BitSize a), ShowX a) =>
+  (ShowX (WishboneMasterRequest addressWidth a))
+
+deriving instance
+  (KnownNat addressWidth, KnownNat (BitSize a), Eq a) =>
+  (Eq (WishboneMasterRequest addressWidth a))
+
 -- Validation for (lenient) spec compliance
 --
 
