@@ -227,7 +227,7 @@ instance DfConv.DfConv (PacketStream dom dataWidth meta) where
         ( fmap coerce bwdIn
         , pure (deepErrorX "PacketStream toDfCircuit: undefined")
         )
-      , Df.dataToMaybe <$> P.fst fwdIn
+      , P.fst fwdIn
       )
 
   fromDfCircuit _ = fromSignals go
@@ -235,7 +235,7 @@ instance DfConv.DfConv (PacketStream dom dataWidth meta) where
     go (fwdIn, bwdIn) =
       ( coerce <$> P.fst bwdIn
       ,
-        ( fmap Df.maybeToData fwdIn
+        ( fwdIn
         , pure (deepErrorX "PacketStream fromDfCircuit: undefined")
         )
       )
@@ -289,9 +289,7 @@ instance
   Test (PacketStream dom dataWidth meta)
   where
   expectN Proxy options sampled =
-    expectN (Proxy @(Df.Df dom _)) options
-      $ Df.maybeToData
-      <$> sampled
+    expectN (Proxy @(Df.Df dom _)) options sampled
 
 {- |
 Undefined PacketStream null byte. Will throw an error if evaluated. The source

@@ -154,14 +154,6 @@ toMaybe :: Bool -> a -> Maybe a
 toMaybe False _ = Nothing
 toMaybe True a = Just a
 
-{- |
-  If the t'Data' is v'NoData', it returns the given value; otherwise,
-  it returns the value contained in the v'Data'.
--}
-dataDefault :: a -> Data a -> a
-dataDefault a NoData = a
-dataDefault _ (Data a) = a
-
 instance (C.KnownDomain dom, C.NFDataX a, C.ShowX a, Show a) => Simulate (Df dom a) where
   type SimulateFwdType (Df dom a) = [Maybe a]
   type SimulateBwdType (Df dom a) = [Ack]
@@ -339,7 +331,7 @@ const b =
 
 -- | Never produce a value.
 empty :: Circuit () (Df dom a)
-empty = Circuit (P.const ((), P.pure NoData))
+empty = Circuit (P.const ((), P.pure Nothing))
 
 -- | Drive a constant value composed of /a/.
 pure :: a -> Circuit () (Df dom a)
@@ -795,18 +787,18 @@ roundrobinCollect Skip =
       Nothing ->
         (C.satSucc C.SatWrap i, (C.repeat (Ack False), Nothing))
 roundrobinCollect Parallel =
-  Circuit (B.first C.unbundle . C.mealyB go NoData . B.first C.bundle)
+  Circuit (B.first C.unbundle . C.mealyB go Nothing . B.first C.bundle)
  where
   go im (fwds, bwd@(Ack ack)) = (nextIm, (bwds, fwd))
    where
     nextSrc = C.fold @(n C.- 1) (<|>) (C.zipWith (<$) C.indicesI fwds)
-    i = fromMaybe (fromMaybe maxBound nextSrc) im
+    i = Maybe.fromMaybe (Maybe.fromMaybe maxBound nextSrc) im
 
     bwds = C.replace i bwd (C.repeat (Ack False))
     fwd = fwds C.!! i
 
     nextIm =
-      if isJust fwd && ack
+      if Maybe.isJust fwd && ack
         then im
         else nextSrc
 

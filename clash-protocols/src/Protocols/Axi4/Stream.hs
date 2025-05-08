@@ -173,8 +173,8 @@ instance
     withClockResetEnable clockGen resetGen enableGen $
       DfConv.drive Proxy conf vals
   sampleC conf ckt =
-    withClockResetEnable clockGen resetGen enableGen
-      $ DfConv.sample Proxy conf ckt
+    withClockResetEnable clockGen resetGen enableGen $
+      DfConv.sample Proxy conf ckt
 
 instance
   ( KnownAxi4StreamConfig conf
@@ -187,7 +187,6 @@ instance
   ) =>
   Test (Axi4Stream dom conf userType)
   where
-  expectToLengths Proxy = pure . P.length
   expectN Proxy = expectN (Proxy @(Df.Df dom _))
 
 instance IdleCircuit (Axi4Stream dom conf userType) where
