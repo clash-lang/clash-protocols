@@ -56,7 +56,7 @@ import GHC.Generics (Generic)
 newtype Ack = Ack Bool
   deriving stock (Generic, Show)
   deriving anyclass (C.Bundle, C.ShowX)
-  deriving newtype (C.NFDataX, Eq, Ord)
+  deriving newtype (C.NFDataX, Eq, Ord, C.BitPack)
 
 -- | Acknowledge. Used in circuit-notation plugin to drive ignore components.
 instance Default Ack where
