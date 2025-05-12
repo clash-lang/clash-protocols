@@ -108,6 +108,8 @@ library
     , clash-protocols-base
     , circuit-notation
     , clash-prelude-hedgehog
+    , containers
+    , infinite-list
     , constraints
     , data-default ^>= 0.7.1.1
     , deepseq
@@ -120,6 +122,7 @@ library
     , strict-tuple
     , tagged
     , template-haskell
+    , text
 
       -- To be removed; we need 'Test.Tasty.Hedgehog.Extra' to fix upstream issues
     , tasty >= 1.2 && < 1.5
@@ -151,6 +154,10 @@ library
     Protocols.Hedgehog
     Protocols.Hedgehog.Internal
     Protocols.Idle
+    Protocols.Test.Driver
+    Protocols.Test.Drivers.Df
+    Protocols.Test.Samples
+    Protocols.Test.Run
     Protocols.Internal
     Protocols.Internal.TH
     Protocols.Vec
