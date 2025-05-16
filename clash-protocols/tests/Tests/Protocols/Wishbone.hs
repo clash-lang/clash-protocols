@@ -35,21 +35,15 @@ genSmallInt = Gen.integral smallInt
 genData :: Gen a -> Gen [a]
 genData = Gen.list (Range.linear 0 300)
 
-genWishboneTransfer ::
-  (KnownNat addressWidth, KnownNat (BitSize a)) =>
-  Gen a ->
-  Gen (WishboneMasterRequest addressWidth a)
-genWishboneTransfer genA =
-  Gen.choice
-    [ Read <$> genDefinedBitVector <*> genDefinedBitVector
-    , Write <$> genDefinedBitVector <*> genDefinedBitVector <*> genA
-    ]
-
 genWbTransferPair ::
   (KnownNat addressWidth, KnownNat (BitSize a)) =>
   Gen a ->
   Gen (WishboneMasterRequest addressWidth a, Int)
-genWbTransferPair genA = liftA2 (,) (genWishboneTransfer genA) genSmallInt
+genWbTransferPair genA =
+  liftA2
+    (,)
+    (genWishboneTransfer (Range.constantBounded) genA)
+    genSmallInt
 
 -- Fourmolu only allows CPP conditions on complete top-level definitions.
 blockRamUClear ::
@@ -118,7 +112,7 @@ prop_addrReadIdWb_model =
         defExpectOptions
         addrReadIdWbModel
         addrReadIdWb
-        (genData $ genWishboneTransfer @10 genDefinedBitVector)
+        (genData $ genWishboneTransfer @10 (Range.constantBounded) genDefinedBitVector)
         ()
 
 --
@@ -172,7 +166,7 @@ prop_memoryWb_model =
         defExpectOptions
         memoryWbModel
         (memoryWb (blockRamUClear (const def) (SNat @256)))
-        (genData (genWishboneTransfer @8 genSmallInt))
+        (genData (genWishboneTransfer @8 (Range.constantBounded) genSmallInt))
         [] -- initial state
 
 --

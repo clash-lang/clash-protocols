@@ -31,18 +31,30 @@ This "common sense" compliance checking additionally checks for:
  - A write request must contain valid data according to the 'busSelect' signal
 -}
 module Protocols.Wishbone.Standard.Hedgehog (
+  -- * Types
   WishboneMasterRequest (..),
+
+  -- * Circuits
   stallStandard,
   driveStandard,
-  wishbonePropWithModel,
   validatorCircuit,
   validatorCircuitLenient,
   observeComposedWishboneCircuit,
+
+  -- * Properties
+  wishbonePropWithModel,
+
+  -- * Generators
+  genWishboneTransfer,
+
+  -- * helpers
   filterTransactions,
   m2sToRequest,
 )
 where
 
+import Clash.Hedgehog.Sized.BitVector (genDefinedBitVector)
+import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
 import Clash.Prelude as C hiding (cycle, indices, not, (&&), (||))
 import Clash.Signal.Internal (Signal ((:-)))
 import Control.DeepSeq (NFData)
@@ -533,6 +545,21 @@ observeComposedWishboneCircuit (Circuit master) (Circuit slave) =
   let ~((), m2s) = master ((), s2m)
       ~(s2m, ()) = slave (m2s, ())
    in (sample_lazy m2s, sample_lazy s2m)
+
+-- | Generate a random Wishbone transfer based on an address range and a payload generator.
+genWishboneTransfer ::
+  (KnownNat addressWidth, KnownNat (BitSize a)) =>
+  Range.Range (Unsigned addressWidth) ->
+  H.Gen a ->
+  H.Gen (WishboneMasterRequest addressWidth a)
+genWishboneTransfer addrRange genA = do
+  addr <- genUnsigned addrRange
+  sel <- genDefinedBitVector
+  dat <- genA
+  Gen.choice
+    [ pure $ Read (pack addr) sel
+    , pure $ Write (pack addr) sel dat
+    ]
 
 -- | Given a list of master / slave samples, only keep the ones where an active request receives a response.
 filterTransactions ::
