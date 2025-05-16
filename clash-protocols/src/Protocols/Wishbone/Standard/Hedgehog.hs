@@ -2,6 +2,8 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE OverloadedRecordDot #-}
+{-# OPTIONS_GHC -fconstraint-solver-iterations=10 #-}
 -- TODO: Fix warnings introduced by GHC 9.2 w.r.t. incomplete lazy pattern matches
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
@@ -31,16 +33,31 @@ This "common sense" compliance checking additionally checks for:
  - A write request must contain valid data according to the 'busSelect' signal
 -}
 module Protocols.Wishbone.Standard.Hedgehog (
+  -- * Types
   WishboneMasterRequest (..),
+
+  -- * Circuits
   stallStandard,
   driveStandard,
-  wishbonePropWithModel,
   validatorCircuit,
   validatorCircuitLenient,
+  observeComposedWishboneCircuit,
+
+  -- * Properties
+  wishbonePropWithModel,
+
+  -- * Generators
+  genWishboneTransfer,
+
+  -- * helpers
+  filterTransactions,
+  m2sToRequest
 )
 where
 
 import Clash.Prelude as C hiding (cycle, indices, not, (&&), (||))
+import Clash.Hedgehog.Sized.BitVector (genDefinedBitVector)
+import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
 import Clash.Signal.Internal (Signal ((:-)))
 import qualified Data.Bifunctor as B
 import GHC.Stack (HasCallStack)
@@ -52,17 +69,31 @@ import Protocols hiding (circuit, stallC)
 import Protocols.Hedgehog
 import Protocols.Wishbone
 import Prelude as P hiding (cycle)
+import Control.DeepSeq (NFData)
 
 -- | Datatype representing a single transaction request sent from a Wishbone Master to a Wishbone Slave
 data WishboneMasterRequest addressWidth dat
   = Read (BitVector addressWidth) (BitVector (BitSize dat `DivRU` 8))
   | Write (BitVector addressWidth) (BitVector (BitSize dat `DivRU` 8)) dat
+  deriving stock (C.Generic)
+  deriving anyclass (NFData, C.BitPack)
+
+deriving instance
+  (KnownNat addressWidth, KnownNat (BitSize a), C.NFDataX a) =>
+  (C.NFDataX (WishboneMasterRequest addressWidth a))
 
 deriving instance
   (KnownNat addressWidth, KnownNat (BitSize a), Show a) =>
   (Show (WishboneMasterRequest addressWidth a))
 
---
+deriving instance
+  (KnownNat addressWidth, KnownNat (BitSize a), ShowX a) =>
+  (ShowX (WishboneMasterRequest addressWidth a))
+
+deriving instance
+  (KnownNat addressWidth, KnownNat (BitSize a), Eq a) =>
+  (Eq (WishboneMasterRequest addressWidth a))
+
 -- Validation for (lenient) spec compliance
 --
 
@@ -480,7 +511,7 @@ wishbonePropWithModel eOpts model circuit0 inputGen st = do
     resets = 5
     driver = driveStandard @dom (defExpectOptions{eoResetCycles = resets}) (P.zip input reqStalls)
     circuit1 = validatorCircuit |> circuit0
-    (_, s2m) = observeComposedWishboneCircuit (eoSampleMax eOpts) driver circuit1
+    s2m = P.take (eoSampleMax eOpts) $ snd $ observeComposedWishboneCircuit  driver circuit1
 
   matchModel 0 s2m input st === Right ()
  where
@@ -502,15 +533,50 @@ wishbonePropWithModel eOpts model circuit0 inputGen st = do
             | retry s = req : reqs0
             | otherwise = reqs0
 
+-- | Given a wishbone manager and wishbone subordinate, connect them and
+-- sample their forward and backward channel lazily.
 observeComposedWishboneCircuit ::
   (KnownDomain dom) =>
-  Int ->
   Circuit () (Wishbone dom mode addressWidth a) ->
   Circuit (Wishbone dom mode addressWidth a) () ->
   ( [WishboneM2S addressWidth (BitSize a `DivRU` 8) a]
   , [WishboneS2M a]
   )
-observeComposedWishboneCircuit n (Circuit master) (Circuit slave) =
+observeComposedWishboneCircuit (Circuit master) (Circuit slave) =
   let ~((), m2s) = master ((), s2m)
       ~(s2m, ()) = slave (m2s, ())
-   in (sampleN_lazy n m2s, sampleN_lazy n s2m)
+   in (sample_lazy m2s, sample_lazy s2m)
+
+genWishboneTransfer ::
+  (KnownNat addressWidth, KnownNat (BitSize a)) =>
+  Range.Range (Unsigned addressWidth) ->
+  H.Gen a ->
+  H.Gen (WishboneMasterRequest addressWidth a)
+genWishboneTransfer addrRange genA = do
+  addr <- genUnsigned addrRange
+  sel <- genDefinedBitVector
+  dat <- genA
+  Gen.choice
+    [ pure $ Read (pack addr) sel
+    , pure $ Write (pack addr) sel dat
+    ]
+
+-- | Given a list of master / slave samples, only keep the ones where an active request receives a response.
+filterTransactions ::
+  (KnownNat addressWidth, KnownNat (BitSize a), BitPack a) =>
+  [(WishboneM2S addressWidth (BitSize a `DivRU` 8) a, WishboneS2M a)] ->
+  [(WishboneM2S addressWidth (BitSize a `DivRU` 8) a, WishboneS2M a)]
+filterTransactions ((m2s,s2m):rest)
+  | not (busCycle m2s && strobe m2s && hasTerminateFlag s2m) = filterTransactions rest
+  | otherwise = (m2s, s2m) : filterTransactions rest
+filterTransactions [] = []
+
+-- | Interpret a 'WishboneM2S' as a 'WishboneMasterRequest'.
+-- Only works for valid requests and performs no checks.
+m2sToRequest ::
+  (KnownNat addressWidth, KnownNat (BitSize a), BitPack a) =>
+  WishboneM2S addressWidth (BitSize a `DivRU` 8) a ->
+  WishboneMasterRequest addressWidth a
+m2sToRequest m2s
+  | m2s.writeEnable = Write m2s.addr m2s.busSelect m2s.writeData
+  | otherwise = Read m2s.addr m2s.busSelect
