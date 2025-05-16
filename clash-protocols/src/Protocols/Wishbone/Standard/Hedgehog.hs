@@ -2,6 +2,8 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE OverloadedRecordDot #-}
+{-# OPTIONS_GHC -fconstraint-solver-iterations=10 #-}
 -- TODO: Fix warnings introduced by GHC 9.2 w.r.t. incomplete lazy pattern matches
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
@@ -38,6 +40,7 @@ module Protocols.Wishbone.Standard.Hedgehog (
   validatorCircuit,
   validatorCircuitLenient,
   observeComposedWishboneCircuit,
+  filterTransactions,
 )
 where
 
@@ -530,3 +533,13 @@ observeComposedWishboneCircuit (Circuit master) (Circuit slave) =
   let ~((), m2s) = master ((), s2m)
       ~(s2m, ()) = slave (m2s, ())
    in (sample_lazy m2s, sample_lazy s2m)
+
+-- | Given a list of master / slave samples, only keep the ones where an active request receives a response.
+filterTransactions ::
+  (KnownNat addressWidth, KnownNat (BitSize a), BitPack a) =>
+  [(WishboneM2S addressWidth (BitSize a `DivRU` 8) a, WishboneS2M a)] ->
+  [(WishboneM2S addressWidth (BitSize a `DivRU` 8) a, WishboneS2M a)]
+filterTransactions ((m2s,s2m):rest)
+  | not (busCycle m2s && strobe m2s && hasTerminateFlag s2m) = filterTransactions rest
+  | otherwise = (m2s, s2m) : filterTransactions rest
+filterTransactions [] = []
