@@ -39,6 +39,7 @@ module Protocols.Wishbone.Standard.Hedgehog (
   validatorCircuitLenient,
   observeComposedWishboneCircuit,
   filterTransactions,
+  m2sToRequest,
 )
 where
 
@@ -542,3 +543,14 @@ filterTransactions ((m2s, s2m) : rest)
   | not (busCycle m2s && strobe m2s && hasTerminateFlag s2m) = filterTransactions rest
   | otherwise = (m2s, s2m) : filterTransactions rest
 filterTransactions [] = []
+
+{- | Interpret a 'WishboneM2S' as a 'WishboneMasterRequest'.
+Only works for valid requests and performs no checks.
+-}
+m2sToRequest ::
+  (KnownNat addressWidth, KnownNat (BitSize a), BitPack a) =>
+  WishboneM2S addressWidth (BitSize a `DivRU` 8) a ->
+  WishboneMasterRequest addressWidth a
+m2sToRequest m2s
+  | m2s.writeEnable = Write m2s.addr m2s.busSelect m2s.writeData
+  | otherwise = Read m2s.addr m2s.busSelect
