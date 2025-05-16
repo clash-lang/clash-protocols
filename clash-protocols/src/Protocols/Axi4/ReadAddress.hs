@@ -37,6 +37,7 @@ module Protocols.Axi4.ReadAddress (
 
   -- * helpers
   forceResetSanity,
+  emptyReadAddressM2S,
 ) where
 
 -- base
@@ -369,6 +370,27 @@ axi4ReadAddrMsgFromReadAddrInfo Axi4ReadAddressInfo{..} =
 instance IdleCircuit (Axi4ReadAddress dom conf userType) where
   idleFwd _ = pure M2S_NoReadAddress
   idleBwd _ = pure S2M_ReadAddress{_arready = False}
+
+-- | Create an empty 'M2S_ReadAddress' message with all fields set to 0.
+emptyReadAddressM2S ::
+  forall conf userType.
+  (KnownAxi4ReadAddressConfig conf) =>
+  userType ->
+  M2S_ReadAddress conf userType
+emptyReadAddressM2S userVal =
+  M2S_ReadAddress
+    { _arid = 0
+    , _araddr = 0
+    , _arregion = toKeepType 0
+    , _arlen = toKeepType 0
+    , _arsize = toKeepType $ C.unpack 0
+    , _arburst = toKeepType $ C.unpack 0
+    , _arlock = toKeepType $ C.unpack 0
+    , _arcache = toKeepType $ C.unpack 0
+    , _arprot = toKeepType $ C.unpack 0
+    , _arqos = toKeepType $ C.unpack 0
+    , _aruser = userVal
+    }
 
 {- | Force a /nack/ on the backward channel and /no data/ on the forward
 channel if reset is asserted.

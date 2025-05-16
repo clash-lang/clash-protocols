@@ -34,6 +34,7 @@ module Protocols.Axi4.WriteAddress (
   axi4WriteAddrMsgToWriteAddrInfo,
   axi4WriteAddrMsgFromWriteAddrInfo,
   forceResetSanity,
+  emptyWriteAddressM2S,
 ) where
 
 -- base
@@ -375,3 +376,27 @@ forceResetSanity ::
   (C.KnownDomain dom, C.HiddenReset dom) =>
   Circuit (Axi4WriteAddress dom conf userType) (Axi4WriteAddress dom conf userType)
 forceResetSanity = forceResetSanityGeneric
+
+-- | Creates an empty 'M2S_WriteAddress' message with all fields set to 0.
+emptyWriteAddressM2S ::
+  forall conf userType.
+  ( KnownAxi4WriteAddressConfig conf
+  , C.KnownNat (AWIdWidth conf)
+  , C.KnownNat (AWAddrWidth conf)
+  ) =>
+  userType ->
+  M2S_WriteAddress conf userType
+emptyWriteAddressM2S user =
+  M2S_WriteAddress
+    { _awid = 0
+    , _awaddr = 0
+    , _awregion = toKeepType 0
+    , _awlen = toKeepType 0
+    , _awsize = toKeepType B(C.unpack 0)
+    , _awburst = toKeepType (C.unpack 0)
+    , _awlock = toKeepType (C.unpack 0)
+    , _awcache = toKeepType (C.unpack 0)
+    , _awprot = toKeepType (C.unpack 0)
+    , _awqos = toKeepType 0
+    , _awuser = user
+    }
