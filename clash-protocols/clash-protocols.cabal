@@ -83,7 +83,7 @@ common common-options
 
   default-language: Haskell2010
   build-depends:
-    base >= 4.15.0.0,
+    base >= 4.16.1.0,
     Cabal,
 
     clash-prelude >= 1.8.1 && < 1.10,
@@ -93,7 +93,7 @@ common common-options
 
 custom-setup
   setup-depends:
-    base          >= 4.11 && <5,
+    base          >= 4.16 && <5,
     Cabal         >= 2.4,
     cabal-doctest >= 1.0.1 && <1.1
 
