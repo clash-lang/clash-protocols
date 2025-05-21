@@ -1,5 +1,6 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# OPTIONS_GHC -fconstraint-solver-iterations=10 #-}
 
 -- | Circuits and utils for working with Standard mode wishbone circuits.
 module Protocols.Wishbone.Standard where
@@ -129,42 +130,26 @@ memoryWb ::
   Circuit (Wishbone dom 'Standard addressWidth a) ()
 memoryWb ram = Circuit go
  where
-  go (m2s, ()) = (mux inCycle s2m1 (pure emptyWishboneS2M), ())
+  go (m2s, ()) = (s2m1, ())
    where
-    inCycle = (busCycle <$> m2s) .&&. (strobe <$> m2s)
-    s2m0 = reply m2s
-    s2m1 = mealy delayControls Wait (bundle (m2s, s2m0))
+    (readAddr, write, s2m0) = unbundle $ mealy fsm Wait m2s
+    s2m1 = (\s2m dat -> s2m{readData = dat}) <$> s2m0 <*> readValue
+    readValue = ram readAddr write
 
-  delayControls st (m2s, s2m)
-    -- no need to delay non-ACK responses
-    | err s2m || retry s2m = (Wait, s2m)
+  fsm st m2s
+    -- Manager must be active if we're in this state
+    | AckRead <- st = (Wait, (0, Nothing, noS2M{acknowledge = True}))
+    -- Stay in Wait for invalid transactions
+    | isError = (Wait, (0, Nothing, noS2M{err = True}))
     -- write requests can be ACKed directly
-    | Wait <- st, writeEnable m2s = (Wait, emptyWishboneS2M{acknowledge = True})
-    -- read ACKs need to be delayed one cycle
-    | Wait <- st, otherwise = (AckRead, emptyWishboneS2M)
-    | AckRead <- st = (Wait, s2m)
-
-  reply ::
-    Signal dom (WishboneM2S addressWidth (BitSize a `DivRU` 8) a) ->
-    Signal dom (WishboneS2M a)
-  reply request = do
-    ack <- (writeAck .||. readAck) .&&. (not <$> isError) .&&. requestValid
-    errVal <- isError
-    val <- readValue
-    pure $ (emptyWishboneS2M @a){acknowledge = ack, err = errVal, readData = val}
+    | isWrite = (Wait, (0, write, noS2M{acknowledge = True}))
+    -- For read requests we go to AckRead state
+    | isRead = (AckRead, (m2s.addr, Nothing, noS2M))
+    | otherwise = (Wait, (0, Nothing, noS2M))
    where
-    addr1 = addr <$> request
-    writeData1 = writeData <$> request
-    writeAck = (\WishboneM2S{..} -> writeEnable && strobe && busCycle) <$> request
-    write =
-      mux
-        writeAck
-        (Just <$> ((,) <$> addr1 <*> writeData1))
-        (pure Nothing)
-
-    readAck = (\WishboneM2S{..} -> writeEnable && strobe && busCycle) <$> request
-
-    requestValid = (busCycle <$> request) .&&. (strobe <$> request)
-
-    readValue = ram addr1 write
-    isError = requestValid .&&. (/= maxBound) <$> (busSelect <$> request)
+    noS2M = emptyWishboneS2M @()
+    managerActive = m2s.busCycle && m2s.strobe
+    isError = managerActive && (m2s.busSelect /= maxBound)
+    isWrite = managerActive && m2s.writeEnable
+    isRead = managerActive && not (m2s.writeEnable)
+    write = Just (m2s.addr, m2s.writeData)
