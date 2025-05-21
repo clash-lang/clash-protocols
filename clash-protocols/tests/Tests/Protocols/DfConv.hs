@@ -1,4 +1,3 @@
-{-# LANGUAGE NumericUnderscores #-}
 -- TODO: Fix warnings introduced by GHC 9.2 w.r.t. incomplete lazy pattern matches
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
@@ -10,21 +9,21 @@ import Data.Maybe (fromMaybe)
 import Prelude
 
 -- clash-prelude
-import qualified Clash.Prelude as C
+import Clash.Prelude qualified as C
 
 -- list
 import Data.List (mapAccumL, partition, transpose)
 
 -- containers
-import qualified Data.HashMap.Strict as HashMap
+import Data.HashMap.Strict qualified as HashMap
 
 -- extra
 import Data.Proxy (Proxy (..))
 
 -- hedgehog
 import Hedgehog
-import qualified Hedgehog.Gen as Gen
-import qualified Hedgehog.Range as Range
+import Hedgehog.Gen qualified as Gen
+import Hedgehog.Range qualified as Range
 
 -- tasty
 import Test.Tasty
@@ -34,13 +33,13 @@ import Test.Tasty.TH (testGroupGenerator)
 
 -- clash-protocols (me!)
 import Protocols
-import qualified Protocols.DfConv as DfConv
+import Protocols.DfConv qualified as DfConv
 import Protocols.Hedgehog
 import Protocols.Internal
 
 -- tests
 
-import qualified Tests.Protocols.Df as DfTest
+import Tests.Protocols.Df qualified as DfTest
 import Util
 
 ---------------------------------------------------------------

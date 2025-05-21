@@ -8,10 +8,10 @@
 
 module Tests.Protocols.Plugin where
 
-import qualified Clash.Prelude as C
+import Clash.Prelude qualified as C
 
 import Protocols
-import qualified Protocols.Df as Df
+import Protocols.Df qualified as Df
 
 {- | Simply swap two streams. Note that the 'circuit' is a magic keyword the
 'Protocols.Plugin' looks for in order to do its work.

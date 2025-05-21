@@ -1,4 +1,3 @@
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Tests.Protocols.PacketStream.Base (
@@ -7,12 +6,12 @@ module Tests.Protocols.PacketStream.Base (
 
 import Clash.Prelude
 
-import qualified Data.List as L
+import Data.List qualified as L
 import Data.List.Extra (unsnoc)
 
 import Hedgehog (Property)
-import qualified Hedgehog.Gen as Gen
-import qualified Hedgehog.Range as Range
+import Hedgehog.Gen qualified as Gen
+import Hedgehog.Range qualified as Range
 
 import Test.Tasty (TestTree, localOption, mkTimeout)
 import Test.Tasty.Hedgehog (HedgehogTestLimit (HedgehogTestLimit))

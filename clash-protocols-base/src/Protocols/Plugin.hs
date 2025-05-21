@@ -22,7 +22,7 @@ module Protocols.Plugin (
 import Prelude
 
 -- clash-prelude
-import qualified Clash.Explicit.Prelude as C
+import Clash.Explicit.Prelude qualified as C
 
 -- clash-protocols
 import Protocols.Plugin.Cpp
@@ -33,13 +33,13 @@ import Protocols.Plugin.Types
 import Protocols.Plugin.Units
 
 -- circuit-notation
-import qualified CircuitNotation as CN
+import CircuitNotation qualified as CN
 
 -- tagged
 import Data.Tagged
 
 -- ghc
-import qualified GHC.Plugins as GHC
+import GHC.Plugins qualified as GHC
 
 instance Protocol () where
   type Fwd () = ()

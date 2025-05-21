@@ -1,7 +1,3 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-missing-fields #-}
@@ -43,7 +39,7 @@ import Data.Kind (Type)
 import GHC.Generics (Generic)
 
 -- clash-prelude
-import qualified Clash.Prelude as C
+import Clash.Prelude qualified as C
 
 -- me
 import Protocols.Axi4.Common

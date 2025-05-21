@@ -1,6 +1,3 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {- |
@@ -41,16 +38,16 @@ import Protocols
 import Protocols.Hedgehog.Internal
 
 -- clash-prelude
-import qualified Clash.Prelude as C
+import Clash.Prelude qualified as C
 
 -- clash-prelude-hedgehog
 import Clash.Hedgehog.Sized.Vector (genVec)
 
 -- hedgehog
 import Hedgehog ((===))
-import qualified Hedgehog as H
-import qualified Hedgehog.Gen as Gen
-import qualified Hedgehog.Range as Range
+import Hedgehog qualified as H
+import Hedgehog.Gen qualified as Gen
+import Hedgehog.Range qualified as Range
 
 -- lifted-async
 import Control.Concurrent.Async.Lifted (race)

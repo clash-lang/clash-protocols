@@ -14,7 +14,7 @@ import GHC.TypeNats (Nat)
 -- clash-prelude
 
 import Clash.Prelude (type (-), type (^))
-import qualified Clash.Prelude as C
+import Clash.Prelude qualified as C
 
 import Protocols.Internal
 

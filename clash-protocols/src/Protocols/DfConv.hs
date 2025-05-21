@@ -1,7 +1,3 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -94,16 +90,16 @@ import Clash.Prelude hiding (
   zip,
   zipWith,
  )
-import qualified Clash.Prelude as C
+import Clash.Prelude qualified as C
 import Control.Arrow ((***))
 import Control.Monad (when)
 import Control.Monad.State (State, get, put, runState)
-import qualified Data.Bifunctor as B
+import Data.Bifunctor qualified as B
 import Data.Maybe (isJust)
 import Data.Proxy (Proxy (..))
 import Data.Tuple (swap)
 import GHC.Stack (HasCallStack)
-import qualified Prelude as P
+import Prelude qualified as P
 
 -- me
 import Protocols.Axi4.Common
@@ -113,9 +109,9 @@ import Protocols.Axi4.WriteAddress
 import Protocols.Axi4.WriteData
 import Protocols.Axi4.WriteResponse
 import Protocols.Df (Df)
-import qualified Protocols.Df as Df
+import Protocols.Df qualified as Df
 import Protocols.Internal
-import qualified Protocols.Vec as Vec
+import Protocols.Vec qualified as Vec
 
 {- | Class for protocols that are "similar" to 'Df', i.e. they can be converted
 to and from a pair of 'Df' ports (one going 'Fwd', one going 'Bwd'), using

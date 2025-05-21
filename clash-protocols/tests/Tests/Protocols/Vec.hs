@@ -1,5 +1,3 @@
-{-# LANGUAGE NumericUnderscores #-}
-
 module Tests.Protocols.Vec where
 
 -- base
@@ -7,7 +5,7 @@ import Prelude
 
 -- clash-prelude
 import Clash.Prelude (System)
-import qualified Clash.Prelude as C
+import Clash.Prelude qualified as C
 
 -- hedgehog
 import Hedgehog
@@ -20,7 +18,7 @@ import Test.Tasty.TH (testGroupGenerator)
 
 -- clash-protocols (me!)
 import Protocols
-import qualified Protocols.Vec as Vec
+import Protocols.Vec qualified as Vec
 
 import Clash.Hedgehog.Sized.Vector (genVec)
 import Protocols.Hedgehog

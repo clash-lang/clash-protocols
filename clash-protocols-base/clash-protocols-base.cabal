@@ -19,32 +19,16 @@ flag large-tuples
 
 common common-options
   default-extensions:
-    BangPatterns
-    BinaryLiterals
-    ConstraintKinds
     CPP
     DataKinds
     DefaultSignatures
     DeriveAnyClass
-    DeriveDataTypeable
-    DeriveFoldable
-    DeriveFunctor
-    DeriveGeneric
-    DeriveLift
-    DeriveTraversable
     DerivingStrategies
-    InstanceSigs
-    KindSignatures
     LambdaCase
     NoStarIsType
-    PolyKinds
-    RankNTypes
-    ScopedTypeVariables
-    StandaloneDeriving
+    OverloadedRecordDot
     TupleSections
-    TypeApplications
     TypeFamilies
-    TypeOperators
     ViewPatterns
 
     -- TemplateHaskell is used to support convenience functions such as
@@ -70,9 +54,9 @@ common common-options
     -- a no-specialize pragma to every function with a blackbox.
     -fno-worker-wrapper
 
-  default-language: Haskell2010
+  default-language: GHC2021
   build-depends:
-    base >= 4.15.0.0,
+    base >= 4.16.1.0,
     Cabal,
 
     clash-prelude >= 1.8.1 && < 1.10,
@@ -82,7 +66,7 @@ common common-options
 
 custom-setup
   setup-depends:
-    base          >= 4.11 && <5,
+    base          >= 4.16 && <5,
     Cabal         >= 2.4,
 
 library
@@ -114,4 +98,4 @@ library
   other-modules:
     Protocols.Plugin.Types
 
-  default-language: Haskell2010
+  default-language: GHC2021

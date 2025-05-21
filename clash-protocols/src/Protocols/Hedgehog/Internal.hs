@@ -1,6 +1,3 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
@@ -26,11 +23,11 @@ import Protocols.Internal.TH
 
 -- clash-prelude
 import Clash.Prelude (type (*), type (+), type (<=))
-import qualified Clash.Prelude as C
+import Clash.Prelude qualified as C
 
 -- hedgehog
-import qualified Hedgehog as H
-import qualified Hedgehog.Internal.Property as H
+import Hedgehog qualified as H
+import Hedgehog.Internal.Property qualified as H
 
 {- | Resets for 30 cycles, checks for superfluous data for 50 cycles after
 seeing last valid data cycle, and times out after seeing 1000 consecutive

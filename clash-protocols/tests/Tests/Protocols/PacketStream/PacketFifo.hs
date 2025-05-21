@@ -1,5 +1,3 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Tests.Protocols.PacketStream.PacketFifo (
@@ -9,13 +7,13 @@ module Tests.Protocols.PacketStream.PacketFifo (
 import Clash.Prelude
 
 import Data.Int (Int16)
-import qualified Data.List as L
+import Data.List qualified as L
 
 import Hedgehog
-import qualified Hedgehog.Gen as Gen
-import qualified Hedgehog.Range as Range
+import Hedgehog.Gen qualified as Gen
+import Hedgehog.Range qualified as Range
 
-import qualified Prelude as P
+import Prelude qualified as P
 
 import Test.Tasty
 import Test.Tasty.Hedgehog (HedgehogTestLimit (HedgehogTestLimit))

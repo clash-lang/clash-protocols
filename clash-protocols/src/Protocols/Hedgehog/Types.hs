@@ -1,5 +1,3 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
 {-# OPTIONS_HADDOCK hide #-}
@@ -10,13 +8,13 @@ module Protocols.Hedgehog.Types where
 -- deepseq
 import Control.DeepSeq
 
-import qualified Clash.Prelude as C
+import Clash.Prelude qualified as C
 import Data.Proxy
 import GHC.Stack (HasCallStack)
 import Protocols.Internal.Types
 
 -- hedgehog
-import qualified Hedgehog as H
+import Hedgehog qualified as H
 
 -- | Superclass class to reduce syntactical noise.
 class (NFData a, C.NFDataX a, C.ShowX a, C.Show a, Eq a) => TestType a

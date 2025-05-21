@@ -1,4 +1,3 @@
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -17,7 +16,7 @@ import Control.DeepSeq (NFData)
 import Protocols
 import Protocols.Idle
 
-import qualified Clash.Prelude as C
+import Clash.Prelude qualified as C
 
 -- | Data communicated from a Wishbone Master to a Wishbone Slave
 data WishboneM2S addressWidth selWidth dat = WishboneM2S

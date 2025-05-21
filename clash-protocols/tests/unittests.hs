@@ -6,8 +6,8 @@ import Test.Tasty
 import Text.Read (readMaybe)
 import Prelude
 
-import qualified Tests.Haxioms
-import qualified Tests.Protocols
+import Tests.Haxioms qualified
+import Tests.Protocols qualified
 
 main :: IO ()
 main = do

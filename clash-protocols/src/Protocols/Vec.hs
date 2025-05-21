@@ -19,7 +19,7 @@ import Prelude ()
 
 -- clash-prelude
 import Clash.Prelude hiding (concat, split, unconcat, unzip, unzip3, zip, zip3)
-import qualified Clash.Prelude as C
+import Clash.Prelude qualified as C
 
 -- clash-protocols-base
 import Protocols.Plugin

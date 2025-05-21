@@ -1,8 +1,6 @@
-{-# LANGUAGE FlexibleContexts #-}
-
 module Protocols.Internal.Types where
 
-import qualified Clash.Prelude as C
+import Clash.Prelude qualified as C
 import Data.Default (Default (..))
 import Data.Proxy
 import GHC.Base (Type)

@@ -30,27 +30,14 @@ flag large-tuples
 
 common common-options
   default-extensions:
-    BangPatterns
-    BinaryLiterals
-    ConstraintKinds
     CPP
     DataKinds
     DefaultSignatures
     DeriveAnyClass
-    DeriveDataTypeable
-    DeriveFoldable
-    DeriveFunctor
-    DeriveGeneric
-    DeriveLift
-    DeriveTraversable
+    OverloadedRecordDot
     DerivingStrategies
-    InstanceSigs
-    KindSignatures
     LambdaCase
     NoStarIsType
-    PolyKinds
-    RankNTypes
-    ScopedTypeVariables
     StandaloneDeriving
     TupleSections
     TypeApplications
@@ -81,9 +68,9 @@ common common-options
     -- a no-specialize pragma to every function with a blackbox.
     -fno-worker-wrapper
 
-  default-language: Haskell2010
+  default-language: GHC2021
   build-depends:
-    base >= 4.15.0.0,
+    base >= 4.16.1.0,
     Cabal,
 
     clash-prelude >= 1.8.1 && < 1.10,
@@ -93,7 +80,7 @@ common common-options
 
 custom-setup
   setup-depends:
-    base          >= 4.11 && <5,
+    base          >= 4.16 && <5,
     Cabal         >= 2.4,
     cabal-doctest >= 1.0.1 && <1.1
 
@@ -175,7 +162,7 @@ library
     Protocols.Hedgehog.Types
     Protocols.Internal.Types
 
-  default-language: Haskell2010
+  default-language: GHC2021
 
 test-suite unittests
   import: common-options
@@ -223,7 +210,7 @@ test-suite unittests
 test-suite doctests
   import:           common-options
   type:             exitcode-stdio-1.0
-  default-language: Haskell2010
+  default-language: GHC2021
   main-is:          doctests.hs
   hs-source-dirs:   tests
 

@@ -2,7 +2,7 @@
 
 module Protocols.Internal.TH where
 
-import qualified Clash.Prelude as C
+import Clash.Prelude qualified as C
 import Control.Monad (zipWithM)
 import Control.Monad.Extra (concatMapM)
 import Data.Proxy

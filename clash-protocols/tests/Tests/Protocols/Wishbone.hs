@@ -1,8 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ApplicativeDo #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Tests.Protocols.Wishbone where
@@ -13,11 +10,11 @@ import Control.DeepSeq (NFData, force)
 import Control.Exception (SomeException, evaluate, try)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Either (isLeft)
-import qualified Data.List as L
+import Data.List qualified as L
 import GHC.Stack (HasCallStack)
 import Hedgehog
-import qualified Hedgehog.Gen as Gen
-import qualified Hedgehog.Range as Range
+import Hedgehog.Gen qualified as Gen
+import Hedgehog.Range qualified as Range
 import Protocols
 import Protocols.Hedgehog (defExpectOptions)
 import Protocols.Wishbone
