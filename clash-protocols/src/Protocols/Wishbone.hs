@@ -262,6 +262,10 @@ emptyWishboneS2M =
     , stall = False
     }
 
+-- | Given a tuple of a wishbone request and corresponding response, determine if the bus is active.
+hasBusActivity :: (WishboneM2S addressWidth sel dat, WishboneS2M dat) -> Bool
+hasBusActivity (m2s, s2m) = busCycle m2s || hasTerminateFlag s2m
+
 -- | Helper function to determine whether a Slave signals the termination of a cycle.
 hasTerminateFlag :: WishboneS2M dat -> Bool
 hasTerminateFlag s2m = acknowledge s2m || err s2m || retry s2m

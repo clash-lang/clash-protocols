@@ -111,6 +111,7 @@ library
       -- To be removed; we need 'Test.Tasty.Hedgehog.Extra' to fix upstream issues
     , tasty >= 1.2 && < 1.5
     , tasty-hedgehog >= 1.2
+    , string-interpolate
 
   exposed-modules:
     Protocols
@@ -193,6 +194,7 @@ test-suite unittests
     Util
 
   build-depends:
+    string-interpolate,
     clash-protocols-base,
     clash-protocols,
     clash-prelude-hedgehog,

@@ -5,13 +5,12 @@
 module Tests.Protocols.Wishbone where
 
 import Clash.Hedgehog.Sized.BitVector
-import Clash.Prelude hiding (not, (&&))
+import Clash.Prelude as C hiding (not, (&&))
 import Control.DeepSeq (NFData, force)
 import Control.Exception (SomeException, evaluate, try)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Either (isLeft)
 import Data.List qualified as L
-import GHC.Stack (HasCallStack)
 import Hedgehog
 import Hedgehog.Gen qualified as Gen
 import Hedgehog.Range qualified as Range
@@ -44,27 +43,6 @@ genWbTransferPair genA =
     (,)
     (genWishboneTransfer (Range.constantBounded) genA)
     genSmallInt
-
--- Fourmolu only allows CPP conditions on complete top-level definitions.
-blockRamUClear ::
-  forall n dom a addr.
-  ( HasCallStack
-  , HiddenClockResetEnable dom
-  , NFDataX a
-  , Enum addr
-  , NFDataX addr
-  , 1 <= n
-  ) =>
-  (Index n -> a) ->
-  SNat n ->
-  Signal dom addr ->
-  Signal dom (Maybe (addr, a)) ->
-  Signal dom a
-#if MIN_VERSION_clash_prelude(1,9,0)
-blockRamUClear initF = blockRamU (ClearOnReset initF)
-#else
-blockRamUClear initF n = blockRamU ClearOnReset n initF
-#endif
 
 --
 -- 'addrReadId' circuit
@@ -165,7 +143,7 @@ prop_memoryWb_model =
       wishbonePropWithModel @System
         defExpectOptions
         memoryWbModel
-        (memoryWb (blockRamUClear (const def) (SNat @256)))
+        (memoryWb (blockRam (C.replicate d256 0)))
         (genData (genWishboneTransfer @8 (Range.constantBounded) genSmallInt))
         [] -- initial state
 
@@ -221,7 +199,7 @@ prop_memoryWb_validator = property $ do
       withClockResetEnable @System clockGen resetGen enableGen $
         let
           driver = driveStandard @System @(BitVector 8) @8 defExpectOptions reqs
-          memory = memoryWb @System @(BitVector 8) @8 (blockRamUClear (const def) (SNat @256))
+          memory = memoryWb @System @(BitVector 8) @8 (blockRam (C.replicate d256 0))
          in
           evaluateUnitCircuit
             sampleNumber
@@ -263,7 +241,7 @@ prop_memoryWb_validator_lenient = property $ do
       withClockResetEnable @System clockGen resetGen enableGen $
         let
           driver = driveStandard @System @(BitVector 8) @8 defExpectOptions reqs
-          memory = memoryWb @System @(BitVector 8) @8 (blockRamUClear (const def) (SNat @256))
+          memory = memoryWb @System @(BitVector 8) @8 (blockRam (C.replicate d256 0))
          in
           evaluateUnitCircuit
             sampleNumber
