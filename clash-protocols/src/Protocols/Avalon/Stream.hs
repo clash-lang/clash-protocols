@@ -1,8 +1,4 @@
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
 -- Hashable (Unsigned n)
@@ -18,18 +14,18 @@ import Control.DeepSeq (NFData)
 import Control.Monad (when)
 import Control.Monad.State (get, gets, modify, put)
 import Data.Hashable (Hashable)
-import qualified Data.Maybe as Maybe
+import Data.Maybe qualified as Maybe
 import Data.Proxy
-import qualified Prelude as P
+import Prelude qualified as P
 
 -- clash-prelude
 import Clash.Prelude hiding (concat, length, take)
-import qualified Clash.Prelude as C
+import Clash.Prelude qualified as C
 
 -- me
 
-import qualified Protocols.Df as Df
-import qualified Protocols.DfConv as DfConv
+import Protocols.Df qualified as Df
+import Protocols.DfConv qualified as DfConv
 import Protocols.Hedgehog
 import Protocols.Idle
 import Protocols.Internal

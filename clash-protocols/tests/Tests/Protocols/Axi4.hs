@@ -1,5 +1,3 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Tests.Protocols.Axi4 where
@@ -8,15 +6,15 @@ module Tests.Protocols.Axi4 where
 import Prelude
 
 -- clash-prelude
-import qualified Clash.Prelude as C
+import Clash.Prelude qualified as C
 
 -- extra
 import Data.Proxy (Proxy (..))
 
 -- hedgehog
 import Hedgehog
-import qualified Hedgehog.Gen as Gen
-import qualified Hedgehog.Range as Range
+import Hedgehog.Gen qualified as Gen
+import Hedgehog.Range qualified as Range
 
 -- tasty
 import Test.Tasty
@@ -33,13 +31,13 @@ import Protocols.Axi4.Stream
 import Protocols.Axi4.WriteAddress
 import Protocols.Axi4.WriteData
 import Protocols.Axi4.WriteResponse
-import qualified Protocols.DfConv as DfConv
+import Protocols.DfConv qualified as DfConv
 import Protocols.Hedgehog
 import Protocols.Internal
 
 -- tests
 
-import qualified Tests.Protocols.Df as DfTest
+import Tests.Protocols.Df qualified as DfTest
 import Util
 
 ---------------------------------------------------------------

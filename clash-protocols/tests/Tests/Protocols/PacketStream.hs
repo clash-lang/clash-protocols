@@ -2,14 +2,14 @@ module Tests.Protocols.PacketStream (tests) where
 
 import Test.Tasty
 
-import qualified Tests.Protocols.PacketStream.AsyncFifo
-import qualified Tests.Protocols.PacketStream.Base
-import qualified Tests.Protocols.PacketStream.Converters
-import qualified Tests.Protocols.PacketStream.Depacketizers
-import qualified Tests.Protocols.PacketStream.PacketFifo
-import qualified Tests.Protocols.PacketStream.Packetizers
-import qualified Tests.Protocols.PacketStream.Padding
-import qualified Tests.Protocols.PacketStream.Routing
+import Tests.Protocols.PacketStream.AsyncFifo qualified
+import Tests.Protocols.PacketStream.Base qualified
+import Tests.Protocols.PacketStream.Converters qualified
+import Tests.Protocols.PacketStream.Depacketizers qualified
+import Tests.Protocols.PacketStream.PacketFifo qualified
+import Tests.Protocols.PacketStream.Packetizers qualified
+import Tests.Protocols.PacketStream.Padding qualified
+import Tests.Protocols.PacketStream.Routing qualified
 
 tests :: TestTree
 tests =

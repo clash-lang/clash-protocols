@@ -1,7 +1,3 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -94,16 +90,16 @@ import Prelude ()
 
 import Control.DeepSeq (NFData)
 import Control.Monad.State (get, put)
-import qualified Data.Maybe as Maybe
+import Data.Maybe qualified as Maybe
 import Data.Proxy
 
 -- clash-prelude
 import Clash.Prelude hiding (concat, length, take)
-import qualified Clash.Prelude as C
+import Clash.Prelude qualified as C
 
 -- me
 
-import qualified Protocols.DfConv as DfConv
+import Protocols.DfConv qualified as DfConv
 import Protocols.Idle
 import Protocols.Internal
 

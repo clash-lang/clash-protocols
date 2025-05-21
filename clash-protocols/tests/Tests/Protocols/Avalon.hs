@@ -1,5 +1,3 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Tests.Protocols.Avalon where
@@ -8,14 +6,14 @@ module Tests.Protocols.Avalon where
 import Prelude
 
 -- clash-prelude
-import qualified Clash.Prelude as C
+import Clash.Prelude qualified as C
 
 -- extra
 import Data.Proxy (Proxy (..))
 
 -- hedgehog
 import Hedgehog
-import qualified Hedgehog.Gen as Gen
+import Hedgehog.Gen qualified as Gen
 
 -- tasty
 import Test.Tasty
@@ -27,13 +25,13 @@ import Test.Tasty.TH (testGroupGenerator)
 import Protocols
 import Protocols.Avalon.MemMap
 import Protocols.Avalon.Stream
-import qualified Protocols.DfConv as DfConv
+import Protocols.DfConv qualified as DfConv
 import Protocols.Hedgehog
 import Protocols.Internal
 
 -- tests
 
-import qualified Tests.Protocols.Df as DfTest
+import Tests.Protocols.Df qualified as DfTest
 import Util
 
 ---------------------------------------------------------------

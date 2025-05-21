@@ -1,5 +1,3 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# OPTIONS_HADDOCK hide #-}
 
@@ -58,20 +56,20 @@ module Protocols.PacketStream.Base (
   eitherMetaS,
 ) where
 
-import qualified Prelude as P
+import Prelude qualified as P
 
 import Control.DeepSeq (NFData)
 
 import Clash.Prelude hiding (empty, sample)
 
-import qualified Data.Bifunctor as B
+import Data.Bifunctor qualified as B
 import Data.Coerce (coerce)
-import qualified Data.Maybe as Maybe
+import Data.Maybe qualified as Maybe
 import Data.Proxy
 
 import Protocols
-import qualified Protocols.Df as Df
-import qualified Protocols.DfConv as DfConv
+import Protocols.Df qualified as Df
+import Protocols.DfConv qualified as DfConv
 import Protocols.Hedgehog (Test (..))
 import Protocols.Idle
 
@@ -175,7 +173,10 @@ newtype PacketStreamS2M = PacketStreamS2M
   { _ready :: Bool
   -- ^ Iff True, the subordinate is ready to receive data.
   }
-  deriving (Bundle, Eq, Generic, NFData, NFDataX, Show, ShowX)
+  -- deriving (Bundle, Eq, Generic, NFData, NFDataX, Show, ShowX)
+  deriving stock (Generic, Show)
+  deriving anyclass (Bundle, ShowX)
+  deriving newtype (NFDataX, Eq)
 
 -- | Used by circuit-notation to create a sink that always acknowledges
 instance Default PacketStreamS2M where

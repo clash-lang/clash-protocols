@@ -1,5 +1,3 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Tests.Protocols.PacketStream.Packetizers (
@@ -10,8 +8,8 @@ import Clash.Hedgehog.Sized.Vector (genVec)
 import Clash.Prelude
 
 import Hedgehog (Property)
-import qualified Hedgehog.Gen as Gen
-import qualified Hedgehog.Range as Range
+import Hedgehog.Gen qualified as Gen
+import Hedgehog.Range qualified as Range
 
 import Test.Tasty
 import Test.Tasty.Hedgehog (HedgehogTestLimit (HedgehogTestLimit))
@@ -19,7 +17,7 @@ import Test.Tasty.Hedgehog.Extra (testProperty)
 import Test.Tasty.TH (testGroupGenerator)
 
 import Protocols
-import qualified Protocols.Df as Df
+import Protocols.Df qualified as Df
 import Protocols.Hedgehog
 import Protocols.PacketStream (packetizeFromDfC, packetizerC)
 import Protocols.PacketStream.Base

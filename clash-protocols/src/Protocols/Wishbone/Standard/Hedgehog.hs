@@ -1,4 +1,3 @@
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -42,12 +41,12 @@ where
 
 import Clash.Prelude as C hiding (cycle, indices, not, (&&), (||))
 import Clash.Signal.Internal (Signal ((:-)))
-import qualified Data.Bifunctor as B
+import Data.Bifunctor qualified as B
 import GHC.Stack (HasCallStack)
 import Hedgehog ((===))
-import qualified Hedgehog as H
-import qualified Hedgehog.Gen as Gen
-import qualified Hedgehog.Range as Range
+import Hedgehog qualified as H
+import Hedgehog.Gen qualified as Gen
+import Hedgehog.Range qualified as Range
 import Protocols hiding (circuit, stallC)
 import Protocols.Hedgehog
 import Protocols.Wishbone

@@ -8,7 +8,6 @@ Maintainer :  QBayLogic B.V. <devops@qbaylogic.com>
 Compile-time dependent constants. Inspired by @clash-prelude@'s @Clash.CPP@.
 -}
 
-{-# LANGUAGE CPP #-}
 
 {-# OPTIONS_HADDOCK hide #-}
 

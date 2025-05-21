@@ -38,14 +38,14 @@ module Protocols.PacketStream.Hedgehog (
 
 import Clash.Hedgehog.Sized.Vector (genVec)
 import Clash.Prelude
-import qualified Clash.Sized.Vector as Vec
+import Clash.Sized.Vector qualified as Vec
 
-import qualified Data.List as L
+import Data.List qualified as L
 import Data.Maybe (fromJust, isJust)
 
 import Hedgehog (Gen, Range)
-import qualified Hedgehog.Gen as Gen
-import qualified Hedgehog.Range as Range
+import Hedgehog.Gen qualified as Gen
+import Hedgehog.Range qualified as Range
 
 import Protocols.PacketStream.Base
 

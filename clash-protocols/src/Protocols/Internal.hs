@@ -1,7 +1,3 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RoleAnnotations #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -28,9 +24,9 @@ import Data.Maybe (fromMaybe)
 import Data.Proxy
 import Prelude hiding (const, map)
 
-import qualified Clash.Explicit.Prelude as CE
+import Clash.Explicit.Prelude qualified as CE
 import Clash.Prelude (type (*), type (+))
-import qualified Clash.Prelude as C
+import Clash.Prelude qualified as C
 
 import Protocols.Internal.TH (
   backPressureTupleInstances,
@@ -57,7 +53,9 @@ import GHC.Generics (Generic)
 
 -- | Protocol-agnostic acknowledgement
 newtype Ack = Ack Bool
-  deriving (Generic, C.NFDataX, C.ShowX, Show, C.Bundle, Eq, NFData, Ord)
+  deriving stock (Generic, Show)
+  deriving anyclass (C.Bundle, C.ShowX)
+  deriving newtype (C.NFDataX, Eq, Ord)
 
 -- | Acknowledge. Used in circuit-notation plugin to drive ignore components.
 instance Default Ack where

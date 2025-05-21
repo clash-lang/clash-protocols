@@ -15,7 +15,7 @@ module Protocols.PacketStream.Padding (
 
 import Clash.Prelude
 
-import qualified Data.Bifunctor as B
+import Data.Bifunctor qualified as B
 import Data.Maybe
 import Data.Type.Equality ((:~:) (Refl))
 

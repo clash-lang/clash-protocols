@@ -1,12 +1,11 @@
 {-# LANGUAGE ApplicativeDo #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards #-}
 
 -- | Circuits and utils for working with Standard mode wishbone circuits.
 module Protocols.Wishbone.Standard where
 
 import Clash.Prelude
-import qualified Data.Bifunctor as B
+import Data.Bifunctor qualified as B
 import Protocols
 import Protocols.Wishbone
 import Prelude hiding (head, not, repeat, (!!), (&&), (||))

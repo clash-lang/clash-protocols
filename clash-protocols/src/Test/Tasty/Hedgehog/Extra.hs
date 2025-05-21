@@ -7,7 +7,7 @@ module Test.Tasty.Hedgehog.Extra (testProperty) where
 import Data.String
 import Hedgehog (Property)
 import Test.Tasty (TestTree)
-import qualified Test.Tasty.Hedgehog as H
+import Test.Tasty.Hedgehog qualified as H
 import Prelude
 
 -- | Like 'Test.Tasty.Hedgehog.testProperty', but inserts correct name

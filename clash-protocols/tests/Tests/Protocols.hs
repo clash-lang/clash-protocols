@@ -1,13 +1,13 @@
 module Tests.Protocols (tests, main) where
 
 import Test.Tasty
-import qualified Tests.Protocols.Avalon
-import qualified Tests.Protocols.Axi4
-import qualified Tests.Protocols.Df
-import qualified Tests.Protocols.DfConv
-import qualified Tests.Protocols.PacketStream
-import qualified Tests.Protocols.Vec
-import qualified Tests.Protocols.Wishbone
+import Tests.Protocols.Avalon qualified
+import Tests.Protocols.Axi4 qualified
+import Tests.Protocols.Df qualified
+import Tests.Protocols.DfConv qualified
+import Tests.Protocols.PacketStream qualified
+import Tests.Protocols.Vec qualified
+import Tests.Protocols.Wishbone qualified
 
 tests :: TestTree
 tests =

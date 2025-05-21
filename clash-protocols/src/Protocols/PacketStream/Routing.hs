@@ -17,10 +17,10 @@ module Protocols.PacketStream.Routing (
 import Clash.Prelude
 
 import Protocols
-import qualified Protocols.Df as Df
+import Protocols.Df qualified as Df
 import Protocols.PacketStream.Base
 
-import qualified Data.Bifunctor as B
+import Data.Bifunctor qualified as B
 import Data.Maybe
 
 -- | Merges multiple packet streams into one, respecting packet boundaries.

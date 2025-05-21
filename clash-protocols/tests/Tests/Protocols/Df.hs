@@ -1,5 +1,3 @@
-{-# LANGUAGE MonomorphismRestriction #-}
-{-# LANGUAGE NumericUnderscores #-}
 -- TODO: Fix warnings introduced by GHC 9.2 w.r.t. incomplete lazy pattern matches
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 -- Hashable (Index n)
@@ -17,11 +15,11 @@ import Prelude
 -- clash-prelude
 
 import Clash.Prelude (type (<=))
-import qualified Clash.Prelude as C
+import Clash.Prelude qualified as C
 
 -- containers
-import qualified Data.HashMap.Strict as HashMap
-import qualified Data.HashSet as HashSet
+import Data.HashMap.Strict qualified as HashMap
+import Data.HashSet qualified as HashSet
 
 -- extra
 import Data.List (mapAccumL, partition, transpose)
@@ -34,8 +32,8 @@ import Data.Hashable (Hashable)
 
 -- hedgehog
 import Hedgehog
-import qualified Hedgehog.Gen as Gen
-import qualified Hedgehog.Range as Range
+import Hedgehog.Gen qualified as Gen
+import Hedgehog.Range qualified as Range
 
 -- tasty
 import Test.Tasty
@@ -45,16 +43,19 @@ import Test.Tasty.TH (testGroupGenerator)
 
 -- clash-protocols (me!)
 import Protocols
-import qualified Protocols.Df as Df
+import Protocols.Df qualified as Df
 import Protocols.Hedgehog
 
 -- tests
 import Util
 
 newtype PlusInt = PlusInt Int
-  deriving (NFData, C.Generic, C.NFDataX, C.ShowX, Show, Eq)
+  deriving stock (C.Generic, Show)
+  deriving anyclass (C.ShowX)
+  deriving newtype (NFData, C.NFDataX, Eq)
 
 instance Semigroup PlusInt where
+  (<>) :: PlusInt -> PlusInt -> PlusInt
   PlusInt i <> PlusInt j = PlusInt (i + j)
 
 instance Monoid PlusInt where

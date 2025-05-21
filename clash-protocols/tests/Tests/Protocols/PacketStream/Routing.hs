@@ -1,4 +1,3 @@
-{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Tests.Protocols.PacketStream.Routing (
@@ -8,21 +7,21 @@ module Tests.Protocols.PacketStream.Routing (
 import Clash.Prelude
 
 import Hedgehog hiding (Parallel)
-import qualified Hedgehog.Gen as Gen
-import qualified Hedgehog.Range as Range
+import Hedgehog.Gen qualified as Gen
+import Hedgehog.Range qualified as Range
 
 import Test.Tasty
 import Test.Tasty.Hedgehog (HedgehogTestLimit (HedgehogTestLimit))
 import Test.Tasty.Hedgehog.Extra (testProperty)
 import Test.Tasty.TH (testGroupGenerator)
 
-import qualified Protocols.Df as Df
+import Protocols.Df qualified as Df
 import Protocols.Hedgehog
 import Protocols.PacketStream.Base
 import Protocols.PacketStream.Hedgehog
 import Protocols.PacketStream.Routing
 
-import qualified Data.List as L
+import Data.List qualified as L
 
 {- |
 Tests a packet arbiter for any data width and number of sources. In particular,

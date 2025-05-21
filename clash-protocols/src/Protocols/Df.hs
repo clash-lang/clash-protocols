@@ -1,8 +1,3 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RecordWildCards #-}
 -- TODO: Fix warnings introduced by GHC 9.2 w.r.t. incomplete lazy pattern matches
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
@@ -103,20 +98,20 @@ import Prelude hiding (
   (!!),
  )
 
-import qualified Data.Bifunctor as B
+import Data.Bifunctor qualified as B
 import Data.Bool (bool)
-import qualified Data.Coerce as Coerce
+import Data.Coerce qualified as Coerce
 import Data.Kind (Type)
 import Data.List ((\\))
-import qualified Data.Maybe as Maybe
+import Data.Maybe qualified as Maybe
 import Data.Proxy
-import qualified Prelude as P
+import Prelude qualified as P
 
 -- clash-prelude
 
-import qualified Clash.Explicit.Prelude as CE
+import Clash.Explicit.Prelude qualified as CE
 import Clash.Prelude (type (<=))
-import qualified Clash.Prelude as C
+import Clash.Prelude qualified as C
 import Clash.Signal.Internal (Signal (..))
 
 -- me

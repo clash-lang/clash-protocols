@@ -1,5 +1,3 @@
-{-# LANGUAGE NumericUnderscores #-}
-
 module Tests.Protocols.PacketStream.Converters (
   tests,
 ) where
@@ -7,8 +5,8 @@ module Tests.Protocols.PacketStream.Converters (
 import Clash.Prelude
 
 import Hedgehog (Property)
-import qualified Hedgehog.Gen as Gen
-import qualified Hedgehog.Range as Range
+import Hedgehog.Gen qualified as Gen
+import Hedgehog.Range qualified as Range
 
 import Test.Tasty
 import Test.Tasty.Hedgehog (HedgehogTestLimit (HedgehogTestLimit))
