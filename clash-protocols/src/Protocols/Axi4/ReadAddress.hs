@@ -158,27 +158,27 @@ data
     (userType :: Type)
   = M2S_NoReadAddress
   | M2S_ReadAddress
-      { _arid :: !(C.BitVector (ARIdWidth conf))
+      { _arid :: C.BitVector (ARIdWidth conf)
       -- ^ Read address id*
-      , _araddr :: !(C.BitVector (ARAddrWidth conf))
+      , _araddr :: C.BitVector (ARAddrWidth conf)
       -- ^ Read address
-      , _arregion :: !(RegionType (ARKeepRegion conf))
+      , _arregion :: RegionType (ARKeepRegion conf)
       -- ^ Read region*
-      , _arlen :: !(BurstLengthType (ARKeepBurstLength conf))
+      , _arlen :: BurstLengthType (ARKeepBurstLength conf)
       -- ^ Burst length*
-      , _arsize :: !(SizeType (ARKeepSize conf))
+      , _arsize :: SizeType (ARKeepSize conf)
       -- ^ Burst size*
-      , _arburst :: !(BurstType (ARKeepBurst conf))
+      , _arburst :: BurstType (ARKeepBurst conf)
       -- ^ Burst type*
-      , _arlock :: !(LockType (ARKeepLock conf))
+      , _arlock :: LockType (ARKeepLock conf)
       -- ^ Lock type*
-      , _arcache :: !(ArCacheType (ARKeepCache conf))
+      , _arcache :: ArCacheType (ARKeepCache conf)
       -- ^ Cache type* (has been renamed to modifiable in AXI spec)
-      , _arprot :: !(PermissionsType (ARKeepPermissions conf))
+      , _arprot :: PermissionsType (ARKeepPermissions conf)
       -- ^ Protection type
-      , _arqos :: !(QosType (ARKeepQos conf))
+      , _arqos :: QosType (ARKeepQos conf)
       -- ^ QoS value
-      , _aruser :: !userType
+      , _aruser :: userType
       -- ^ User data
       }
   deriving (Generic)
@@ -269,27 +269,27 @@ one-to-one with the fields of 'M2S_ReadAddress' except for '_arlen',
 '_arsize', and '_arburst'.
 -}
 data Axi4ReadAddressInfo (conf :: Axi4ReadAddressConfig) (userType :: Type) = Axi4ReadAddressInfo
-  { _ariid :: !(C.BitVector (ARIdWidth conf))
+  { _ariid :: C.BitVector (ARIdWidth conf)
   -- ^ Id
-  , _ariaddr :: !(C.BitVector (ARAddrWidth conf))
+  , _ariaddr :: C.BitVector (ARAddrWidth conf)
   -- ^ Address
-  , _ariregion :: !(RegionType (ARKeepRegion conf))
+  , _ariregion :: RegionType (ARKeepRegion conf)
   -- ^ Region
-  , _arilen :: !(BurstLengthType (ARKeepBurstLength conf))
+  , _arilen :: BurstLengthType (ARKeepBurstLength conf)
   -- ^ Burst length
-  , _arisize :: !(SizeType (ARKeepSize conf))
+  , _arisize :: SizeType (ARKeepSize conf)
   -- ^ Burst size
-  , _ariburst :: !(BurstType (ARKeepBurst conf))
+  , _ariburst :: BurstType (ARKeepBurst conf)
   -- ^ Burst type
-  , _arilock :: !(LockType (ARKeepLock conf))
+  , _arilock :: LockType (ARKeepLock conf)
   -- ^ Lock type
-  , _aricache :: !(ArCacheType (ARKeepCache conf))
+  , _aricache :: ArCacheType (ARKeepCache conf)
   -- ^ Cache type
-  , _ariprot :: !(PermissionsType (ARKeepPermissions conf))
+  , _ariprot :: PermissionsType (ARKeepPermissions conf)
   -- ^ Protection type
-  , _ariqos :: !(QosType (ARKeepQos conf))
+  , _ariqos :: QosType (ARKeepQos conf)
   -- ^ QoS value
-  , _ariuser :: !userType
+  , _ariuser :: userType
   -- ^ User data
   }
   deriving (Generic)
