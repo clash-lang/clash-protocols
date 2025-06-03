@@ -92,15 +92,15 @@ data
     (dataType :: Type)
   = S2M_NoReadData
   | S2M_ReadData
-      { _rid :: !(C.BitVector (RIdWidth conf))
+      { _rid :: C.BitVector (RIdWidth conf)
       -- ^ Read address id*
-      , _rdata :: !dataType
+      , _rdata :: dataType
       -- ^ Read data
-      , _rresp :: !(ResponseType (RKeepResponse conf))
+      , _rresp :: ResponseType (RKeepResponse conf)
       -- ^ Read response
-      , _rlast :: !Bool
+      , _rlast :: Bool
       -- ^ Read last
-      , _ruser :: !userType
+      , _ruser :: userType
       -- ^ User data
       }
   deriving (Generic)

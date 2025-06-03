@@ -75,11 +75,11 @@ data
     (userType :: Type)
   = S2M_NoWriteResponse
   | S2M_WriteResponse
-      { _bid :: !(C.BitVector (BIdWidth conf))
+      { _bid :: C.BitVector (BIdWidth conf)
       -- ^ Response ID
-      , _bresp :: !(ResponseType (BKeepResponse conf))
+      , _bresp :: ResponseType (BKeepResponse conf)
       -- ^ Write response
-      , _buser :: !userType
+      , _buser :: userType
       -- ^ User data
       }
   deriving (Generic)

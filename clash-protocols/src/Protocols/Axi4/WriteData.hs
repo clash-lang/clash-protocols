@@ -90,11 +90,11 @@ data
     (userType :: Type)
   = M2S_NoWriteData
   | M2S_WriteData
-      { _wdata :: !(StrictStrobeType (WNBytes conf) (WKeepStrobe conf))
+      { _wdata :: StrictStrobeType (WNBytes conf) (WKeepStrobe conf)
       -- ^ Write data
-      , _wlast :: !Bool
+      , _wlast :: Bool
       -- ^ Write last
-      , _wuser :: !userType
+      , _wuser :: userType
       -- ^ User data
       }
   deriving (Generic)

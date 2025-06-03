@@ -155,27 +155,27 @@ data
     (userType :: Type)
   = M2S_NoWriteAddress
   | M2S_WriteAddress
-      { _awid :: !(C.BitVector (AWIdWidth conf))
+      { _awid :: C.BitVector (AWIdWidth conf)
       -- ^ Write address id*
-      , _awaddr :: !(C.BitVector (AWAddrWidth conf))
+      , _awaddr :: C.BitVector (AWAddrWidth conf)
       -- ^ Write address
-      , _awregion :: !(RegionType (AWKeepRegion conf))
+      , _awregion :: RegionType (AWKeepRegion conf)
       -- ^ Write region*
-      , _awlen :: !(BurstLengthType (AWKeepBurstLength conf))
+      , _awlen :: BurstLengthType (AWKeepBurstLength conf)
       -- ^ Burst length*
-      , _awsize :: !(SizeType (AWKeepSize conf))
+      , _awsize :: SizeType (AWKeepSize conf)
       -- ^ Burst size*
-      , _awburst :: !(BurstType (AWKeepBurst conf))
+      , _awburst :: BurstType (AWKeepBurst conf)
       -- ^ Burst type*
-      , _awlock :: !(LockType (AWKeepLock conf))
+      , _awlock :: LockType (AWKeepLock conf)
       -- ^ Lock type*
-      , _awcache :: !(AwCacheType (AWKeepCache conf))
+      , _awcache :: AwCacheType (AWKeepCache conf)
       -- ^ Cache type*
-      , _awprot :: !(PermissionsType (AWKeepPermissions conf))
+      , _awprot :: PermissionsType (AWKeepPermissions conf)
       -- ^ Protection type
-      , _awqos :: !(QosType (AWKeepQos conf))
+      , _awqos :: QosType (AWKeepQos conf)
       -- ^ QoS value
-      , _awuser :: !userType
+      , _awuser :: userType
       -- ^ User data
       }
   deriving (Generic)
@@ -270,23 +270,23 @@ one-to-one with the fields of 'M2S_WriteAddress' except for '_awlen',
 '_awsize', and '_awburst'.
 -}
 data Axi4WriteAddressInfo (conf :: Axi4WriteAddressConfig) (userType :: Type) = Axi4WriteAddressInfo
-  { _awiid :: !(C.BitVector (AWIdWidth conf))
+  { _awiid :: C.BitVector (AWIdWidth conf)
   -- ^ Id
-  , _awiaddr :: !(C.BitVector (AWAddrWidth conf))
+  , _awiaddr :: C.BitVector (AWAddrWidth conf)
   -- ^ Address
-  , _awiregion :: !(RegionType (AWKeepRegion conf))
+  , _awiregion :: RegionType (AWKeepRegion conf)
   -- ^ Region
-  , _awisize :: !(SizeType (AWKeepSize conf))
+  , _awisize :: SizeType (AWKeepSize conf)
   -- ^ Burst size
-  , _awilock :: !(LockType (AWKeepLock conf))
+  , _awilock :: LockType (AWKeepLock conf)
   -- ^ Lock type
-  , _awicache :: !(AwCacheType (AWKeepCache conf))
+  , _awicache :: AwCacheType (AWKeepCache conf)
   -- ^ Cache type
-  , _awiprot :: !(PermissionsType (AWKeepPermissions conf))
+  , _awiprot :: PermissionsType (AWKeepPermissions conf)
   -- ^ Protection type
-  , _awiqos :: !(QosType (AWKeepQos conf))
+  , _awiqos :: QosType (AWKeepQos conf)
   -- ^ QoS value
-  , _awiuser :: !userType
+  , _awiuser :: userType
   -- ^ User data
   }
   deriving (Generic)
