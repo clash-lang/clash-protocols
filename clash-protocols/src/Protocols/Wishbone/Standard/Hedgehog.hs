@@ -3,6 +3,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 -- TODO: Fix warnings introduced by GHC 9.2 w.r.t. incomplete lazy pattern matches
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
+{-# OPTIONS_GHC -fconstraint-solver-iterations=10 #-}
 
 {- |
 Types and functions to aid with testing Wishbone circuits.
@@ -30,18 +31,35 @@ This "common sense" compliance checking additionally checks for:
  - A write request must contain valid data according to the 'busSelect' signal
 -}
 module Protocols.Wishbone.Standard.Hedgehog (
+  -- * Types
   WishboneMasterRequest (..),
+
+  -- * Circuits
   stallStandard,
   driveStandard,
-  wishbonePropWithModel,
   validatorCircuit,
   validatorCircuitLenient,
+  observeComposedWishboneCircuit,
+
+  -- * Properties
+  wishbonePropWithModel,
+
+  -- * Generators
+  genWishboneTransfer,
+
+  -- * helpers
+  filterTransactions,
+  m2sToRequest,
 )
 where
 
+import Clash.Hedgehog.Sized.BitVector (genDefinedBitVector)
+import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
 import Clash.Prelude as C hiding (cycle, indices, not, (&&), (||))
 import Clash.Signal.Internal (Signal ((:-)))
+import Control.DeepSeq (NFData)
 import Data.Bifunctor qualified as B
+import Data.String.Interpolate (i)
 import GHC.Stack (HasCallStack)
 import Hedgehog ((===))
 import Hedgehog qualified as H
@@ -56,12 +74,25 @@ import Prelude as P hiding (cycle)
 data WishboneMasterRequest addressWidth dat
   = Read (BitVector addressWidth) (BitVector (BitSize dat `DivRU` 8))
   | Write (BitVector addressWidth) (BitVector (BitSize dat `DivRU` 8)) dat
+  deriving stock (C.Generic)
+  deriving anyclass (NFData, C.BitPack)
+
+deriving instance
+  (KnownNat addressWidth, KnownNat (BitSize a), C.NFDataX a) =>
+  (C.NFDataX (WishboneMasterRequest addressWidth a))
 
 deriving instance
   (KnownNat addressWidth, KnownNat (BitSize a), Show a) =>
   (Show (WishboneMasterRequest addressWidth a))
 
---
+deriving instance
+  (KnownNat addressWidth, KnownNat (BitSize a), ShowX a) =>
+  (ShowX (WishboneMasterRequest addressWidth a))
+
+deriving instance
+  (KnownNat addressWidth, KnownNat (BitSize a), Eq a) =>
+  (Eq (WishboneMasterRequest addressWidth a))
+
 -- Validation for (lenient) spec compliance
 --
 
@@ -441,6 +472,30 @@ validatorCircuitLenient =
       Right (True, state1) -> ((cycle + 1, (m2s1, s2m1), state1), (s2m1, m2s1))
       Right (False, state1) -> go (cycle, (m2s0, s2m0), state1) (m2s1, s2m1)
 
+{- |
+Takes elements from a list while the predicate holds, considers up to @window@ elements
+since the last element that satisfied the predicate.
+
+>>> takeWhileAnyInWindow 3 Prelude.odd [1, 2, 3, 6, 8, 10, 12]
+[1,2,3]
+-}
+takeWhileAnyInWindow ::
+  -- | Number of elements to consider since the last element that satisfied the predicate.
+  Int ->
+  -- | Function to test each element.
+  (a -> Bool) ->
+  -- | Input list
+  [a] ->
+  -- | List of elements that satisfied the predicate. Ends at an element that satisfies the predicate.
+  [a]
+takeWhileAnyInWindow wdw predicate = go wdw []
+ where
+  go 0 _ _ = []
+  go cnt acc (x : xs)
+    | predicate x = P.reverse (x : acc) <> go wdw [] xs
+    | otherwise = go (pred cnt) (x : acc) xs
+  go _ _ _ = []
+
 -- | Test a wishbone 'Standard' circuit against a pure model.
 wishbonePropWithModel ::
   forall dom a addressWidth st m.
@@ -479,9 +534,19 @@ wishbonePropWithModel eOpts model circuit0 inputGen st = do
     resets = 5
     driver = driveStandard @dom (defExpectOptions{eoResetCycles = resets}) (P.zip input reqStalls)
     circuit1 = validatorCircuit |> circuit0
-    (_, s2m) = observeComposedWishboneCircuit (eoSampleMax eOpts) driver circuit1
+    (m2s0, s2m0) =
+      P.unzip $
+        takeWhileAnyInWindow (eoSampleMax eOpts) hasBusActivity $
+          P.uncurry P.zip $
+            observeComposedWishboneCircuit driver circuit1
 
-  matchModel 0 s2m input st === Right ()
+    m2s1 = P.reverse $ P.dropWhile (\m2s -> not (m2s.busCycle || m2s.strobe)) $ P.reverse m2s0
+    s2m1 = P.reverse $ P.dropWhile (not . hasTerminateFlag) $ P.reverse s2m0
+
+  H.footnoteShow s2m1
+  H.footnoteShow m2s1
+
+  matchModel 0 s2m1 input st === Right ()
  where
   matchModel ::
     Int ->
@@ -489,8 +554,6 @@ wishbonePropWithModel eOpts model circuit0 inputGen st = do
     [WishboneMasterRequest addressWidth a] ->
     st ->
     Either (Int, String) ()
-  matchModel _ [] _ _ = Right () -- so far everything is good but the sampling stopped
-  matchModel _ _ [] _ = Right ()
   matchModel cyc (s : s2m) (req : reqs0) state
     | not (hasTerminateFlag s) = s `C.seqX` matchModel (succ cyc) s2m (req : reqs0) state
     | otherwise = case model req s state of
@@ -500,16 +563,59 @@ wishbonePropWithModel eOpts model circuit0 inputGen st = do
           reqs1
             | retry s = req : reqs0
             | otherwise = reqs0
+  matchModel _ [] [] _ = Right () -- We're done!
+  matchModel cyc [] reqs _ = Left (cyc, [i|The implementation did not produce enough responses: #{reqs}|])
+  matchModel cyc resps [] _
+    | null (P.filter hasTerminateFlag resps) = Right () -- If there's only empty responses left we're done!
+    | otherwise = Left (cyc, [i|The implementation produced too many responses: #{resps}|])
 
+{- | Given a wishbone manager and wishbone subordinate, connect them and
+sample their forward and backward channel lazily.
+-}
 observeComposedWishboneCircuit ::
   (KnownDomain dom) =>
-  Int ->
   Circuit () (Wishbone dom mode addressWidth a) ->
   Circuit (Wishbone dom mode addressWidth a) () ->
   ( [WishboneM2S addressWidth (BitSize a `DivRU` 8) a]
   , [WishboneS2M a]
   )
-observeComposedWishboneCircuit n (Circuit master) (Circuit slave) =
+observeComposedWishboneCircuit (Circuit master) (Circuit slave) =
   let ~((), m2s) = master ((), s2m)
       ~(s2m, ()) = slave (m2s, ())
-   in (sampleN_lazy n m2s, sampleN_lazy n s2m)
+   in (sample_lazy m2s, sample_lazy s2m)
+
+-- | Generate a random Wishbone transfer based on an address range and a payload generator.
+genWishboneTransfer ::
+  (KnownNat addressWidth, KnownNat (BitSize a)) =>
+  Range.Range (Unsigned addressWidth) ->
+  H.Gen a ->
+  H.Gen (WishboneMasterRequest addressWidth a)
+genWishboneTransfer addrRange genA = do
+  addr <- genUnsigned addrRange
+  sel <- genDefinedBitVector
+  dat <- genA
+  Gen.choice
+    [ pure $ Read (pack addr) sel
+    , pure $ Write (pack addr) sel dat
+    ]
+
+-- | Given a list of master / slave samples, only keep the ones where an active request receives a response.
+filterTransactions ::
+  (KnownNat addressWidth, KnownNat (BitSize a), BitPack a) =>
+  [(WishboneM2S addressWidth (BitSize a `DivRU` 8) a, WishboneS2M a)] ->
+  [(WishboneM2S addressWidth (BitSize a `DivRU` 8) a, WishboneS2M a)]
+filterTransactions ((m2s, s2m) : rest)
+  | not (busCycle m2s && strobe m2s && hasTerminateFlag s2m) = filterTransactions rest
+  | otherwise = (m2s, s2m) : filterTransactions rest
+filterTransactions [] = []
+
+{- | Interpret a 'WishboneM2S' as a 'WishboneMasterRequest'.
+Only works for valid requests and performs no checks.
+-}
+m2sToRequest ::
+  (KnownNat addressWidth, KnownNat (BitSize a), BitPack a) =>
+  WishboneM2S addressWidth (BitSize a `DivRU` 8) a ->
+  WishboneMasterRequest addressWidth a
+m2sToRequest m2s
+  | m2s.writeEnable = Write m2s.addr m2s.busSelect m2s.writeData
+  | otherwise = Read m2s.addr m2s.busSelect
