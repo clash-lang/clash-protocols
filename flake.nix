@@ -8,6 +8,9 @@
   outputs = { nixpkgs, flake-utils, clash-compiler, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
+        # What version of the GHC compiler to use for protocols
+        compiler-version = "ghc910";
+
         # Sources for things which do not yet have a flake
         non-flake-srcs = {
           circuit-notation = pkgs.fetchFromGitHub {
@@ -18,13 +21,25 @@
           };
         };
 
+        # Apply aarch64-linux patches
+        clash-hs = clash-input-pkgs.haskell // {
+          compiler = clash-input-pkgs.haskell.compiler // {
+            ${compiler-version} = clash-input-pkgs.haskell.compiler.${compiler-version}.overrideAttrs (prev: {
+              patches = let
+                  isAarch64 = pkgs.stdenv.hostPlatform.system == "aarch64-linux";
+                in
+                  (prev.patches or []) ++ pkgs.lib.optional isAarch64 [./nix/aarch64-reloc.patch];
+            });
+          };
+        };
+
         # Patch programs to be the correct version we want
         overlay = final: prev: {
           clash-ghc = clash-compiler.packages.${system}.clash-ghc;
           clash-prelude = clash-compiler.packages.${system}.clash-prelude;
           clash-prelude-hedgehog = clash-compiler.packages.${system}.clash-prelude-hedgehog;
 
-          string-interpolate = clash-input-pkgs.haskell.lib.doJailbreak (prev.string-interpolate);
+          string-interpolate = clash-hs.lib.doJailbreak (prev.string-interpolate);
 
           circuit-notation = final.developPackage {
             root = non-flake-srcs.circuit-notation.outPath;
@@ -42,7 +57,7 @@
           };
         };
         clash-input-pkgs = clash-compiler.inputs.nixpkgs.legacyPackages.${system};
-        hs-pkgs = clash-input-pkgs.haskell.packages.ghc910.extend overlay;
+        hs-pkgs = clash-hs.packages.${compiler-version}.extend overlay;
 
         # General packages from nixpkgs
         pkgs = nixpkgs.legacyPackages.${system};
