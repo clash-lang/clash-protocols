@@ -79,6 +79,7 @@
           ;
         };
         packages = {
+          circuit-notation = hs-pkgs.circuit-notation;
           clash-protocols = hs-pkgs.clash-protocols;
           clash-protocols-base = hs-pkgs.clash-protocols-base;
 
