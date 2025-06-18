@@ -6,7 +6,7 @@ module Tests.Protocols.PacketStream.Padding (
 
 import Clash.Prelude
 
-import Data.List.Extra qualified as L
+import "extra" Data.List.Extra qualified as L
 
 import Hedgehog
 import Hedgehog.Gen qualified as Gen

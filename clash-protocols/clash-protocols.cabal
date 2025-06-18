@@ -34,10 +34,11 @@ common common-options
     DataKinds
     DefaultSignatures
     DeriveAnyClass
-    OverloadedRecordDot
     DerivingStrategies
     LambdaCase
     NoStarIsType
+    OverloadedRecordDot
+    PackageImports
     StandaloneDeriving
     TupleSections
     TypeApplications
@@ -145,6 +146,8 @@ library
     Protocols.Wishbone
     Protocols.Wishbone.Standard
     Protocols.Wishbone.Standard.Hedgehog
+
+    Data.List.Extra
 
     -- 'testProperty' is broken upstream, it reports wrong test names
     -- TODO: test / upstream ^

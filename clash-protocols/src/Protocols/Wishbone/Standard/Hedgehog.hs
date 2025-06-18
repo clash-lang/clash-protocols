@@ -58,6 +58,7 @@ import Clash.Prelude as C hiding (cycle, indices, not, (&&), (||))
 import Clash.Signal.Internal (Signal ((:-)))
 import Control.DeepSeq (NFData)
 import Data.Bifunctor qualified as B
+import Data.List.Extra
 import Data.String.Interpolate (i)
 import GHC.Stack (HasCallStack)
 import Hedgehog ((===))
@@ -470,30 +471,6 @@ validatorCircuitLenient =
             <> show s2m0
       Right (True, state1) -> ((cycle + 1, (m2s1, s2m1), state1), (s2m1, m2s1))
       Right (False, state1) -> go (cycle, (m2s0, s2m0), state1) (m2s1, s2m1)
-
-{- |
-Takes elements from a list while the predicate holds, considers up to @window@ elements
-since the last element that satisfied the predicate.
-
->>> takeWhileAnyInWindow 3 Prelude.odd [1, 2, 3, 6, 8, 10, 12]
-[1,2,3]
--}
-takeWhileAnyInWindow ::
-  -- | Number of elements to consider since the last element that satisfied the predicate.
-  Int ->
-  -- | Function to test each element.
-  (a -> Bool) ->
-  -- | Input list
-  [a] ->
-  -- | List of elements that satisfied the predicate. Ends at an element that satisfies the predicate.
-  [a]
-takeWhileAnyInWindow wdw predicate = go wdw []
- where
-  go 0 _ _ = []
-  go cnt acc (x : xs)
-    | predicate x = P.reverse (x : acc) <> go wdw [] xs
-    | otherwise = go (pred cnt) (x : acc) xs
-  go _ _ _ = []
 
 -- | Test a wishbone 'Standard' circuit against a pure model.
 wishbonePropWithModel ::
