@@ -1,7 +1,8 @@
+{-# LANGUAGE PackageImports #-}
+
 module Util where
 
 -- base
-import Data.List.Extra (transpose)
 import Unsafe.Coerce (unsafeCoerce)
 
 -- unordered-containers
@@ -18,7 +19,8 @@ import Clash.Prelude (type (<=))
 import Clash.Prelude qualified as C
 
 -- extra
-import Data.List.Extra qualified as Extra
+import "extra" Data.List.Extra (transpose)
+import "extra" Data.List.Extra qualified as Extra
 
 -- hedgehog
 import Hedgehog qualified as H
