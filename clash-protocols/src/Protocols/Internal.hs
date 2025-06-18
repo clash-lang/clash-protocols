@@ -182,6 +182,38 @@ prod2C ab cd = circuit $ \(a, c) -> do
   d <- cd -< c
   idC -< (b, d)
 
+{- | Combine three separate circuits into one. If you are looking to combine
+multiple streams into a single stream, checkout 'Protocols.Df.fanin'.
+-}
+prod3C ::
+  forall a c b d e f.
+  Circuit a b ->
+  Circuit c d ->
+  Circuit e f ->
+  Circuit (a, c, e) (b, d, f)
+prod3C ab cd ef = circuit $ \(a, c, e) -> do
+  b <- ab -< a
+  d <- cd -< c
+  f <- ef -< e
+  idC -< (b, d, f)
+
+{- | Combine four separate circuits into one. If you are looking to combine
+multiple streams into a single stream, checkout 'Protocols.Df.fanin'.
+-}
+prod4C ::
+  forall a c b d e f g h.
+  Circuit a b ->
+  Circuit c d ->
+  Circuit e f ->
+  Circuit g h ->
+  Circuit (a, c, e, g) (b, d, f, h)
+prod4C ab cd ef gh = circuit $ \(a, c, e, g) -> do
+  b <- ab -< a
+  d <- cd -< c
+  f <- ef -< e
+  h <- gh -< g
+  idC -< (b, d, f, h)
+
 --------------------------------- SIMULATION -----------------------------------
 
 instance Simulate () where
