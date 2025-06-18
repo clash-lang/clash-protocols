@@ -262,9 +262,47 @@ emptyWishboneS2M =
     , stall = False
     }
 
--- | Given a tuple of a wishbone request and corresponding response, determine if the bus is active.
+{- | Given a tuple of a wishbone request and corresponding response, determine
+whether transactions are in progress(returns true for any 'hasTerminateFlag').
+This is useful to determine whether a Wishbone bus is active.
+
+>>> :{
+let m2s = (emptyWishboneM2S @32 @()){busCycle = True, strobe = True}
+    s2m = emptyWishboneS2M{acknowledge = True}
+  in hasBusActivity (m2s, s2m)
+:}
+True
+
+>>> :{
+let m2s = (emptyWishboneM2S @32 @()){busCycle = True, strobe = True}
+    s2m = emptyWishboneS2M{retry = True}
+  in hasBusActivity (m2s, s2m)
+:}
+True
+
+>>> :{
+let m2s = (emptyWishboneM2S @32 @()){busCycle = True}
+    s2m = emptyWishboneS2M{acknowledge = True}
+  in hasBusActivity (m2s, s2m)
+:}
+False
+
+>>> :{
+let m2s = (emptyWishboneM2S @32 @()){busCycle = True, strobe = True}
+    s2m = emptyWishboneS2M
+  in hasBusActivity (m2s, s2m)
+:}
+False
+
+>>> :{
+let m2s = emptyWishboneM2S @32 @()
+    s2m = emptyWishboneS2M{acknowledge = True}
+  in hasBusActivity (m2s, s2m)
+:}
+False
+-}
 hasBusActivity :: (WishboneM2S addressWidth sel dat, WishboneS2M dat) -> Bool
-hasBusActivity (m2s, s2m) = busCycle m2s || hasTerminateFlag s2m
+hasBusActivity (m2s, s2m) = busCycle m2s C.&& strobe m2s C.&& hasTerminateFlag s2m
 
 -- | Helper function to determine whether a Slave signals the termination of a cycle.
 hasTerminateFlag :: WishboneS2M dat -> Bool
