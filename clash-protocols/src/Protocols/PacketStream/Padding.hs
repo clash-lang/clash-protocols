@@ -57,7 +57,7 @@ stripPaddingT ::
     , Maybe (PacketStreamM2S dataWidth meta)
     )
   )
-stripPaddingT _ st@Counting{} (Nothing, bwdIn) = (nextSt, (PacketStreamS2M True, fwdOut))
+stripPaddingT _ st@Counting{} (Nothing, bwdIn) = (nextSt, (deepErrorX "undefined ack", fwdOut))
  where
   fwdOut =
     if _valid st
@@ -123,7 +123,7 @@ stripPaddingT toLength st@Counting{} (Just inPkt, bwdIn) = (nextSt, (bwdOut, fwd
     | isJust fwdOut && not (_ready bwdIn) = st
     | isNothing (_last inPkt) && tooBig = Strip nextBuf
     | otherwise = Counting nextBuf nextValid nextCounter
-stripPaddingT _ st@Strip{} (Nothing, _) = (st, (PacketStreamS2M True, Nothing))
+stripPaddingT _ st@Strip{} (Nothing, _) = (st, (deepErrorX "undefined ack", Nothing))
 stripPaddingT _ Strip{_buffer = f} (Just inPkt, _) =
   (nextSt, (PacketStreamS2M True, Nothing))
  where

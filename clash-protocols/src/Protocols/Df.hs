@@ -253,7 +253,7 @@ compander s0 f = forceResetSanity |> Circuit (C.unbundle . go . C.bundle)
   go :: Signal dom (Maybe i, Ack) -> Signal dom (Ack, Maybe o)
   go = C.mealy f' s0
   f' :: s -> (Maybe i, Ack) -> (s, (Ack, Maybe o))
-  f' s (Nothing, _) = (s, (Ack False, Nothing))
+  f' s (Nothing, _) = (s, (C.deepErrorX "undefined ack", Nothing))
   f' s (Just i, Ack ack) = (s'', (Ack ackBack, o))
    where
     (s', o, doneWithInput) = f s i
@@ -357,7 +357,7 @@ Example:
 catMaybes :: Circuit (Df dom (Maybe a)) (Df dom a)
 catMaybes = Circuit (C.unbundle . fmap go . C.bundle)
  where
-  go (Nothing, _) = (Ack False, Nothing)
+  go (Nothing, _) = (C.deepErrorX "undefined ack", Nothing)
   go (Just Nothing, _) = (Ack True, Nothing)
   go (Just (Just a), ack) = (ack, Just a)
 
@@ -379,7 +379,7 @@ filter f = filterS (C.pure f)
 filterS :: forall dom a. Signal dom (a -> Bool) -> Circuit (Df dom a) (Df dom a)
 filterS fS = Circuit (C.unbundle . liftA2 go fS . C.bundle)
  where
-  go _ (Nothing, _) = (Ack False, Nothing)
+  go _ (Nothing, _) = (C.deepErrorX "undefined ack", Nothing)
   go f (Just d, ack)
     | f d = (ack, Just d)
     | otherwise = (Ack True, Nothing)
@@ -462,7 +462,7 @@ partitionS fS =
   go f (Just a, (ackT, ackF))
     | f a = (ackT, (Just a, Nothing))
     | otherwise = (ackF, (Nothing, Just a))
-  go _ _ = (Ack False, (Nothing, Nothing))
+  go _ _ = (C.deepErrorX "undefined ack", (Nothing, Nothing))
 
 {- | Route a 'Df' stream to another corresponding to the index
 
@@ -486,7 +486,7 @@ route =
     , C.replace i (Just a) (C.repeat Nothing)
     )
   go _ =
-    (Ack False, C.repeat Nothing)
+    (C.deepErrorX "undefined ack", C.repeat Nothing)
 
 {- | Select data from the channel indicated by the 'Df' stream carrying
 @Index n@.
@@ -629,7 +629,7 @@ fanout = forceResetSanity |> goC
 
   f acked (dat, acks) =
     case dat of
-      Nothing -> (acked, (Ack False, C.repeat Nothing))
+      Nothing -> (acked, (C.deepErrorX "undefined ack", C.repeat Nothing))
       Just _ ->
         -- Data on input
         let
@@ -692,7 +692,7 @@ unbundleVec =
   initState :: C.Vec n Bool
   initState = C.repeat False
 
-  go _ (Nothing, _) = (initState, (Ack False, C.repeat Nothing))
+  go _ (Nothing, _) = (initState, (C.deepErrorX "undefined ack", C.repeat Nothing))
   go acked (Just payloadVec, acks) =
     let
       -- Send data to "clients" that have not acked yet
@@ -722,7 +722,7 @@ roundrobin =
         . B.second C.bundle
     )
  where
-  go i0 (Nothing, _) = (i0, (Ack False, C.repeat Nothing))
+  go i0 (Nothing, _) = (i0, (C.deepErrorX "undefined ack", C.repeat Nothing))
   go i0 (Just dat, acks) =
     let
       datOut = C.replace i0 (Just dat) (C.repeat Nothing)

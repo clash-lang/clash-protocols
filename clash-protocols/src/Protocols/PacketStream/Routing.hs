@@ -82,7 +82,7 @@ packetDispatcherC predicates =
   Circuit (B.second unbundle . unbundle . fmap go . bundle . B.second bundle)
  where
   idleOtp = repeat Nothing
-  go (Nothing, _) = (PacketStreamS2M False, idleOtp)
+  go (Nothing, _) = (deepErrorX "undefined ack", idleOtp)
   go (Just x, bwds) = case findIndex id (zipWith ($) predicates (pure $ _meta x)) of
     Just i -> (bwds !! i, replace i (Just x) idleOtp)
     Nothing -> (PacketStreamS2M True, idleOtp)
