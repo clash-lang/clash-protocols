@@ -3,6 +3,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -fconstraint-solver-iterations=20 #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_GHC -fplugin Protocols.Plugin #-}
 
 -- TODO: Hide internal documentation
 -- {-# OPTIONS_HADDOCK hide #-}
@@ -176,15 +177,10 @@ prod2C ::
   Circuit a b ->
   Circuit c d ->
   Circuit (a, c) (b, d)
-prod2C (Circuit a) (Circuit c) =
-  Circuit
-    ( \((aFwd, cFwd), (bBwd, dBwd)) ->
-        let
-          (aBwd, bFwd) = a (aFwd, bBwd)
-          (cBwd, dFwd) = c (cFwd, dBwd)
-         in
-          ((aBwd, cBwd), (bFwd, dFwd))
-    )
+prod2C ab cd = circuit $ \(a, c) -> do
+  b <- ab -< a
+  d <- cd -< c
+  idC -< (b, d)
 
 --------------------------------- SIMULATION -----------------------------------
 
