@@ -110,7 +110,7 @@ packetizerT1 toMetaOut toHeader st (Just inPkt, bwdIn) =
             , _abort = _aborted1 || _abort inPkt
             }
         nextStOut = if _ready bwdIn then Insert1 False else st
-packetizerT1 _ _ s (Nothing, bwdIn) = (s, (bwdIn, Nothing))
+packetizerT1 _ _ s (Nothing, _) = (s, (deepErrorX "undefined ack", Nothing))
 
 data PacketizerState2 (metaOut :: Type) (headerBytes :: Nat) (dataWidth :: Nat)
   = LoadHeader2
@@ -175,7 +175,7 @@ packetizerT2 toMetaOut _ Forward2{..} (Just inPkt, bwdIn) =
   nextStOut
     | isJust (_last inPkt) && _ready bwdIn = LoadHeader2
     | otherwise = Forward2 nextAborted
-packetizerT2 _ _ s (Nothing, bwdIn) = (s, (bwdIn, Nothing))
+packetizerT2 _ _ s (Nothing, _) = (s, (deepErrorX "undefined ack", Nothing))
 
 data PacketizerState3 (headerBytes :: Nat) (dataWidth :: Nat)
   = LoadHeader3
@@ -288,7 +288,7 @@ packetizerT3 toMetaOut _ st@LastForward3{..} (Just inPkt, bwdIn) =
       , _abort = _aborted3 || _abort inPkt
       }
   nextStOut = if _ready bwdIn then LoadHeader3 else st
-packetizerT3 _ _ s (Nothing, bwdIn) = (s, (bwdIn, Nothing))
+packetizerT3 _ _ s (Nothing, _) = (s, (deepErrorX "undefined ack", Nothing))
 
 {- |
 Writes a portion of the metadata to the front of the packet stream, and shifts
@@ -390,7 +390,7 @@ packetizeFromDfT toMetaOut _ st@DfInsert{..} (Just dataIn, bwdIn) = (nextStOut, 
   bwdOut = Ack (_ready bwdIn && _dfCounter == maxBound)
   nextSt = if _dfCounter == maxBound then DfIdle else DfInsert (succ _dfCounter) newHdrBuf
   nextStOut = if _ready bwdIn then nextSt else st
-packetizeFromDfT _ _ s (Nothing, bwdIn) = (s, (Ack (_ready bwdIn), Nothing))
+packetizeFromDfT _ _ s (Nothing, _) = (s, (deepErrorX "undefined ack", Nothing))
 
 {- |
 Starts a packet stream upon receiving some data over a `Df` channel.
@@ -424,7 +424,7 @@ packetizeFromDfC toMetaOut toHeader = case strictlyPositiveDivRu @headerBytes @d
     -- the entire payload in one clock cycle.
     SNatLE -> Circuit (unbundle . fmap go . bundle)
      where
-      go (Nothing, _) = (Ack False, Nothing)
+      go (Nothing, _) = (deepErrorX "undefined ack", Nothing)
       go (Just dataIn, bwdIn) = (Ack (_ready bwdIn), Just outPkt)
        where
         outPkt = PacketStreamM2S dataOut (Just l) (toMetaOut dataIn) False

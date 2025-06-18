@@ -192,7 +192,7 @@ depacketizerT toMetaOut st@Forward{..} (Just pkt@PacketStreamM2S{..}, bwdIn) = (
   outReady
     | Forward{_lastFwd = True} <- nextStOut = False
     | otherwise = _ready bwdIn
-depacketizerT _ st (Nothing, bwdIn) = (st, (bwdIn, Nothing))
+depacketizerT _ st (Nothing, _) = (st, (deepErrorX "undefined ack", Nothing))
 
 {- |
 Reads bytes at the start of each packet into `_meta`. If a packet contains
@@ -316,7 +316,7 @@ depacketizeToDfT toOut st@DfConsumePadding{..} (Just (PacketStreamM2S{..}), Ack 
 
   readyOut = isNothing fwdOut || readyIn
   nextStOut = if readyOut then nextSt else st
-depacketizeToDfT _ st (Nothing, Ack readyIn) = (st, (PacketStreamS2M readyIn, Nothing))
+depacketizeToDfT _ st (Nothing, _) = (st, (deepErrorX "undefined ack", Nothing))
 
 {- |
 Reads bytes at the start of each packet into a header structure, and

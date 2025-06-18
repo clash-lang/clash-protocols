@@ -267,11 +267,10 @@ downConverterT st@(DownConverterState{..}) (fwdIn, bwdIn) =
   -- newly received valid data and load it into our registers.
   emptyState = _dcSize == 0 && not _dcZeroByteTransfer
   readyOut =
-    isJust fwdIn
-      && (emptyState || (_dcSize <= natToNum @dwOut && _ready bwdIn))
+    emptyState || (_dcSize <= natToNum @dwOut && _ready bwdIn)
 
   nextSt
-    | readyOut = newState (fromJustX fwdIn)
+    | isJust fwdIn && readyOut = newState (fromJustX fwdIn)
     | not emptyState && _ready bwdIn =
         st
           { _dcBuf = shiftedBuf
