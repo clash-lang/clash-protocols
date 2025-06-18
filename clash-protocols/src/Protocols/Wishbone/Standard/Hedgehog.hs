@@ -48,7 +48,6 @@ module Protocols.Wishbone.Standard.Hedgehog (
   genWishboneTransfer,
 
   -- * helpers
-  filterTransactions,
   m2sToRequest,
 )
 where
@@ -598,16 +597,6 @@ genWishboneTransfer addrRange genA = do
     [ pure $ Read (pack addr) sel
     , pure $ Write (pack addr) sel dat
     ]
-
--- | Given a list of master / slave samples, only keep the ones where an active request receives a response.
-filterTransactions ::
-  (KnownNat addressWidth, KnownNat (BitSize a), BitPack a) =>
-  [(WishboneM2S addressWidth (BitSize a `DivRU` 8) a, WishboneS2M a)] ->
-  [(WishboneM2S addressWidth (BitSize a `DivRU` 8) a, WishboneS2M a)]
-filterTransactions ((m2s, s2m) : rest)
-  | not (busCycle m2s && strobe m2s && hasTerminateFlag s2m) = filterTransactions rest
-  | otherwise = (m2s, s2m) : filterTransactions rest
-filterTransactions [] = []
 
 {- | Interpret a 'WishboneM2S' as a 'WishboneMasterRequest'.
 Only works for valid requests and performs no checks.
