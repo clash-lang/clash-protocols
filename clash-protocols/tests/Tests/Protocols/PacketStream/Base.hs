@@ -1,3 +1,4 @@
+{-# LANGUAGE PackageImports #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Tests.Protocols.PacketStream.Base (
@@ -7,7 +8,7 @@ module Tests.Protocols.PacketStream.Base (
 import Clash.Prelude
 
 import Data.List qualified as L
-import Data.List.Extra (unsnoc)
+import "extra" Data.List.Extra (unsnoc)
 
 import Hedgehog (Property)
 import Hedgehog.Gen qualified as Gen

@@ -48,8 +48,8 @@ module Protocols.Wishbone.Standard.Hedgehog (
   genWishboneTransfer,
 
   -- * helpers
-  filterTransactions,
   m2sToRequest,
+  eqWishboneS2M,
 )
 where
 
@@ -59,8 +59,11 @@ import Clash.Prelude as C hiding (cycle, indices, not, (&&), (||))
 import Clash.Signal.Internal (Signal ((:-)))
 import Control.DeepSeq (NFData)
 import Data.Bifunctor qualified as B
+import Data.List.Extra
 import Data.String.Interpolate (i)
+import Data.Type.Equality (TestEquality (testEquality), type (:~:) (Refl))
 import GHC.Stack (HasCallStack)
+import GHC.TypeNats qualified as TypeNats
 import Hedgehog ((===))
 import Hedgehog qualified as H
 import Hedgehog.Gen qualified as Gen
@@ -92,6 +95,43 @@ deriving instance
 deriving instance
   (KnownNat addressWidth, KnownNat (BitSize a), Eq a) =>
   (Eq (WishboneMasterRequest addressWidth a))
+
+{- | Checks equality for relevant parts of a 'WishboneS2M' response
+based on the corresponding 'WishboneMasterRequest'.
+For a 'Write' request, the 'readData' field is ignored, for a 'Read' request
+only the selected bytes are checked.
+>>> let readReqA = Read (0 :: BitVector 32) (0b1111 :: BitVector 4)
+>>> let readReqB = Read (0 :: BitVector 32) (0b0001 :: BitVector 4)
+>>> let writeReq = Write (0 :: BitVector 32) (0b1111 :: BitVector 4) (0x12345678 :: BitVector 32)
+>>> let s2mA = (emptyWishboneS2M @()){ readData = 0x00FF :: BitVector 32, acknowledge = True, err = False, retry = False }
+>>> let s2mB = (emptyWishboneS2M @()){ readData = 0xFFFF :: BitVector 32, acknowledge = True, err = False, retry = False }
+>>> let s2mC = (emptyWishboneS2M @()){ readData = deepErrorX "" :: BitVector 32, acknowledge = True, err = False, retry = False }
+>>> eqWishboneS2M readReqA s2mA s2mB
+False
+>>> eqWishboneS2M readReqB s2mA s2mB
+True
+>>> eqWishboneS2M writeReq s2mA s2mB
+True
+>>> eqWishboneS2M writeReq s2mA s2mC
+True
+-}
+eqWishboneS2M ::
+  forall (addressWidth :: Natural) (nBytes :: Natural) a.
+  (KnownNat nBytes, BitPack a, BitSize a ~ nBytes * 8) =>
+  -- | Request that determines which fields to check
+  WishboneMasterRequest addressWidth a ->
+  -- | Wishbone Subordinate response A
+  WishboneS2M a ->
+  -- | Wishbone Subordinate response B
+  WishboneS2M a ->
+  Bool
+eqWishboneS2M (Write _ _ _) s2mA s2mB =
+  s2mA{readData = ()} == s2mB{readData = ()}
+eqWishboneS2M (Read _ sel) s2mA s2mB = case testEquality (TypeNats.SNat @(DivRU (BitSize a) 8)) (TypeNats.SNat @nBytes) of
+  Nothing -> C.errorX "eqWishboneS2M: nBytes is not divisible by 8"
+  Just Refl ->
+    s2mA{readData = mux (unpack sel) (bitCoerce s2mA.readData) (C.repeat (0 :: BitVector 8))}
+      == s2mB{readData = mux (unpack sel) (bitCoerce s2mB.readData) (C.repeat 0)}
 
 -- Validation for (lenient) spec compliance
 --
@@ -472,30 +512,6 @@ validatorCircuitLenient =
       Right (True, state1) -> ((cycle + 1, (m2s1, s2m1), state1), (s2m1, m2s1))
       Right (False, state1) -> go (cycle, (m2s0, s2m0), state1) (m2s1, s2m1)
 
-{- |
-Takes elements from a list while the predicate holds, considers up to @window@ elements
-since the last element that satisfied the predicate.
-
->>> takeWhileAnyInWindow 3 Prelude.odd [1, 2, 3, 6, 8, 10, 12]
-[1,2,3]
--}
-takeWhileAnyInWindow ::
-  -- | Number of elements to consider since the last element that satisfied the predicate.
-  Int ->
-  -- | Function to test each element.
-  (a -> Bool) ->
-  -- | Input list
-  [a] ->
-  -- | List of elements that satisfied the predicate. Ends at an element that satisfies the predicate.
-  [a]
-takeWhileAnyInWindow wdw predicate = go wdw []
- where
-  go 0 _ _ = []
-  go cnt acc (x : xs)
-    | predicate x = P.reverse (x : acc) <> go wdw [] xs
-    | otherwise = go (pred cnt) (x : acc) xs
-  go _ _ _ = []
-
 -- | Test a wishbone 'Standard' circuit against a pure model.
 wishbonePropWithModel ::
   forall dom a addressWidth st m.
@@ -598,16 +614,6 @@ genWishboneTransfer addrRange genA = do
     [ pure $ Read (pack addr) sel
     , pure $ Write (pack addr) sel dat
     ]
-
--- | Given a list of master / slave samples, only keep the ones where an active request receives a response.
-filterTransactions ::
-  (KnownNat addressWidth, KnownNat (BitSize a), BitPack a) =>
-  [(WishboneM2S addressWidth (BitSize a `DivRU` 8) a, WishboneS2M a)] ->
-  [(WishboneM2S addressWidth (BitSize a `DivRU` 8) a, WishboneS2M a)]
-filterTransactions ((m2s, s2m) : rest)
-  | not (busCycle m2s && strobe m2s && hasTerminateFlag s2m) = filterTransactions rest
-  | otherwise = (m2s, s2m) : filterTransactions rest
-filterTransactions [] = []
 
 {- | Interpret a 'WishboneM2S' as a 'WishboneMasterRequest'.
 Only works for valid requests and performs no checks.

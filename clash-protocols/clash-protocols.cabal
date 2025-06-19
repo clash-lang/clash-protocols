@@ -146,6 +146,8 @@ library
     Protocols.Wishbone.Standard
     Protocols.Wishbone.Standard.Hedgehog
 
+    Data.List.Extra
+
     -- 'testProperty' is broken upstream, it reports wrong test names
     -- TODO: test / upstream ^
     Test.Tasty.Hedgehog.Extra
