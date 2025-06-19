@@ -49,6 +49,7 @@ module Protocols.Wishbone.Standard.Hedgehog (
 
   -- * helpers
   m2sToRequest,
+  eqWishboneS2M,
 )
 where
 
@@ -60,7 +61,9 @@ import Control.DeepSeq (NFData)
 import Data.Bifunctor qualified as B
 import Data.List.Extra
 import Data.String.Interpolate (i)
+import Data.Type.Equality (TestEquality (testEquality), type (:~:) (Refl))
 import GHC.Stack (HasCallStack)
+import GHC.TypeNats qualified as TypeNats
 import Hedgehog ((===))
 import Hedgehog qualified as H
 import Hedgehog.Gen qualified as Gen
@@ -92,6 +95,43 @@ deriving instance
 deriving instance
   (KnownNat addressWidth, KnownNat (BitSize a), Eq a) =>
   (Eq (WishboneMasterRequest addressWidth a))
+
+{- | Checks equality for relevant parts of a 'WishboneS2M' response
+based on the corresponding 'WishboneMasterRequest'.
+For a 'Write' request, the 'readData' field is ignored, for a 'Read' request
+only the selected bytes are checked.
+>>> let readReqA = Read (0 :: BitVector 32) (0b1111 :: BitVector 4)
+>>> let readReqB = Read (0 :: BitVector 32) (0b0001 :: BitVector 4)
+>>> let writeReq = Write (0 :: BitVector 32) (0b1111 :: BitVector 4) (0x12345678 :: BitVector 32)
+>>> let s2mA = (emptyWishboneS2M @()){ readData = 0x00FF :: BitVector 32, acknowledge = True, err = False, retry = False }
+>>> let s2mB = (emptyWishboneS2M @()){ readData = 0xFFFF :: BitVector 32, acknowledge = True, err = False, retry = False }
+>>> let s2mC = (emptyWishboneS2M @()){ readData = deepErrorX "" :: BitVector 32, acknowledge = True, err = False, retry = False }
+>>> eqWishboneS2M readReqA s2mA s2mB
+False
+>>> eqWishboneS2M readReqB s2mA s2mB
+True
+>>> eqWishboneS2M writeReq s2mA s2mB
+True
+>>> eqWishboneS2M writeReq s2mA s2mC
+True
+-}
+eqWishboneS2M ::
+  forall (addressWidth :: Natural) (nBytes :: Natural) a.
+  (KnownNat nBytes, BitPack a, BitSize a ~ nBytes * 8) =>
+  -- | Request that determines which fields to check
+  WishboneMasterRequest addressWidth a ->
+  -- | Wishbone Subordinate response A
+  WishboneS2M a ->
+  -- | Wishbone Subordinate response B
+  WishboneS2M a ->
+  Bool
+eqWishboneS2M (Write _ _ _) s2mA s2mB =
+  s2mA{readData = ()} == s2mB{readData = ()}
+eqWishboneS2M (Read _ sel) s2mA s2mB = case testEquality (TypeNats.SNat @(DivRU (BitSize a) 8)) (TypeNats.SNat @nBytes) of
+  Nothing -> C.errorX "eqWishboneS2M: nBytes is not divisible by 8"
+  Just Refl ->
+    s2mA{readData = mux (unpack sel) (bitCoerce s2mA.readData) (C.repeat (0 :: BitVector 8))}
+      == s2mB{readData = mux (unpack sel) (bitCoerce s2mB.readData) (C.repeat 0)}
 
 -- Validation for (lenient) spec compliance
 --
