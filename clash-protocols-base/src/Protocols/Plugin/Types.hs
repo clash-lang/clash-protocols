@@ -10,8 +10,12 @@ exported elsewhere.
 -}
 module Protocols.Plugin.Types where
 
+import Protocols.Plugin.Cpp
 import Clash.Signal
 import Data.Kind (Type)
+import Protocols.Plugin.TH
+
+import qualified Clash.Prelude as C
 
 -- | A protocol describes the in- and outputs of one side of a 'Circuit'.
 class Protocol a where
@@ -141,3 +145,28 @@ Note: 'CSignal' exists to work around [issue 760](https://github.com/clash-lang/
 data CSignal (dom :: Domain) (a :: Type)
 
 type role CSignal nominal representational
+
+instance Protocol () where
+  type Fwd () = ()
+  type Bwd () = ()
+
+{- | __NB__: The documentation only shows instances up to /3/-tuples. By
+default, instances up to and including /12/-tuples will exist. If the flag
+@large-tuples@ is set instances up to the GHC imposed limit will exist. The
+GHC imposed limit is either 62 or 64 depending on the GHC version.
+-}
+instance Protocol (a, b) where
+  type Fwd (a, b) = (Fwd a, Fwd b)
+  type Bwd (a, b) = (Bwd a, Bwd b)
+
+-- Generate n-tuple instances, where n > 2
+protocolTupleInstances 3 maxTupleSize
+
+instance (C.KnownNat n) => Protocol (C.Vec n a) where
+  type Fwd (C.Vec n a) = C.Vec n (Fwd a)
+  type Bwd (C.Vec n a) = C.Vec n (Bwd a)
+
+-- XXX: Type families with Signals on LHS are currently broken on Clash:
+instance Protocol (CSignal dom a) where
+  type Fwd (CSignal dom a) = C.Signal dom a
+  type Bwd (CSignal dom a) = C.Signal dom ()
