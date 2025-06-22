@@ -170,3 +170,15 @@ instance (C.KnownNat n) => Protocol (C.Vec n a) where
 instance Protocol (CSignal dom a) where
   type Fwd (CSignal dom a) = C.Signal dom a
   type Bwd (CSignal dom a) = C.Signal dom ()
+
+instance Protocol (Clock dom) where
+  type Fwd (Clock dom) = C.Clock dom
+  type Bwd (Clock dom) = ()
+
+instance Protocol (Reset dom) where
+  type Fwd (Reset dom) = C.Reset dom
+  type Bwd (Reset dom) = ()
+
+instance Protocol (Enable dom) where
+  type Fwd (Enable dom) = C.Enable dom
+  type Bwd (Enable dom) = ()
