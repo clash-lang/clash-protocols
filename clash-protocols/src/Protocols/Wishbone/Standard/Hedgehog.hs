@@ -47,19 +47,26 @@ module Protocols.Wishbone.Standard.Hedgehog (
   -- * Generators
   genWishboneTransfer,
 
+  -- * Simulation
+  sample,
+  sampleUnfiltered,
+
   -- * helpers
-  filterTransactions,
   m2sToRequest,
+  eqWishboneS2M,
 )
 where
 
 import Clash.Hedgehog.Sized.BitVector (genDefinedBitVector)
 import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
-import Clash.Prelude as C hiding (cycle, indices, not, (&&), (||))
+import Clash.Prelude as C hiding (cycle, indices, not, sample, (&&), (||))
 import Clash.Signal.Internal (Signal ((:-)))
 import Control.DeepSeq (NFData)
 import Data.Bifunctor qualified as B
+import Data.List.Extra
+import Data.Proxy (Proxy (..))
 import Data.String.Interpolate (i)
+import Data.Type.Equality ((:~:) (Refl))
 import GHC.Stack (HasCallStack)
 import Hedgehog ((===))
 import Hedgehog qualified as H
@@ -92,6 +99,65 @@ deriving instance
 deriving instance
   (KnownNat addressWidth, KnownNat (BitSize a), Eq a) =>
   (Eq (WishboneMasterRequest addressWidth a))
+
+{- | Checks equality for relevant parts of a 'WishboneS2M' response based on the
+corresponding 'WishboneMasterRequest'. For a 'Protocols.Wishbone.Standard.Hedgehog.Write' request, the 'readData' field
+is ignored, for a 'Protocols.Wishbone.Standard.Hedgehog.Read' request only the selected bytes are checked.
+
+>>>
+:{
+let
+  readReqA = Read (0 :: BitVector 32) (0b1111 :: BitVector 4)
+  readReqB = Read (0 :: BitVector 32) (0b0001 :: BitVector 4)
+  writeReq = Write (0 :: BitVector 32) (0b1111 :: BitVector 4) (0x12345678 :: BitVector 32)
+  s2mA = (emptyWishboneS2M @())
+    { readData = 0x00FF :: BitVector 32
+    , acknowledge = True
+    , err = False
+    , retry = False
+    }
+  s2mB = (emptyWishboneS2M @())
+    { readData = 0xFFFF :: BitVector 32
+    , acknowledge = True
+    , err = False
+    , retry = False
+    }
+  s2mC = (emptyWishboneS2M @())
+    { readData = deepErrorX "" :: BitVector 32
+    , acknowledge = True
+    , err = False
+    , retry = False
+    }
+:}
+
+>>> eqWishboneS2M readReqA s2mA s2mB
+False
+>>> eqWishboneS2M readReqB s2mA s2mB
+True
+>>> eqWishboneS2M writeReq s2mA s2mB
+True
+>>> eqWishboneS2M writeReq s2mA s2mC
+True
+-}
+eqWishboneS2M ::
+  forall (addressWidth :: Natural) (nBytes :: Natural) a.
+  (KnownNat nBytes, BitPack a, BitSize a ~ nBytes * 8) =>
+  -- | Request that determines which fields to check
+  WishboneMasterRequest addressWidth a ->
+  -- | Wishbone Subordinate response A
+  WishboneS2M a ->
+  -- | Wishbone Subordinate response B
+  WishboneS2M a ->
+  Bool
+eqWishboneS2M (Write _ _ _) s2mA s2mB =
+  s2mA{readData = ()} == s2mB{readData = ()}
+eqWishboneS2M (Read _ sel) s2mA s2mB =
+  case sameNat (Proxy @(DivRU (BitSize a) 8)) (Proxy @nBytes) of
+    Nothing -> C.errorX "eqWishboneS2M: nBytes is not divisible by 8"
+    Just Refl ->
+      let nullBytes = C.repeat (0 :: BitVector 8)
+       in s2mA{readData = mux (unpack sel) (bitCoerce s2mA.readData) nullBytes}
+            == s2mB{readData = mux (unpack sel) (bitCoerce s2mB.readData) nullBytes}
 
 -- Validation for (lenient) spec compliance
 --
@@ -472,30 +538,6 @@ validatorCircuitLenient =
       Right (True, state1) -> ((cycle + 1, (m2s1, s2m1), state1), (s2m1, m2s1))
       Right (False, state1) -> go (cycle, (m2s0, s2m0), state1) (m2s1, s2m1)
 
-{- |
-Takes elements from a list while the predicate holds, considers up to @window@ elements
-since the last element that satisfied the predicate.
-
->>> takeWhileAnyInWindow 3 Prelude.odd [1, 2, 3, 6, 8, 10, 12]
-[1,2,3]
--}
-takeWhileAnyInWindow ::
-  -- | Number of elements to consider since the last element that satisfied the predicate.
-  Int ->
-  -- | Function to test each element.
-  (a -> Bool) ->
-  -- | Input list
-  [a] ->
-  -- | List of elements that satisfied the predicate. Ends at an element that satisfies the predicate.
-  [a]
-takeWhileAnyInWindow wdw predicate = go wdw []
- where
-  go 0 _ _ = []
-  go cnt acc (x : xs)
-    | predicate x = P.reverse (x : acc) <> go wdw [] xs
-    | otherwise = go (pred cnt) (x : acc) xs
-  go _ _ _ = []
-
 -- | Test a wishbone 'Standard' circuit against a pure model.
 wishbonePropWithModel ::
   forall dom a addressWidth st m.
@@ -534,19 +576,12 @@ wishbonePropWithModel eOpts model circuit0 inputGen st = do
     resets = 5
     driver = driveStandard @dom (defExpectOptions{eoResetCycles = resets}) (P.zip input reqStalls)
     circuit1 = validatorCircuit |> circuit0
-    (m2s0, s2m0) =
-      P.unzip $
-        takeWhileAnyInWindow (eoSampleMax eOpts) hasBusActivity $
-          P.uncurry P.zip $
-            observeComposedWishboneCircuit driver circuit1
+    (m2s, s2m) = P.unzip $ sample eOpts driver circuit1
 
-    m2s1 = P.reverse $ P.dropWhile (\m2s -> not (m2s.busCycle || m2s.strobe)) $ P.reverse m2s0
-    s2m1 = P.reverse $ P.dropWhile (not . hasTerminateFlag) $ P.reverse s2m0
+  H.footnoteShow m2s
+  H.footnoteShow s2m
 
-  H.footnoteShow s2m1
-  H.footnoteShow m2s1
-
-  matchModel 0 s2m1 input st === Right ()
+  matchModel 0 s2m input st === Right ()
  where
   matchModel ::
     Int ->
@@ -599,16 +634,6 @@ genWishboneTransfer addrRange genA = do
     , pure $ Write (pack addr) sel dat
     ]
 
--- | Given a list of master / slave samples, only keep the ones where an active request receives a response.
-filterTransactions ::
-  (KnownNat addressWidth, KnownNat (BitSize a), BitPack a) =>
-  [(WishboneM2S addressWidth (BitSize a `DivRU` 8) a, WishboneS2M a)] ->
-  [(WishboneM2S addressWidth (BitSize a `DivRU` 8) a, WishboneS2M a)]
-filterTransactions ((m2s, s2m) : rest)
-  | not (busCycle m2s && strobe m2s && hasTerminateFlag s2m) = filterTransactions rest
-  | otherwise = (m2s, s2m) : filterTransactions rest
-filterTransactions [] = []
-
 {- | Interpret a 'WishboneM2S' as a 'WishboneMasterRequest'.
 Only works for valid requests and performs no checks.
 -}
@@ -619,3 +644,32 @@ m2sToRequest ::
 m2sToRequest m2s
   | m2s.writeEnable = Write m2s.addr m2s.busSelect m2s.writeData
   | otherwise = Read m2s.addr m2s.busSelect
+
+{- | Simulates a wishbone manager and subordinate and returns their transactions.
+The results are filtered to only include transactions that have bus activity,
+for a version that includes all cycles, see 'sampleUnfiltered'.
+-}
+sample ::
+  (KnownDomain dom) =>
+  ExpectOptions ->
+  Circuit () (Wishbone dom mode addressWidth a) ->
+  Circuit (Wishbone dom mode addressWidth a) () ->
+  [(WishboneM2S addressWidth (BitSize a `DivRU` 8) a, WishboneS2M a)]
+sample eOpts manager subordinate =
+  P.filter hasBusActivity $
+    sampleUnfiltered eOpts manager subordinate
+
+{- | Simulates a wishbone manager and subordinate and the state of the bus for
+every cycle. For a time independent version that only includes transactions,
+see 'sample'.
+-}
+sampleUnfiltered ::
+  (KnownDomain dom) =>
+  ExpectOptions ->
+  Circuit () (Wishbone dom mode addressWidth a) ->
+  Circuit (Wishbone dom mode addressWidth a) () ->
+  [(WishboneM2S addressWidth (BitSize a `DivRU` 8) a, WishboneS2M a)]
+sampleUnfiltered eOpts manager subordinate =
+  takeWhileAnyInWindow (eoStopAfterEmpty eOpts) hasBusActivity $
+    uncurry P.zip $
+      observeComposedWishboneCircuit manager subordinate
