@@ -9,6 +9,7 @@ module Protocols.Hedgehog.Types where
 import Control.DeepSeq
 
 import Clash.Prelude qualified as C
+import Data.Maybe (fromMaybe)
 import Data.Proxy
 import GHC.Stack (HasCallStack)
 import Protocols.Internal.Types
@@ -23,14 +24,16 @@ instance (NFData a, C.NFDataX a, C.ShowX a, C.Show a, Eq a) => TestType a
 
 -- | Options for 'expectN' function. See individual fields for more information.
 data ExpectOptions = ExpectOptions
-  { eoStopAfterEmpty :: Int
-  -- ^ Stop sampling after seeing /n/ consecutive empty samples
+  { eoStopAfterEmpty :: Maybe Int
+  -- ^ Explicitly control the number of samples empty samples simulate before we stop
+  -- the simulation. When set to `Nothing`, this is derived using `expectedEmptyCycles`.
   , eoSampleMax :: Int
   -- ^ Produce an error if the circuit produces more than /n/ valid samples. This
   -- is used to terminate (potentially) infinitely running circuits.
-  --
-  -- This number is used to generate stall information, so setting it to
-  -- unreasonable values will result in long runtimes.
+  , eoStallsMax :: Int
+  -- ^ Generate at most /n/ stall moments of zero or more cycles(set by 'eoConsecutiveStalls').
+  , eoConsecutiveStalls :: Int
+  -- ^ Maximum number of consecutive stalls that are allowed to be inserted.
   , eoResetCycles :: Int
   -- ^ Ignore first /n/ cycles
   , eoDriveEarly :: Bool
@@ -41,6 +44,16 @@ data ExpectOptions = ExpectOptions
   , eoTrace :: Bool
   -- ^ Trace data generation for debugging purposes
   }
+
+-- | Default derivation of `eoStopAfterEmpty` when it is set to `Nothing`.
+expectedEmptyCycles :: ExpectOptions -> Int
+expectedEmptyCycles eOpts =
+  -- +2 on `eoStallsMax` to account worst case left side stalling + right side stalling
+  -- +1 on `eoConsecutiveStalls` to consume 1 sample after stalling
+  -- +100 arbitrarily chosen to allow the circuit to have some internal latency.
+  fromMaybe
+    (eOpts.eoStallsMax * (eOpts.eoConsecutiveStalls + 1) + eOpts.eoResetCycles + 100)
+    eOpts.eoStopAfterEmpty
 
 {- | Provides a way of comparing expected data with data produced by a
 protocol component.

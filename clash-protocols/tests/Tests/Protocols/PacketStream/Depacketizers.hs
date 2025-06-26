@@ -44,7 +44,7 @@ depacketizerPropGen ::
 depacketizerPropGen SNat SNat metaGen toMetaOut =
   idWithModelSingleDomain
     @System
-    defExpectOptions{eoSampleMax = 1000, eoStopAfterEmpty = 1000}
+    defExpectOptions
     (genPackets 1 4 (genValidPacket defPacketOptions metaGen (Range.linear 0 30)))
     (exposeClockResetEnable (depacketizerModel toMetaOut))
     (exposeClockResetEnable ckt)
@@ -80,7 +80,7 @@ depacketizeToDfPropGen ::
 depacketizeToDfPropGen SNat SNat metaGen toOut =
   idWithModelSingleDomain
     @System
-    defExpectOptions{eoSampleMax = 1000, eoStopAfterEmpty = 1000}
+    defExpectOptions
     (genPackets 1 10 (genValidPacket defPacketOptions metaGen (Range.linear 0 20)))
     (exposeClockResetEnable (depacketizeToDfModel toOut))
     (exposeClockResetEnable ckt)
