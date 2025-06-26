@@ -39,7 +39,7 @@ makePropPacketArbiter ::
 makePropPacketArbiter SNat SNat mode =
   propWithModelSingleDomain
     @System
-    defExpectOptions{eoSampleMax = 1000}
+    defExpectOptions
     genSources
     (exposeClockResetEnable L.concat)
     (exposeClockResetEnable (packetArbiterC mode))
@@ -87,7 +87,7 @@ makePropPacketDispatcher ::
   Property
 makePropPacketDispatcher SNat fs =
   idWithModelSingleDomain @System
-    defExpectOptions{eoSampleMax = 2000, eoStopAfterEmpty = 1000}
+    defExpectOptions
     (genPackets 1 10 (genValidPacket defPacketOptions Gen.enumBounded (Range.linear 0 6)))
     (exposeClockResetEnable (model 0))
     (exposeClockResetEnable (packetDispatcherC fs))
