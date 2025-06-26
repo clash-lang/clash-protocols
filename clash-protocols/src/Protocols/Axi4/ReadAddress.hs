@@ -189,12 +189,17 @@ deriving instance
   (KnownAxi4ReadAddressConfig conf, C.BitPack user) => C.BitPack (M2S_ReadAddress conf user)
 deriving instance
   (KnownAxi4ReadAddressConfig conf, Show userType) => Show (M2S_ReadAddress conf userType)
+deriving instance
+  (KnownAxi4ReadAddressConfig conf, C.ShowX userType) =>
+  C.ShowX (M2S_ReadAddress conf userType)
+deriving instance
+  (KnownAxi4ReadAddressConfig conf, Eq userType) => Eq (M2S_ReadAddress conf userType)
 
 -- | See Table A2-5 "Read address channel signals"
 newtype S2M_ReadAddress = S2M_ReadAddress
   {_arready :: Bool}
-  deriving stock (Show, Generic)
-  deriving anyclass (C.NFDataX, C.BitPack)
+  deriving stock (Show, Generic, Eq)
+  deriving anyclass (C.ShowX, C.NFDataX, C.BitPack)
 
 {- | Shorthand for a "well-behaved" read address config,
 so that we don't need to write out a bunch of type constraints later.

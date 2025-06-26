@@ -1,5 +1,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-missing-fields #-}
+{-# OPTIONS_GHC -fconstraint-solver-iterations=10 #-}
 
 {- |
 Defines WriteData channel of full AXI4 protocol with port names corresponding
@@ -111,7 +112,9 @@ Holds for every configuration; don't worry about implementing this class.
 type KnownAxi4WriteDataConfig conf =
   ( KeepStrobeClass (WKeepStrobe conf)
   , C.KnownNat (WNBytes conf)
+  , Eq (StrobeDataType (WKeepStrobe conf))
   , Show (StrobeDataType (WKeepStrobe conf))
+  , C.ShowX (StrobeDataType (WKeepStrobe conf))
   , C.NFDataX (StrobeDataType (WKeepStrobe conf))
   , C.BitPack (StrobeDataType (WKeepStrobe conf))
   )
@@ -121,6 +124,24 @@ deriving instance
   , Show userType
   ) =>
   Show (M2S_WriteData conf userType)
+
+deriving instance
+  ( KnownAxi4WriteDataConfig conf
+  , C.ShowX userType
+  ) =>
+  C.ShowX (M2S_WriteData conf userType)
+
+deriving instance
+  ( KnownAxi4WriteDataConfig conf
+  , Eq userType
+  ) =>
+  Eq (M2S_WriteData conf userType)
+
+deriving instance
+  ( KnownAxi4WriteDataConfig conf
+  , C.BitPack userType
+  ) =>
+  C.BitPack (M2S_WriteData conf userType)
 
 deriving instance
   ( KnownAxi4WriteDataConfig conf
