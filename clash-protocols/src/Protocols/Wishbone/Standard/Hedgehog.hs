@@ -47,6 +47,10 @@ module Protocols.Wishbone.Standard.Hedgehog (
   -- * Generators
   genWishboneTransfer,
 
+  -- * Simulation
+  sample,
+  sampleUnfiltered,
+
   -- * helpers
   m2sToRequest,
   eqWishboneS2M,
@@ -55,7 +59,7 @@ where
 
 import Clash.Hedgehog.Sized.BitVector (genDefinedBitVector)
 import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
-import Clash.Prelude as C hiding (cycle, indices, not, (&&), (||))
+import Clash.Prelude as C hiding (cycle, indices, not, sample, (&&), (||))
 import Clash.Signal.Internal (Signal ((:-)))
 import Control.DeepSeq (NFData)
 import Data.Bifunctor qualified as B
@@ -572,19 +576,12 @@ wishbonePropWithModel eOpts model circuit0 inputGen st = do
     resets = 5
     driver = driveStandard @dom (defExpectOptions{eoResetCycles = resets}) (P.zip input reqStalls)
     circuit1 = validatorCircuit |> circuit0
-    (m2s0, s2m0) =
-      P.unzip $
-        takeWhileAnyInWindow (eoSampleMax eOpts) hasBusActivity $
-          P.uncurry P.zip $
-            observeComposedWishboneCircuit driver circuit1
+    (m2s, s2m) = P.unzip $ sample eOpts driver circuit1
 
-    m2s1 = P.reverse $ P.dropWhile (\m2s -> not (m2s.busCycle || m2s.strobe)) $ P.reverse m2s0
-    s2m1 = P.reverse $ P.dropWhile (not . hasTerminateFlag) $ P.reverse s2m0
+  H.footnoteShow m2s
+  H.footnoteShow s2m
 
-  H.footnoteShow s2m1
-  H.footnoteShow m2s1
-
-  matchModel 0 s2m1 input st === Right ()
+  matchModel 0 s2m input st === Right ()
  where
   matchModel ::
     Int ->
@@ -647,3 +644,32 @@ m2sToRequest ::
 m2sToRequest m2s
   | m2s.writeEnable = Write m2s.addr m2s.busSelect m2s.writeData
   | otherwise = Read m2s.addr m2s.busSelect
+
+{- | Simulates a wishbone manager and subordinate and returns their transactions.
+The results are filtered to only include transactions that have bus activity,
+for a version that includes all cycles, see 'sampleUnfiltered'.
+-}
+sample ::
+  (KnownDomain dom) =>
+  ExpectOptions ->
+  Circuit () (Wishbone dom mode addressWidth a) ->
+  Circuit (Wishbone dom mode addressWidth a) () ->
+  [(WishboneM2S addressWidth (BitSize a `DivRU` 8) a, WishboneS2M a)]
+sample eOpts manager subordinate =
+  P.filter hasBusActivity $
+    sampleUnfiltered eOpts manager subordinate
+
+{- | Simulates a wishbone manager and subordinate and the state of the bus for
+every cycle. For a time independent version that only includes transactions,
+see 'sample'.
+-}
+sampleUnfiltered ::
+  (KnownDomain dom) =>
+  ExpectOptions ->
+  Circuit () (Wishbone dom mode addressWidth a) ->
+  Circuit (Wishbone dom mode addressWidth a) () ->
+  [(WishboneM2S addressWidth (BitSize a `DivRU` 8) a, WishboneS2M a)]
+sampleUnfiltered eOpts manager subordinate =
+  takeWhileAnyInWindow (eoStopAfterEmpty eOpts) hasBusActivity $
+    uncurry P.zip $
+      observeComposedWishboneCircuit manager subordinate
