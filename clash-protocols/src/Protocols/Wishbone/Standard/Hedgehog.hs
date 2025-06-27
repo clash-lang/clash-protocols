@@ -671,5 +671,6 @@ sampleUnfiltered ::
   [(WishboneM2S addressWidth (BitSize a `DivRU` 8) a, WishboneS2M a)]
 sampleUnfiltered eOpts manager subordinate =
   takeWhileAnyInWindow (expectedEmptyCycles eOpts) hasBusActivity $
-    uncurry P.zip $
-      observeComposedWishboneCircuit manager subordinate
+    P.take eOpts.eoSampleMax $
+      uncurry P.zip $
+        observeComposedWishboneCircuit manager subordinate
