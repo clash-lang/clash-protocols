@@ -86,8 +86,8 @@ data
 
 -- | See Table A2-4 "Write response channel signals"
 newtype M2S_WriteResponse = M2S_WriteResponse {_bready :: Bool}
-  deriving stock (Show, Generic)
-  deriving anyclass (C.NFDataX, C.BitPack)
+  deriving stock (Show, Eq, Generic)
+  deriving anyclass (C.ShowX, C.NFDataX, C.BitPack)
 
 {- | Shorthand for a "well-behaved" write response config,
 so that we don't need to write out a bunch of type constraints later.
@@ -96,16 +96,36 @@ Holds for every configuration; don't worry about implementing this class.
 type KnownAxi4WriteResponseConfig conf =
   ( KeepTypeClass (BKeepResponse conf)
   , C.KnownNat (BIdWidth conf)
+  , Eq (ResponseType (BKeepResponse conf))
   , Show (ResponseType (BKeepResponse conf))
+  , C.ShowX (ResponseType (BKeepResponse conf))
   , C.NFDataX (ResponseType (BKeepResponse conf))
   , C.BitPack (ResponseType (BKeepResponse conf))
   )
 
 deriving instance
   ( KnownAxi4WriteResponseConfig conf
+  , Eq userType
+  ) =>
+  Eq (S2M_WriteResponse conf userType)
+
+deriving instance
+  ( KnownAxi4WriteResponseConfig conf
   , Show userType
   ) =>
   Show (S2M_WriteResponse conf userType)
+
+deriving instance
+  ( KnownAxi4WriteResponseConfig conf
+  , C.BitPack userType
+  ) =>
+  C.BitPack (S2M_WriteResponse conf userType)
+
+deriving instance
+  ( KnownAxi4WriteResponseConfig conf
+  , C.ShowX userType
+  ) =>
+  C.ShowX (S2M_WriteResponse conf userType)
 
 deriving instance
   ( KnownAxi4WriteResponseConfig conf

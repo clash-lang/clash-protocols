@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wno-missing-fields #-}
+{-# OPTIONS_GHC -fconstraint-solver-iterations=10 #-}
 
 {- |
 Defines WriteAddress channel of full AXI4 protocol with port names corresponding
@@ -182,8 +183,8 @@ data
 
 -- | See Table A2-2 "Write address channel signals"
 newtype S2M_WriteAddress = S2M_WriteAddress {_awready :: Bool}
-  deriving stock (Show, Generic)
-  deriving anyclass (C.NFDataX, C.BitPack)
+  deriving stock (Show, Eq, Generic)
+  deriving anyclass (C.ShowX, C.NFDataX, C.BitPack)
 
 {- | Shorthand for a "well-behaved" write address config,
 so that we don't need to write out a bunch of type constraints later.
@@ -258,9 +259,27 @@ deriving instance
 
 deriving instance
   ( KnownAxi4WriteAddressConfig conf
+  , C.ShowX userType
+  ) =>
+  C.ShowX (M2S_WriteAddress conf userType)
+
+deriving instance
+  ( KnownAxi4WriteAddressConfig conf
   , C.NFDataX userType
   ) =>
   C.NFDataX (M2S_WriteAddress conf userType)
+
+deriving instance
+  ( KnownAxi4WriteAddressConfig conf
+  , Eq userType
+  ) =>
+  Eq (M2S_WriteAddress conf userType)
+
+deriving instance
+  ( KnownAxi4WriteAddressConfig conf
+  , C.BitPack userType
+  ) =>
+  C.BitPack (M2S_WriteAddress conf userType)
 
 {- | Mainly for use in @DfConv@.
 
