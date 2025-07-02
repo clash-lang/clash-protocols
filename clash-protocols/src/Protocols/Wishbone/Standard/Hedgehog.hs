@@ -155,9 +155,13 @@ eqWishboneS2M (Read _ sel) s2mA s2mB =
   case sameNat (Proxy @(DivRU (BitSize a) 8)) (Proxy @nBytes) of
     Nothing -> C.errorX "eqWishboneS2M: nBytes is not divisible by 8"
     Just Refl ->
-      let nullBytes = C.repeat (0 :: BitVector 8)
-       in s2mA{readData = mux (unpack sel) (bitCoerce s2mA.readData) nullBytes}
-            == s2mB{readData = mux (unpack sel) (bitCoerce s2mB.readData) nullBytes}
+      let
+        maskBytes wb = wb{readData = mux (unpack sel) (bitCoerce wb.readData) nullBytes}
+        nullBytes = C.repeat (0 :: BitVector 8)
+       in
+        if s2mA.acknowledge
+          then maskBytes s2mA == maskBytes s2mB
+          else s2mA{readData = ()} == s2mB{readData = ()}
 
 -- Validation for (lenient) spec compliance
 --
