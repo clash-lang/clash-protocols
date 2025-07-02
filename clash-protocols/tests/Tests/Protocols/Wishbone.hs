@@ -15,7 +15,7 @@ import Hedgehog
 import Hedgehog.Gen qualified as Gen
 import Hedgehog.Range qualified as Range
 import Protocols
-import Protocols.Hedgehog (defExpectOptions)
+import Protocols.Hedgehog (defExpectOptions, eoSampleMax)
 import Protocols.Wishbone
 import Protocols.Wishbone.Standard
 import Protocols.Wishbone.Standard.Hedgehog
@@ -87,7 +87,7 @@ prop_addrReadIdWb_model =
   property $
     withClockResetEnable clockGen resetGen enableGen $
       wishbonePropWithModel @System
-        defExpectOptions
+        defExpectOptions{eoSampleMax = 10_000}
         addrReadIdWbModel
         addrReadIdWb
         (genData $ genWishboneTransfer @10 (Range.constantBounded) genDefinedBitVector)
@@ -141,7 +141,7 @@ prop_memoryWb_model =
   property $
     withClockResetEnable clockGen resetGen enableGen $
       wishbonePropWithModel @System
-        defExpectOptions
+        defExpectOptions{eoSampleMax = 10_000}
         memoryWbModel
         (memoryWb (blockRam (C.replicate d256 0)))
         (genData (genWishboneTransfer @8 (Range.constantBounded) genSmallInt))
@@ -179,7 +179,7 @@ prop_addrReadId_validator = property $ do
     circuitSignalsN =
       withClockResetEnable @System clockGen resetGen enableGen $
         let
-          driver = driveStandard @System @(BitVector 8) @8 defExpectOptions reqs
+          driver = driveStandard @System @(BitVector 8) @8 defExpectOptions{eoSampleMax = 10_000} reqs
           addrRead = addrReadIdWb @System @8
          in
           evaluateUnitCircuit
@@ -198,7 +198,7 @@ prop_memoryWb_validator = property $ do
     circuitSignalsN =
       withClockResetEnable @System clockGen resetGen enableGen $
         let
-          driver = driveStandard @System @(BitVector 8) @8 defExpectOptions reqs
+          driver = driveStandard @System @(BitVector 8) @8 defExpectOptions{eoSampleMax = 10_000} reqs
           memory = memoryWb @System @(BitVector 8) @8 (blockRam (C.replicate d256 0))
          in
           evaluateUnitCircuit
@@ -221,7 +221,7 @@ prop_addrReadId_validator_lenient = property $ do
     circuitSignalsN =
       withClockResetEnable @System clockGen resetGen enableGen $
         let
-          driver = driveStandard @System @(BitVector 8) @8 defExpectOptions reqs
+          driver = driveStandard @System @(BitVector 8) @8 defExpectOptions{eoSampleMax = 10_000} reqs
           addrRead = addrReadIdWb @System @8
          in
           evaluateUnitCircuit
@@ -240,7 +240,7 @@ prop_memoryWb_validator_lenient = property $ do
     circuitSignalsN =
       withClockResetEnable @System clockGen resetGen enableGen $
         let
-          driver = driveStandard @System @(BitVector 8) @8 defExpectOptions reqs
+          driver = driveStandard @System @(BitVector 8) @8 defExpectOptions{eoSampleMax = 10_000} reqs
           memory = memoryWb @System @(BitVector 8) @8 (blockRam (C.replicate d256 0))
          in
           evaluateUnitCircuit
@@ -260,7 +260,7 @@ prop_specViolation_lenient = property $ do
     circuitSignalsN =
       withClockResetEnable @System clockGen resetGen enableGen $
         let
-          driver = driveStandard @System @(BitVector 8) @8 defExpectOptions reqs
+          driver = driveStandard @System @(BitVector 8) @8 defExpectOptions{eoSampleMax = 10_000} reqs
           invalid = invalidCircuit
          in
           evaluateUnitCircuit
