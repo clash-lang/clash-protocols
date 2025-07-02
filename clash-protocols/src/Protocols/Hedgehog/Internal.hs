@@ -29,9 +29,12 @@ import Clash.Prelude qualified as C
 import Hedgehog qualified as H
 import Hedgehog.Internal.Property qualified as H
 
-{- | Resets for 30 cycles, checks for superfluous data for 50 cycles after
-seeing last valid data cycle, and times out after seeing 1000 consecutive
-empty cycles.
+{- | Conservative settings for `ExpectOptions`:
+- Reset for 30 cycles
+- Insert at most 10 stall moments
+- Every stall moment is at most 10 cycles long
+- Sample at most 1000 cycles
+- Automatically derive when to stop sampling empty samples using `expectedEmptyCycles`.
 -}
 defExpectOptions :: ExpectOptions
 defExpectOptions =
@@ -41,8 +44,10 @@ defExpectOptions =
       --      increase the time it takes to run the tests. This is because
       --      the test will run for at least the number of cycles specified
       --      in 'eoStopAfterEmpty'.
-      eoStopAfterEmpty = 256
-    , eoSampleMax = 256
+      eoStopAfterEmpty = Nothing
+    , eoSampleMax = 1000
+    , eoStallsMax = 10
+    , eoConsecutiveStalls = 10
     , eoResetCycles = 30
     , eoDriveEarly = True
     , eoTimeoutMs = Nothing
@@ -57,9 +62,10 @@ instance (TestType a, C.KnownDomain dom) => Test (Df dom a) where
     ExpectOptions ->
     [Maybe a] ->
     m [a]
-  expectN Proxy (ExpectOptions{eoSampleMax, eoStopAfterEmpty}) sampled = do
-    go eoSampleMax eoStopAfterEmpty sampled
+  expectN Proxy eOpts sampled = do
+    go eOpts.eoSampleMax maxEmptyCycles sampled
    where
+    maxEmptyCycles = expectedEmptyCycles eOpts
     go :: (HasCallStack) => Int -> Int -> [Maybe a] -> m [a]
     go _timeout _n [] =
       -- This really should not happen, protocols should produce data indefinitely
@@ -69,7 +75,7 @@ instance (TestType a, C.KnownDomain dom) => Test (Df dom a) where
       H.failWith
         Nothing
         ( "Sample limit reached after sampling "
-            <> show eoSampleMax
+            <> show eOpts.eoSampleMax
             <> " samples. "
             <> "Consider increasing 'eoSampleMax' in 'ExpectOptions'."
         )
@@ -78,7 +84,7 @@ instance (TestType a, C.KnownDomain dom) => Test (Df dom a) where
       pure []
     go sampleTimeout _emptyTimeout (Just a : as) =
       -- Valid sample
-      (a :) <$> go (sampleTimeout - 1) eoStopAfterEmpty as
+      (a :) <$> go (sampleTimeout - 1) maxEmptyCycles as
     go sampleTimeout emptyTimeout (Nothing : as) =
       -- Empty sample
       go sampleTimeout (emptyTimeout - 1) as

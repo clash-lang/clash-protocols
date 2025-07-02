@@ -670,6 +670,6 @@ sampleUnfiltered ::
   Circuit (Wishbone dom mode addressWidth a) () ->
   [(WishboneM2S addressWidth (BitSize a `DivRU` 8) a, WishboneS2M a)]
 sampleUnfiltered eOpts manager subordinate =
-  takeWhileAnyInWindow (eoStopAfterEmpty eOpts) hasBusActivity $
+  takeWhileAnyInWindow (expectedEmptyCycles eOpts) hasBusActivity $
     uncurry P.zip $
       observeComposedWishboneCircuit manager subordinate

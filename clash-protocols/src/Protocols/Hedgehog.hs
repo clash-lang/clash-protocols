@@ -23,6 +23,7 @@ module Protocols.Hedgehog (
   genStallAck,
   genStallMode,
   genStalls,
+  expectedEmptyCycles,
 ) where
 
 -- base
@@ -63,16 +64,6 @@ resetGen :: (C.KnownDomain dom) => Int -> C.Reset dom
 resetGen n =
   C.unsafeFromActiveHigh
     (C.fromList (replicate n True <> repeat False))
-
-smallInt :: H.Range Int
-smallInt = Range.linear 0 10
-
-genSmallInt :: H.Gen Int
-genSmallInt =
-  Gen.frequency
-    [ (90, Gen.integral smallInt)
-    , (10, Gen.constant (Range.lowerBound 99 smallInt))
-    ]
 
 {- | Attach a timeout to a property. Fails if the property does not finish in
 the given time. The timeout is given in milliseconds.
@@ -120,11 +111,12 @@ propWithModel eOpts genData model prot prop =
     when (eoTrace eOpts) $ liftIO $ putStr "propWithModel: dat: " >> print dat
 
     -- TODO: Different 'n's for each output
-    n <- H.forAll (Gen.integral (Range.linear 0 (eoSampleMax eOpts)))
+    n <- H.forAll (Gen.integral (Range.linear 0 (eoStallsMax eOpts)))
     when (eoTrace eOpts) $ liftIO $ putStr "propWithModel: n: " >> print n
 
     -- TODO: Different distributions?
-    let genStall = genSmallInt
+    let
+      genStall = Gen.int (Range.linear 1 eOpts.eoConsecutiveStalls)
 
     -- Generate stalls for LHS part of the protocol. The first line determines
     -- whether to stall or not. The second determines how many cycles to stall

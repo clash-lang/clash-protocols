@@ -55,7 +55,7 @@ prop_packet_fifo_small_buffer_id :: Property
 prop_packet_fifo_small_buffer_id =
   idWithModelSingleDomain
     @System
-    defExpectOptions{eoStopAfterEmpty = 1000}
+    defExpectOptions{eoStopAfterEmpty = Just 500} -- To account for empty cycles due to dropped packets
     (genPackets 1 10 (genValidPacket defPacketOptions Gen.enumBounded (Range.linear 0 30)))
     (exposeClockResetEnable (dropBigPackets d3 . dropAbortedPackets))
     (exposeClockResetEnable (packetFifoC @_ @1 @Int16 d3 d5 Backpressure))
@@ -78,7 +78,7 @@ prop_overFlowDrop_packetFifo_id :: Property
 prop_overFlowDrop_packetFifo_id =
   idWithModelSingleDomain
     @System
-    defExpectOptions{eoStopAfterEmpty = 1000}
+    defExpectOptions
     (genPackets 1 10 (genValidPacket defPacketOptions Gen.enumBounded (Range.linear 0 10)))
     (exposeClockResetEnable dropAbortedPackets)
     (exposeClockResetEnable (packetFifoC @_ @1 @Int16 d10 d10 Drop))

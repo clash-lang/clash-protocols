@@ -42,7 +42,7 @@ generateDownConverterProperty ::
   Property
 generateDownConverterProperty SNat SNat =
   idWithModelSingleDomain
-    defExpectOptions{eoSampleMax = 1000}
+    defExpectOptions
     (genPackets 1 8 (genValidPacket defPacketOptions Gen.enumBounded (Range.linear 0 10)))
     (exposeClockResetEnable (upConvert . downConvert))
     (exposeClockResetEnable @System (downConverterC @dwOut @n @Int))
