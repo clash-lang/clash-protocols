@@ -11,6 +11,8 @@ module Protocols.Vec (
   unzip3,
   concat,
   unconcat,
+  repeat,
+  replicate,
 ) where
 
 -- base
@@ -18,7 +20,17 @@ import Data.Tuple
 import Prelude ()
 
 -- clash-prelude
-import Clash.Prelude hiding (concat, split, unconcat, unzip, unzip3, zip, zip3)
+import Clash.Prelude hiding (
+  concat,
+  repeat,
+  replicate,
+  split,
+  unconcat,
+  unzip,
+  unzip3,
+  zip,
+  zip3,
+ )
 import Clash.Prelude qualified as C
 
 -- clash-protocols-base
@@ -131,3 +143,15 @@ split3Vec ::
 split3Vec v = (v0, v1, v2)
  where
   (v0, splitAtI -> (v1, v2)) = splitAtI v
+
+{- | repeat a circuit for a number of times, the number of times the circuit is repeated
+is determined by the type-level natural number `n`.
+-}
+repeat :: (C.KnownNat n) => Circuit a b -> Circuit (Vec n a) (Vec n b)
+repeat (Circuit function) = Circuit (C.unzip . uncurry (zipWith (curry function)))
+
+{- | replicate a circuit for a given number of times, the number of times the circuit is replicated
+is given by the supplied `SNat n`.
+-}
+replicate :: SNat n -> Circuit a b -> Circuit (Vec n a) (Vec n b)
+replicate SNat = repeat
