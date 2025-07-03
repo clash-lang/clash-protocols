@@ -16,6 +16,7 @@ import Test.Tasty.TH (testGroupGenerator)
 import Protocols.Hedgehog
 import Protocols.PacketStream.Converters
 import Protocols.PacketStream.Hedgehog
+import qualified Hedgehog as H
 
 generateUpConverterProperty ::
   forall (dwIn :: Nat) (n :: Nat).
@@ -25,7 +26,7 @@ generateUpConverterProperty ::
   SNat dwIn ->
   SNat n ->
   Property
-generateUpConverterProperty SNat SNat =
+generateUpConverterProperty SNat SNat = H.property $
   idWithModelSingleDomain
     defExpectOptions
     (genPackets 1 10 (genValidPacket defPacketOptions Gen.enumBounded (Range.linear 0 20)))
@@ -40,7 +41,7 @@ generateDownConverterProperty ::
   SNat dwOut ->
   SNat n ->
   Property
-generateDownConverterProperty SNat SNat =
+generateDownConverterProperty SNat SNat = H.property $
   idWithModelSingleDomain
     defExpectOptions
     (genPackets 1 8 (genValidPacket defPacketOptions Gen.enumBounded (Range.linear 0 10)))

@@ -22,6 +22,7 @@ import Protocols.Hedgehog
 import Protocols.PacketStream (packetizeFromDfC, packetizerC)
 import Protocols.PacketStream.Base
 import Protocols.PacketStream.Hedgehog
+import qualified Hedgehog as H
 
 {- |
 Test @packetizerC@ with varying data width, number of bytes in the
@@ -46,7 +47,7 @@ packetizerPropGen ::
   (Vec metaInBytes (BitVector 8) -> metaOut) ->
   (Vec metaInBytes (BitVector 8) -> Vec headerBytes (BitVector 8)) ->
   Property
-packetizerPropGen SNat SNat toMetaOut toHeader =
+packetizerPropGen SNat SNat toMetaOut toHeader = H.property $
   idWithModelSingleDomain
     @System
     defExpectOptions
@@ -89,7 +90,7 @@ packetizeFromDfPropGen ::
   (Vec aBytes (BitVector 8) -> metaOut) ->
   (Vec aBytes (BitVector 8) -> Vec headerBytes (BitVector 8)) ->
   Property
-packetizeFromDfPropGen SNat SNat toMetaOut toHeader =
+packetizeFromDfPropGen SNat SNat toMetaOut toHeader = H.property $
   idWithModelSingleDomain
     @System
     defExpectOptions

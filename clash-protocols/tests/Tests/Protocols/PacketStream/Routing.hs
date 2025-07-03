@@ -22,6 +22,7 @@ import Protocols.PacketStream.Hedgehog
 import Protocols.PacketStream.Routing
 
 import Data.List qualified as L
+import qualified Hedgehog as H
 
 {- |
 Tests a packet arbiter for any data width and number of sources. In particular,
@@ -36,7 +37,7 @@ makePropPacketArbiter ::
   SNat dataWidth ->
   Df.CollectMode ->
   Property
-makePropPacketArbiter SNat SNat mode =
+makePropPacketArbiter SNat SNat mode = H.property $
   propWithModelSingleDomain
     @System
     defExpectOptions
@@ -85,7 +86,7 @@ makePropPacketDispatcher ::
   -- | Dispatch function
   Vec sinks (meta -> Bool) ->
   Property
-makePropPacketDispatcher SNat fs =
+makePropPacketDispatcher SNat fs = H.property $
   idWithModelSingleDomain @System
     defExpectOptions
     (genPackets 1 10 (genValidPacket defPacketOptions Gen.enumBounded (Range.linear 0 6)))

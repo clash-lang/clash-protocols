@@ -20,6 +20,7 @@ import Test.Tasty.TH (testGroupGenerator)
 import Protocols.Hedgehog
 import Protocols.PacketStream
 import Protocols.PacketStream.Hedgehog
+import qualified Hedgehog as H
 
 -- | Pure model of `stripPaddingC`.
 stripPaddingModel ::
@@ -60,7 +61,7 @@ stripPaddingProperty ::
   (1 <= dataWidth) =>
   SNat dataWidth ->
   Property
-stripPaddingProperty SNat =
+stripPaddingProperty SNat = H.property $
   idWithModelSingleDomain
     @System
     defExpectOptions

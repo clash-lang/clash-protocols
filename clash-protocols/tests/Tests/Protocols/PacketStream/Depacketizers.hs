@@ -21,6 +21,7 @@ import Protocols.Hedgehog
 import Protocols.PacketStream.Base
 import Protocols.PacketStream.Depacketizers
 import Protocols.PacketStream.Hedgehog
+import qualified Hedgehog as H
 
 {- |
 Test @depacketizerC@ with varying data width, number of bytes in the
@@ -41,7 +42,7 @@ depacketizerPropGen ::
   Gen metaIn ->
   (Vec headerBytes (BitVector 8) -> metaIn -> metaOut) ->
   Property
-depacketizerPropGen SNat SNat metaGen toMetaOut =
+depacketizerPropGen SNat SNat metaGen toMetaOut = H.property $
   idWithModelSingleDomain
     @System
     defExpectOptions
@@ -77,7 +78,7 @@ depacketizeToDfPropGen ::
   Gen metaIn ->
   (Vec headerBytes (BitVector 8) -> metaIn -> a) ->
   Property
-depacketizeToDfPropGen SNat SNat metaGen toOut =
+depacketizeToDfPropGen SNat SNat metaGen toOut = H.property $
   idWithModelSingleDomain
     @System
     defExpectOptions

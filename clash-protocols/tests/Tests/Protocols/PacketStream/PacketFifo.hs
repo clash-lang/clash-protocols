@@ -25,6 +25,7 @@ import Protocols.Hedgehog
 import Protocols.PacketStream.Base
 import Protocols.PacketStream.Hedgehog
 import Protocols.PacketStream.PacketFifo
+import qualified Hedgehog as H
 
 -- | Drops packets that consist of more than 2^n transfers.
 dropBigPackets ::
@@ -39,7 +40,7 @@ dropBigPackets n packets =
 
 -- | Test for id and proper dropping of aborted packets.
 prop_packet_fifo_id :: Property
-prop_packet_fifo_id =
+prop_packet_fifo_id = H.property $
   idWithModelSingleDomain
     @System
     defExpectOptions
@@ -52,7 +53,7 @@ Ensure that backpressure because of a full content RAM and dropping of packets
 that are too big to fit in the FIFO is tested.
 -}
 prop_packet_fifo_small_buffer_id :: Property
-prop_packet_fifo_small_buffer_id =
+prop_packet_fifo_small_buffer_id = H.property $
   idWithModelSingleDomain
     @System
     defExpectOptions{eoStopAfterEmpty = Just 500} -- To account for empty cycles due to dropped packets
@@ -65,7 +66,7 @@ Test for id using a small meta buffer to ensure backpressure using
 the meta buffer is tested.
 -}
 prop_packet_fifo_small_meta_buffer_id :: Property
-prop_packet_fifo_small_meta_buffer_id =
+prop_packet_fifo_small_meta_buffer_id = H.property $
   idWithModelSingleDomain
     @System
     defExpectOptions
@@ -75,7 +76,7 @@ prop_packet_fifo_small_meta_buffer_id =
 
 -- | test for id and proper dropping of aborted packets
 prop_overFlowDrop_packetFifo_id :: Property
-prop_overFlowDrop_packetFifo_id =
+prop_overFlowDrop_packetFifo_id = H.property $
   idWithModelSingleDomain
     @System
     defExpectOptions
@@ -85,7 +86,7 @@ prop_overFlowDrop_packetFifo_id =
 
 -- | test for proper dropping when full
 prop_overFlowDrop_packetFifo_drop :: Property
-prop_overFlowDrop_packetFifo_drop =
+prop_overFlowDrop_packetFifo_drop = H.property $
   propWithModelSingleDomain
     @System
     defExpectOptions

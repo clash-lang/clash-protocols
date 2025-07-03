@@ -21,9 +21,10 @@ import Test.Tasty.TH (testGroupGenerator)
 import Protocols.Hedgehog
 import Protocols.PacketStream.Base
 import Protocols.PacketStream.Hedgehog
+import qualified Hedgehog as H
 
 prop_strip_trailing_empty :: Property
-prop_strip_trailing_empty =
+prop_strip_trailing_empty = H.property $
   idWithModelSingleDomain
     @System
     defExpectOptions

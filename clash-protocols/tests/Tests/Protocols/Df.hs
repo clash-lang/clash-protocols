@@ -48,6 +48,7 @@ import Protocols.Hedgehog
 
 -- tests
 import Util
+import qualified Hedgehog as H
 
 newtype PlusInt = PlusInt Int
   deriving stock (C.Generic, Show)
@@ -104,7 +105,7 @@ idWithModelDf ::
   ([a] -> [b]) ->
   -- | Implementation
   Circuit (Df C.System a) (Df C.System b) ->
-  Property
+  H.PropertyT IO ()
 idWithModelDf = idWithModel
 
 -- | Same as 'idWithModelDf' but with hardcoded data generator
@@ -113,23 +114,23 @@ idWithModelDf' ::
   ([Int] -> [Int]) ->
   -- | Implementation
   Circuit (Df C.System Int) (Df C.System Int) ->
-  Property
+  H.PropertyT IO ()
 idWithModelDf' = idWithModelDf defExpectOptions (genData genSmallInt)
 
 ---------------------------------------------------------------
 ---------------------------- TESTS ----------------------------
 ---------------------------------------------------------------
 prop_id :: Property
-prop_id = idWithModelDf' id idC
+prop_id = H.property $ idWithModelDf' id idC
 
 prop_map :: Property
-prop_map = idWithModelDf' (map succ) (Df.map succ)
+prop_map = H.property $ idWithModelDf' (map succ) (Df.map succ)
 
 prop_filter :: Property
-prop_filter = idWithModelDf' (filter (> 5)) (Df.filter (> 5))
+prop_filter = H.property $ idWithModelDf' (filter (> 5)) (Df.filter (> 5))
 
 prop_catMaybes :: Property
-prop_catMaybes =
+prop_catMaybes = H.property $
   idWithModelDf
     defExpectOptions
     (genData (genMaybe genSmallInt))
@@ -140,7 +141,7 @@ prop_catMaybes =
 -- simply releases a value downstream once every N cycles
 -- does not otherwise change the contents of the stream.
 testExpanderPassThrough :: forall n. (C.KnownNat n) => C.SNat n -> Property
-testExpanderPassThrough _periodicity =
+testExpanderPassThrough _periodicity = H.property $
   idWithModelSingleDomain @C.System
     defExpectOptions
     (genData genSmallInt)
@@ -170,7 +171,7 @@ prop_expander_passthrough_slow = testExpanderPassThrough C.d4
 -- A parameterized test definition validating that an expander duplicates
 -- input values N times and sends them downstream.
 testExpanderDuplicate :: forall n. (C.KnownNat n) => C.SNat n -> Property
-testExpanderDuplicate duplication =
+testExpanderDuplicate duplication = H.property $
   idWithModelSingleDomain @C.System
     defExpectOptions
     (genData genSmallInt)
@@ -200,7 +201,7 @@ prop_expander_duplicate_slow = testExpanderDuplicate C.d4
 -- A paremterized test definition validating that a compressor correctly
 -- sums up batches of N values.
 testCompressorSum :: forall n. (C.KnownNat n) => C.SNat n -> Property
-testCompressorSum batchSize =
+testCompressorSum batchSize = H.property $
   idWithModelSingleDomain @C.System
     defExpectOptions
     (genData genSmallInt)
@@ -231,7 +232,7 @@ prop_compressor_sum_slow :: Property
 prop_compressor_sum_slow = testCompressorSum C.d4
 
 prop_registerFwd :: Property
-prop_registerFwd =
+prop_registerFwd = H.property $
   idWithModelSingleDomain
     @C.System
     defExpectOptions
@@ -240,7 +241,7 @@ prop_registerFwd =
     (C.exposeClockResetEnable Df.registerFwd)
 
 prop_registerBwd :: Property
-prop_registerBwd =
+prop_registerBwd = H.property $
   idWithModelSingleDomain
     @C.System
     defExpectOptions
@@ -249,7 +250,7 @@ prop_registerBwd =
     (C.exposeClockResetEnable Df.registerBwd)
 
 prop_fanout1 :: Property
-prop_fanout1 =
+prop_fanout1 = H.property $
   idWithModelSingleDomain
     @C.System
     defExpectOptions
@@ -258,7 +259,7 @@ prop_fanout1 =
     (C.exposeClockResetEnable @C.System (Df.fanout @1))
 
 prop_fanout2 :: Property
-prop_fanout2 =
+prop_fanout2 = H.property $
   idWithModelSingleDomain
     @C.System
     defExpectOptions
@@ -267,7 +268,7 @@ prop_fanout2 =
     (C.exposeClockResetEnable @C.System (Df.fanout @2))
 
 prop_fanout7 :: Property
-prop_fanout7 =
+prop_fanout7 = H.property $
   idWithModelSingleDomain
     @C.System
     defExpectOptions
@@ -276,7 +277,7 @@ prop_fanout7 =
     (C.exposeClockResetEnable @C.System (Df.fanout @7))
 
 prop_roundrobin :: Property
-prop_roundrobin =
+prop_roundrobin = H.property $
   idWithModelSingleDomain
     @C.System
     defExpectOptions
@@ -285,7 +286,7 @@ prop_roundrobin =
     (C.exposeClockResetEnable @C.System (Df.roundrobin @3))
 
 prop_roundrobinCollectNoSkip :: Property
-prop_roundrobinCollectNoSkip =
+prop_roundrobinCollectNoSkip = H.property $
   idWithModelSingleDomain
     @C.System
     defExpectOptions
@@ -294,7 +295,7 @@ prop_roundrobinCollectNoSkip =
     (C.exposeClockResetEnable @C.System (Df.roundrobinCollect @3 Df.NoSkip))
 
 prop_roundrobinCollectSkip :: Property
-prop_roundrobinCollectSkip =
+prop_roundrobinCollectSkip = H.property $
   propWithModelSingleDomain
     @C.System
     defExpectOptions
@@ -307,7 +308,7 @@ prop_roundrobinCollectSkip =
   prop expected actual = HashSet.fromList expected === HashSet.fromList actual
 
 prop_roundrobinCollectParallel :: Property
-prop_roundrobinCollectParallel =
+prop_roundrobinCollectParallel = H.property $
   propWithModelSingleDomain
     @C.System
     defExpectOptions
@@ -320,7 +321,7 @@ prop_roundrobinCollectParallel =
   prop expected actual = HashSet.fromList expected === HashSet.fromList actual
 
 prop_unbundleVec :: Property
-prop_unbundleVec =
+prop_unbundleVec = H.property $
   idWithModelSingleDomain
     @C.System
     defExpectOptions
@@ -329,7 +330,7 @@ prop_unbundleVec =
     (C.exposeClockResetEnable (Df.unbundleVec @3 @C.System @Int))
 
 prop_bundleVec :: Property
-prop_bundleVec =
+prop_bundleVec = H.property $
   idWithModel
     defExpectOptions
     (C.repeat <$> genData genSmallPlusInt)
@@ -337,7 +338,7 @@ prop_bundleVec =
     (Df.bundleVec @3 @C.System @PlusInt)
 
 prop_fanin :: Property
-prop_fanin =
+prop_fanin = H.property $
   idWithModel
     defExpectOptions
     (genVecData genSmallInt)
@@ -345,7 +346,7 @@ prop_fanin =
     (Df.fanin @3 @C.System @Int (+))
 
 prop_mfanin :: Property
-prop_mfanin =
+prop_mfanin = H.property $
   idWithModel
     defExpectOptions
     (genVecData genSmallPlusInt)
@@ -353,7 +354,7 @@ prop_mfanin =
     (Df.mfanin @3 @C.System @PlusInt)
 
 prop_zipWith :: Property
-prop_zipWith =
+prop_zipWith = H.property $
   idWithModel
     defExpectOptions
     ( do
@@ -366,7 +367,7 @@ prop_zipWith =
     (Df.zipWith @C.System @Int @Int (+))
 
 prop_zip :: Property
-prop_zip =
+prop_zip = H.property $
   idWithModel
     defExpectOptions
     ( do
@@ -379,7 +380,7 @@ prop_zip =
     (Df.zip @Int @Int @C.System)
 
 prop_partition :: Property
-prop_partition =
+prop_partition = H.property $
   idWithModel
     defExpectOptions
     (genData genSmallInt)
@@ -387,7 +388,7 @@ prop_partition =
     (Df.partition @C.System @Int (> 5))
 
 prop_route :: Property
-prop_route =
+prop_route = H.property $
   idWithModel
     defExpectOptions
     (zip <$> genData Gen.enumBounded <*> genData genSmallInt)
@@ -395,7 +396,7 @@ prop_route =
     (Df.route @3 @C.System @Int)
 
 prop_select :: Property
-prop_select =
+prop_select = H.property $
   idWithModel
     defExpectOptions
     goGen
@@ -414,7 +415,7 @@ prop_select =
     pure (dats, ixs)
 
 prop_selectN :: Property
-prop_selectN =
+prop_selectN = H.property $
   idWithModelSingleDomain
     @C.System
     defExpectOptions
@@ -438,7 +439,7 @@ prop_selectN =
     pure (dats, zip ixs lenghts)
 
 prop_selectUntil :: Property
-prop_selectUntil =
+prop_selectUntil = H.property $
   idWithModel
     defExpectOptions
     goGen
@@ -465,7 +466,7 @@ prop_selectUntil =
     pure (concatMap tagEnd inputs0)
 
 prop_fifo :: Property
-prop_fifo =
+prop_fifo = H.property $
   idWithModelDf'
     id
     (C.withClockResetEnable C.clockGen C.resetGen C.enableGen Df.fifo (C.SNat @10))

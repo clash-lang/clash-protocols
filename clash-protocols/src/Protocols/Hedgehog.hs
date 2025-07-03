@@ -91,7 +91,7 @@ Finally, the data will be tested against the property supplied in the last
 argument.
 -}
 propWithModel ::
-  forall a b.
+  forall a b .
   (Test a, Test b, HasCallStack) =>
   -- | Options, see 'ExpectOptions'
   ExpectOptions ->
@@ -104,9 +104,9 @@ propWithModel ::
   -- | Property to test for. Function is given the data produced by the model
   -- as a first argument, and the sampled data as a second argument.
   (ExpectType b -> ExpectType b -> H.PropertyT IO ()) ->
-  H.Property
+  H.PropertyT IO ()
 propWithModel eOpts genData model prot prop =
-  H.property $ maybe id withTimeoutMs (eoTimeoutMs eOpts) $ do
+  maybe id withTimeoutMs (eoTimeoutMs eOpts) $ do
     dat <- H.forAll genData
     when (eoTrace eOpts) $ liftIO $ putStr "propWithModel: dat: " >> print dat
 
@@ -190,7 +190,7 @@ idWithModel ::
   (ExpectType a -> ExpectType b) ->
   -- | Implementation
   Circuit a b ->
-  H.Property
+  H.PropertyT IO ()
 idWithModel eOpts genData model prot =
   propWithModel eOpts genData model prot (===)
 
@@ -209,7 +209,7 @@ propWithModelSingleDomain ::
   -- | Property to test for. Function is given the data produced by the model
   -- as a first argument, and the sampled data as a second argument.
   (ExpectType b -> ExpectType b -> H.PropertyT IO ()) ->
-  H.Property
+  H.PropertyT IO ()
 propWithModelSingleDomain eOpts genData model0 circuit0 prop =
   propWithModel eOpts genData model1 circuit1 prop
  where
@@ -232,7 +232,7 @@ idWithModelSingleDomain ::
   (C.Clock dom -> C.Reset dom -> C.Enable dom -> ExpectType a -> ExpectType b) ->
   -- | Implementation
   (C.Clock dom -> C.Reset dom -> C.Enable dom -> Circuit a b) ->
-  H.Property
+  H.PropertyT IO ()
 idWithModelSingleDomain eOpts genData model0 circuit0 =
   propWithModelSingleDomain eOpts genData model0 circuit0 (===)
 

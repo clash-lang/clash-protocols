@@ -16,6 +16,7 @@ import Test.Tasty.TH (testGroupGenerator)
 import Protocols.Hedgehog
 import Protocols.PacketStream.AsyncFifo (asyncFifoC)
 import Protocols.PacketStream.Hedgehog
+import qualified Hedgehog as H
 
 createDomain
   vSystem
@@ -67,7 +68,7 @@ generateAsyncFifoIdProp ::
   Reset rDom ->
   Enable rDom ->
   Property
-generateAsyncFifoIdProp wClk wRst wEn rClk rRst rEn =
+generateAsyncFifoIdProp wClk wRst wEn rClk rRst rEn = H.property $
   idWithModel
     defExpectOptions
     (genPackets 1 10 (genValidPacket defPacketOptions Gen.enumBounded (Range.linear 0 30)))

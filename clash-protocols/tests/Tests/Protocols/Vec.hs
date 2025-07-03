@@ -25,9 +25,10 @@ import Protocols.Hedgehog
 
 -- tests
 import Tests.Protocols.Df (genData, genSmallInt, genVecData)
+import qualified Hedgehog as H
 
 prop_append :: Property
-prop_append =
+prop_append = H.property $
   idWithModel
     @(C.Vec 2 (Df System Int), C.Vec 3 (Df System Int))
     defExpectOptions
@@ -43,7 +44,7 @@ prop_append =
   model = uncurry (C.++)
 
 prop_append3 :: Property
-prop_append3 =
+prop_append3 = H.property $
   idWithModel
     @(C.Vec 2 (Df System Int), C.Vec 3 (Df System Int), C.Vec 4 (Df System Int))
     @(C.Vec 9 (Df System Int))
