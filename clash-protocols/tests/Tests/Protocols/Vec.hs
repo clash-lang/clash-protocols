@@ -18,6 +18,7 @@ import Test.Tasty.TH (testGroupGenerator)
 
 -- clash-protocols (me!)
 import Protocols
+import Protocols.Df qualified as Df
 import Protocols.Vec qualified as Vec
 
 import Clash.Hedgehog.Sized.Vector (genVec)
@@ -175,6 +176,34 @@ prop_unconcat =
   gen = genVecData genSmallInt
   dut = Vec.unconcat C.d2
   model = C.unconcat C.d2
+
+prop_repeat :: Property
+prop_repeat =
+  idWithModel
+    @(C.Vec 3 (Df System Int))
+    @(C.Vec 3 (Df System Int))
+    defExpectOptions
+    gen
+    model
+    dut
+ where
+  gen = genVecData genSmallInt
+  dut = Vec.repeat (Df.map succ)
+  model = fmap (fmap succ)
+
+prop_replicate :: Property
+prop_replicate =
+  idWithModel
+    @(C.Vec 3 (Df System Int))
+    @(C.Vec 3 (Df System Int))
+    defExpectOptions
+    gen
+    model
+    dut
+ where
+  gen = genVecData genSmallInt
+  dut = Vec.replicate C.SNat (Df.map succ)
+  model = fmap (fmap succ)
 
 tests :: TestTree
 tests =
