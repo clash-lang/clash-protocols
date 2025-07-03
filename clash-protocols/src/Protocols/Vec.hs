@@ -114,7 +114,7 @@ unconcat SNat = Circuit (swap . bimap (C.unconcat SNat) C.concat)
 uncurry3 :: (a -> b -> c -> d) -> (a, b, c) -> d
 uncurry3 f (a, b, c) = f a b c
 
--- Append three vectors of `a` into one vector of `a`.
+-- | Append three vectors of `a` into one vector of `a`.
 append3Vec ::
   (KnownNat n0, KnownNat n1, KnownNat n2) =>
   C.Vec n0 a ->
@@ -123,7 +123,7 @@ append3Vec ::
   C.Vec (n0 + n1 + n2) a
 append3Vec v0 v1 v2 = v0 ++ v1 ++ v2
 
--- Split a C.Vector of 3-tuples into three vectors of the same length.
+-- | Split a C.Vector of 3-tuples into three vectors of the same length.
 split3Vec ::
   (KnownNat n0, KnownNat n1, KnownNat n2) =>
   C.Vec (n0 + n1 + n2) a ->
