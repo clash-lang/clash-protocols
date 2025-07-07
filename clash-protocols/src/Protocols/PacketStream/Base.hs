@@ -29,6 +29,7 @@ module Protocols.PacketStream.Base (
   zeroOutInvalidBytesC,
   stripTrailingEmptyC,
   unsafeAbortOnBackpressureC,
+  truncateAbortedPackets,
 
   -- * Components imported from DfConv
   void,
@@ -438,6 +439,41 @@ zeroOutInvalidBytesC = Circuit $ \(fwdIn, bwdIn) -> (bwdIn, fmap (go <$>) fwdIn)
         imap
           (\(j :: Index dataWidth) byte -> if resize j < i then byte else 0x00)
           (_data transferIn)
+
+data TruncateState = Forwarding | Truncating
+  deriving (Show, ShowX, Eq, Generic, NFDataX)
+
+{- |
+When a packet is aborted, this circuit will truncate the current packet by setting the
+'_last' field of the transaction to @Just 0@ and the '_abort' field to @True@.
+All subsequent transactions will be consumed without being forwarded.
+-}
+truncateAbortedPackets ::
+  forall (dom :: Domain) (dataWidth :: Nat) (meta :: Type).
+  (HiddenClockResetEnable dom, KnownNat dataWidth, ShowX meta) =>
+  (1 <= dataWidth) =>
+  Circuit
+    (PacketStream dom dataWidth meta)
+    (PacketStream dom dataWidth meta)
+truncateAbortedPackets = forceResetSanity |> Circuit (unbundle . mealy go Forwarding . bundle)
+ where
+  go state (Nothing, _) = (state, (deepErrorX "truncateAbortedPackets: undefined ack", Nothing))
+  go Truncating (Just m2s, _) = (nextState, (PacketStreamS2M True, Nothing))
+   where
+    nextState
+      | Maybe.isJust m2s._last = Forwarding
+      | otherwise = Truncating
+  go Forwarding (Just m2sLeft, PacketStreamS2M ack) = (nextState, (PacketStreamS2M ack, Just m2sRight))
+   where
+    m2sRight
+      | m2sLeft._abort = m2sLeft{_last = Just 0}
+      | otherwise = m2sLeft
+
+    nextState
+      -- Note that there is no need to move to 'Truncating' if the transfer we
+      -- see here is the last transfer of a packet (i.e., '_last' is @Just _@).
+      | Maybe.isNothing m2sLeft._last && m2sLeft._abort && ack = Truncating
+      | otherwise = Forwarding
 
 {- |
 Copy data of a single `PacketStream` to multiple. LHS will only receive
