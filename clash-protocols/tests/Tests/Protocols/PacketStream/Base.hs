@@ -9,7 +9,7 @@ import Clash.Prelude
 import Data.List qualified as L
 import "extra" Data.List.Extra (unsnoc)
 
-import Hedgehog (Property)
+import Hedgehog (Gen, Property)
 import Hedgehog.Gen qualified as Gen
 import Hedgehog.Range qualified as Range
 
@@ -43,6 +43,26 @@ prop_strip_trailing_empty =
         if _last l == Just 0
           then ys L.++ [l2{_last = Just maxBound, _abort = _abort l2 || _abort l}]
           else packet
+
+prop_truncate_aborted_packets :: Property
+prop_truncate_aborted_packets =
+  idWithModelSingleDomain
+    @System
+    defExpectOptions
+    gen
+    (exposeClockResetEnable model')
+    (exposeClockResetEnable truncateAbortedPackets)
+ where
+  gen :: Gen [PacketStreamM2S 4 ()]
+  gen = genPackets 0 10 (genValidPacket defPacketOptions Gen.enumBounded (Range.linear 0 10))
+
+  model' packets = L.concatMap model (chunkByPacket packets)
+
+  model :: [PacketStreamM2S 4 ()] -> [PacketStreamM2S 4 ()]
+  model [] = []
+  model (x : xs)
+    | x._abort = [x{_last = Just 0}]
+    | otherwise = x : model xs
 
 tests :: TestTree
 tests =
