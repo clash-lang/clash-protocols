@@ -38,7 +38,6 @@ import Control.DeepSeq (NFData)
 import Data.Bifunctor qualified as B
 import Data.Coerce (coerce)
 import Data.Kind (Type)
-import Data.Maybe (fromMaybe)
 import Data.Proxy (Proxy (..))
 import GHC.Generics (Generic)
 
@@ -384,7 +383,6 @@ axi4WriteAddrMsgFromWriteAddrInfo _awlen _awburst Axi4WriteAddressInfo{..} =
     , _awburst
     }
 
--- TODO: Use @Axi4WriteAddresInfo@ as FwdPayload (and friends)
 instance
   (KnownAxi4WriteAddressConfig conf, C.NFDataX userType) =>
   DfConv.DfConv (Axi4WriteAddress dom conf userType)
@@ -392,13 +390,18 @@ instance
   type Dom (Axi4WriteAddress dom conf userType) = dom
   type
     FwdPayload (Axi4WriteAddress dom conf userType) =
-      M2S_WriteAddress conf userType
+      ( Axi4WriteAddressInfo conf userType
+      , BurstLengthType (AWKeepBurstLength conf)
+      , BurstType (AWKeepBurst conf)
+      )
 
   toDfCircuit Proxy = Circuit $ B.first unbundle . unbundle . fmap go . bundle . B.first bundle
    where
     go ~(~(dfFwdM2S, _dfBwdS2M), waS2M) = ((dfFwdS2M, dfBwdM2S), waM2S)
      where
-      waM2S = fromMaybe M2S_NoWriteAddress dfFwdM2S
+      waM2S = case dfFwdM2S of
+        Just (info, len, burst) -> axi4WriteAddrMsgFromWriteAddrInfo len burst info
+        Nothing -> M2S_NoWriteAddress
       dfFwdS2M = Ack waS2M._awready
       dfBwdM2S = Nothing
 
@@ -407,11 +410,15 @@ instance
     go ~(waM2S, ~(Ack dfFwdS2M, _dfBwdM2S)) = (waS2M, (dfFwdM2S, dfBwdS2M))
      where
       waS2M = S2M_WriteAddress dfFwdS2M
-      dfFwdM2S = convertData waM2S
+      dfFwdM2S = case waM2S of
+        m2s@M2S_WriteAddress{} ->
+          Just
+            ( axi4WriteAddrMsgToWriteAddrInfo m2s
+            , m2s._awlen :: BurstLengthType (AWKeepBurstLength conf)
+            , m2s._awburst :: BurstType (AWKeepBurst conf)
+            )
+        M2S_NoWriteAddress{} -> Nothing
       dfBwdS2M = Ack False
-
-      convertData (m2s@M2S_WriteAddress{}) = Just m2s
-      convertData (M2S_NoWriteAddress) = Nothing
 
 instance IdleCircuit (Axi4WriteAddress dom conf userType) where
   idleFwd _ = C.pure M2S_NoWriteAddress
