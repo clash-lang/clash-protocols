@@ -48,3 +48,6 @@ log
 
 # Created by .ci/build_docs.sh
 /docs
+
+# DirEnv nix pointers
+.direnv
