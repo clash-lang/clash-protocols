@@ -35,17 +35,21 @@ module Protocols.Axi4.WriteAddress (
 
 -- base
 import Control.DeepSeq (NFData)
+import Data.Bifunctor qualified as B
 import Data.Coerce (coerce)
 import Data.Kind (Type)
+import Data.Proxy (Proxy(..))
 import GHC.Generics (Generic)
 
 -- clash-prelude
-import Clash.Prelude qualified as C
+import Clash.Prelude (bundle, unbundle)
+import qualified Clash.Prelude as C
 
 -- me
 import Protocols.Axi4.Common
 import Protocols.Idle
 import Protocols.Internal
+import qualified Protocols.DfConv as DfConv
 
 -- | Configuration options for 'Axi4WriteAddress'.
 data Axi4WriteAddressConfig = Axi4WriteAddressConfig
@@ -378,6 +382,43 @@ axi4WriteAddrMsgFromWriteAddrInfo _awlen _awburst Axi4WriteAddressInfo{..} =
     , _awlen
     , _awburst
     }
+
+instance
+  (KnownAxi4WriteAddressConfig conf, C.NFDataX userType) =>
+  DfConv.DfConv (Axi4WriteAddress dom conf userType)
+  where
+  type Dom (Axi4WriteAddress dom conf userType) = dom
+  type
+    FwdPayload (Axi4WriteAddress dom conf userType) =
+      ( Axi4WriteAddressInfo conf userType
+      , BurstLengthType (AWKeepBurstLength conf)
+      , BurstType (AWKeepBurst conf)
+      )
+
+  toDfCircuit Proxy = Circuit $ B.first unbundle . unbundle . fmap go . bundle . B.first bundle
+   where
+    go ~(~(dfFwdM2S, _dfBwdS2M), waS2M) = ((dfFwdS2M, dfBwdM2S), waM2S)
+     where
+      waM2S = case dfFwdM2S of
+        Just (info, len, burst) -> axi4WriteAddrMsgFromWriteAddrInfo len burst info
+        Nothing -> M2S_NoWriteAddress
+      dfFwdS2M = Ack waS2M._awready
+      dfBwdM2S = Nothing
+
+  fromDfCircuit Proxy = Circuit $ B.second unbundle . unbundle . fmap go . bundle . B.second bundle
+   where
+    go ~(waM2S, ~(Ack dfFwdS2M, _dfBwdM2S)) = (waS2M, (dfFwdM2S, dfBwdS2M))
+     where
+      waS2M = S2M_WriteAddress dfFwdS2M
+      dfFwdM2S = case waM2S of
+        m2s@M2S_WriteAddress{} ->
+          Just
+            ( axi4WriteAddrMsgToWriteAddrInfo m2s
+            , m2s._awlen :: BurstLengthType (AWKeepBurstLength conf)
+            , m2s._awburst :: BurstType (AWKeepBurst conf)
+            )
+        M2S_NoWriteAddress{} -> Nothing
+      dfBwdS2M = Ack False
 
 instance IdleCircuit (Axi4WriteAddress dom conf userType) where
   idleFwd _ = C.pure M2S_NoWriteAddress
