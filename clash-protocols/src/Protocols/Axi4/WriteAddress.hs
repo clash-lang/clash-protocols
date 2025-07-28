@@ -47,7 +47,9 @@ import Clash.Prelude qualified as C
 
 -- me
 import Protocols.Axi4.Common
+import Protocols.Df qualified as Df
 import Protocols.DfConv qualified as DfConv
+import Protocols.Hedgehog (Test (..))
 import Protocols.Idle
 import Protocols.Internal
 
@@ -289,8 +291,8 @@ deriving instance
 
 Data carried along 'Axi4WriteAddress' channel which is put in control of
 the user, rather than being managed by the @DfConv@ instances. Matches up
-one-to-one with the fields of 'M2S_WriteAddress' except for '_awlen',
-'_awsize', and '_awburst'.
+one-to-one with the fields of 'M2S_WriteAddress' except for '_awlen'
+and '_awburst'.
 -}
 data Axi4WriteAddressInfo (conf :: Axi4WriteAddressConfig) (userType :: Type) = Axi4WriteAddressInfo
   { _awiid :: C.BitVector (AWIdWidth conf)
@@ -419,6 +421,76 @@ instance
             )
         M2S_NoWriteAddress{} -> Nothing
       dfBwdS2M = Ack False
+
+instance
+  (KnownAxi4WriteAddressConfig conf, C.NFDataX userType, C.KnownDomain dom) =>
+  Simulate (Axi4WriteAddress dom conf userType)
+  where
+  type
+    SimulateFwdType (Axi4WriteAddress dom conf userType) =
+      [M2S_WriteAddress conf userType]
+  type SimulateBwdType (Axi4WriteAddress dom conf userType) = [S2M_WriteAddress]
+  type SimulateChannels (Axi4WriteAddress dom conf userType) = 1
+
+  simToSigFwd _ = C.fromList_lazy
+  simToSigBwd _ = C.fromList_lazy
+  sigToSimFwd _ s = C.sample_lazy s
+  sigToSimBwd _ s = C.sample_lazy s
+
+  stallC conf (C.head -> (stallAck, stalls)) =
+    C.withClockResetEnable C.clockGen C.resetGen C.enableGen $
+      DfConv.stall Proxy Proxy conf stallAck stalls
+
+instance
+  (KnownAxi4WriteAddressConfig conf, C.NFDataX userType, C.KnownDomain dom) =>
+  Drivable (Axi4WriteAddress dom conf userType)
+  where
+  type
+    ExpectType (Axi4WriteAddress dom conf userType) =
+      [M2S_WriteAddress conf userType]
+
+  toSimulateType Proxy = id
+  fromSimulateType Proxy = filter p
+   where
+    -- TODO: Should we filter out M2S_NoWriteAddress like we do here?
+    p M2S_WriteAddress{} = True
+    p M2S_NoWriteAddress = False
+
+  driveC conf vals =
+    C.withClockResetEnable C.clockGen C.resetGen C.enableGen $
+      DfConv.drive Proxy conf (map toInfo vals)
+   where
+    toInfo m2s@M2S_WriteAddress{} =
+      Just (axi4WriteAddrMsgToWriteAddrInfo m2s, m2s._awlen, m2s._awburst)
+    toInfo M2S_NoWriteAddress = Nothing
+  sampleC conf ckt =
+    map fromInfo $
+      C.withClockResetEnable C.clockGen C.resetGen C.enableGen $
+        DfConv.sample Proxy conf ckt
+   where
+    fromInfo (Just (i, l, b)) = axi4WriteAddrMsgFromWriteAddrInfo l b i
+    fromInfo Nothing = M2S_NoWriteAddress
+
+instance
+  ( KnownAxi4WriteAddressConfig conf
+  , NFData (M2S_WriteAddress conf userType)
+  , C.NFDataX userType
+  , NFData userType
+  , C.ShowX userType
+  , Show userType
+  , Eq userType
+  , C.KnownDomain dom
+  ) =>
+  Test (Axi4WriteAddress dom conf userType)
+  where
+  expectN Proxy eOpts simFwd =
+    fmap (map fromInfo) $ expectN (Proxy @(Df.Df dom _)) eOpts $ map toInfo simFwd
+   where
+    toInfo m2s@M2S_WriteAddress{} =
+      Just (axi4WriteAddrMsgToWriteAddrInfo m2s, m2s._awlen, m2s._awburst)
+    toInfo M2S_NoWriteAddress = Nothing
+
+    fromInfo (i, l, b) = axi4WriteAddrMsgFromWriteAddrInfo l b i
 
 instance IdleCircuit (Axi4WriteAddress dom conf userType) where
   idleFwd _ = C.pure M2S_NoWriteAddress
