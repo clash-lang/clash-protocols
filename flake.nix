@@ -1,56 +1,44 @@
 { 
   description = "A flake for the clash-protocols and clash-protocols-base";
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
     clash-compiler.url = "github:clash-lang/clash-compiler";
+    circuit-notation = {
+      url = "github:cchalmers/circuit-notation";
+      inputs.clash-compiler.follows = "clash-compiler";
+    };
   };
-  outputs = { nixpkgs, flake-utils, clash-compiler, ... }:
+  outputs = { self, flake-utils, clash-compiler, circuit-notation, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         # What version of the GHC compiler to use for protocols
-        compiler-version = "ghc910";
+        compiler-version = clash-compiler.ghcVersion.${system};
 
-        # Sources for things which do not yet have a flake
-        non-flake-srcs = {
-          circuit-notation = pkgs.fetchFromGitHub {
-            owner = "cchalmers";
-            repo = "circuit-notation";
-            rev = "564769c52aa05b90f81bbc898b7af7087d96613d";
-            hash = "sha256-sPfLRjuMxqVRMzXrHRCuKKrdTdqgAJ33pf11DoTP84Q=";
-          };
-        };
+        pkgs = (import clash-compiler.inputs.nixpkgs {
+          inherit system;
+        }).extend clash-compiler.overlays.${compiler-version};
+        clash-pkgs = pkgs."clashPackages-${compiler-version}";
 
-        # Patch programs to be the correct version we want
         overlay = final: prev: {
-          clash-ghc = clash-compiler.packages.${system}.clash-ghc;
-          clash-prelude = clash-compiler.packages.${system}.clash-prelude;
-          clash-prelude-hedgehog = clash-compiler.packages.${system}.clash-prelude-hedgehog;
-
-          string-interpolate = clash-input-pkgs.haskell.lib.doJailbreak (prev.string-interpolate);
-
-          circuit-notation = final.developPackage {
-            root = non-flake-srcs.circuit-notation.outPath;
-            overrides = overlay;
-          };
-
-          # Packages built by this repository
-          clash-protocols = hs-pkgs.developPackage {
+          # Append the package set with clash-protocols*
+          clash-protocols = prev.developPackage {
             root = ./clash-protocols;
-            overrides = overlay;
+            overrides = _: _: final;
           };
-          clash-protocols-base = hs-pkgs.developPackage {
+          clash-protocols-base = prev.developPackage {
             root = ./clash-protocols-base;
-            overrides = overlay;
+            overrides = _: _: final;
           };
-        };
-        clash-input-pkgs = clash-compiler.inputs.nixpkgs.legacyPackages.${system};
-        hs-pkgs = clash-input-pkgs.haskell.packages.${compiler-version}.extend overlay;
-
-        # General packages from nixpkgs
-        pkgs = nixpkgs.legacyPackages.${system};
+        }
+        # Make sure circuit circuit-notation is in scope as well
+        // (circuit-notation.overlays.${system}.default final prev);
+        hs-pkgs = clash-pkgs.extend overlay;
       in
       {
+        # Expose the overlay which adds clash-protocols & clash-protocols-base
+        # (...along the inherited overlays)
+        # The base of the overlay is clash-pkgs
+        overlays.default = overlay;
+
         devShells.default = hs-pkgs.shellFor {
           packages = p: [
             p.clash-protocols

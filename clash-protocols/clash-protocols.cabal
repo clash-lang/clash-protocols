@@ -110,7 +110,7 @@ library
     , template-haskell
 
       -- To be removed; we need 'Test.Tasty.Hedgehog.Extra' to fix upstream issues
-    , tasty >= 1.2 && < 1.5
+    , tasty >= 1.2 && < 1.6
     , tasty-hedgehog >= 1.2
     , string-interpolate
 
@@ -207,7 +207,7 @@ test-suite unittests
     hashable,
     hedgehog,
     strict-tuple,
-    tasty >= 1.2 && < 1.5,
+    tasty >= 1.2 && < 1.6,
     tasty-hedgehog >= 1.2,
     tasty-th,
     tasty-hunit
