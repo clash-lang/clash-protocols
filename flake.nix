@@ -20,16 +20,31 @@
 
         overlay = final: prev: {
           # Append the package set with clash-protocols*
-          clash-protocols = prev.developPackage {
+          clash-protocols = (prev.developPackage {
             root = ./clash-protocols;
             overrides = _: _: final;
-          };
-          clash-protocols-base = prev.developPackage {
+          }).overrideAttrs (fAttr: pAttr: {
+            # Remove the -fplugin and Setup.hs settings in the .cabal
+            # For ghc9101 these options don't matter, but for ghc964 this breaks compilation
+            preInstall = pAttr.preInstall or "" + ''
+              sed -i "/-fplugin GHC.TypeLits.Extra.Solver/,+2d" clash-protocols.cabal
+              rm Setup.hs
+            '';
+          });
+          clash-protocols-base = (prev.developPackage {
             root = ./clash-protocols-base;
             overrides = _: _: final;
-          };
+          }).overrideAttrs (fAttr: pAttr: {
+            # Remove the -fplugin and Setup.hs settings in the .cabal
+            # For ghc9101 these options don't matter, but for ghc964 this breaks compilation
+            preInstall = pAttr.preInstall or "" + ''
+              sed -i "/-fplugin GHC.TypeLits.Extra.Solver/,+2d" clash-protocols-base.cabal
+              rm Setup.hs
+            '';
+          });
         }
         # Make sure circuit circuit-notation is in scope as well
+        # // (circuit-notation.overlays.${system}.default final prev);
         // (circuit-notation.overlays.${system}.default final prev);
         hs-pkgs = clash-pkgs.extend overlay;
       in
