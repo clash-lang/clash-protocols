@@ -8,11 +8,11 @@
         "flake-utils": "flake-utils"
       },
       "locked": {
-        "lastModified": 1753788891,
-        "narHash": "sha256-UcrvegnJUr0iIuR1nK9gmWufx+lfVhbdVnA7tF9YiSY=",
+        "lastModified": 1754654260,
+        "narHash": "sha256-lnWz7cjZYkgH7IF1VvXy0n6xw+faNJbdrF/79QIieDo=",
         "owner": "cchalmers",
         "repo": "circuit-notation",
-        "rev": "68484f9837b9915ac5b340aeafeda3f8c0c4d3fa",
+        "rev": "a99969b79df6752532792fd30482b83cf3285f52",
         "type": "github"
       },
       "original": {
@@ -32,11 +32,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1753722205,
-        "narHash": "sha256-tfBkzRbiYVX6f0oSnY86Uem/JSsCmYXfAJxW+ZKmWQk=",
+        "lastModified": 1754301255,
+        "narHash": "sha256-dne2oWxOEosMYumUZZhc3c8NyJMdiqpb/xvd1saTp30=",
         "owner": "clash-lang",
         "repo": "clash-compiler",
-        "rev": "43a1c722af29f34c6faf18f14e6cf46a3cfba80f",
+        "rev": "6a0810496560e2ff2a0071f315afb573c12bba39",
         "type": "github"
       },
       "original": {
