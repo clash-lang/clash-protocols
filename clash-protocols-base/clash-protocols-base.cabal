@@ -41,11 +41,6 @@ common common-options
   ghc-options:
     -Wall -Wcompat
 
-    -- Plugins to support type-level constraint solving on naturals
-    -fplugin GHC.TypeLits.Extra.Solver
-    -fplugin GHC.TypeLits.Normalise
-    -fplugin GHC.TypeLits.KnownNat.Solver
-
     -- Clash needs access to the source code in compiled modules
     -fexpose-all-unfoldings
 
@@ -60,14 +55,6 @@ common common-options
     Cabal,
 
     clash-prelude >= 1.8.1 && < 1.10,
-    ghc-typelits-natnormalise,
-    ghc-typelits-extra,
-    ghc-typelits-knownnat
-
-custom-setup
-  setup-depends:
-    base          >= 4.16 && <5,
-    Cabal         >= 2.4,
 
 library
   import: common-options
