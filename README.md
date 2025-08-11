@@ -668,6 +668,36 @@ in
 
 And that's it!
 
+### Cache
+
+Compiling Clash can take quite some time. To remedy the situation, we maintain a Cachix cache which can be used to speed up compilation. To add the cache, first (temporarily) install cachix:
+
+`nix shell nixpkgs#cachix`
+
+And then running:
+
+`cachix use clash-lang`
+
+And that's it! The cache is now set up and you no longer need cachix installed.
+
+Alternatively you can add the cache manually to your `nix.conf` file. Simply add the following two configurations:
+```conf
+extra-substituters = https://clash-lang.cachix.org
+extra-trusted-public-keys = clash-lang.cachix.org-1:/2N1uka38B/heaOAC+Ztd/EWLmF0RLfizWgC5tamCBg=
+```
+If a project specific cache is preferred, using a `flake.nix` with the following will only make the cache active for the specific project of the flake:
+```nix
+{
+  nixConfig = {
+    extra-substituters = [ "https://clash-lang.cachix.org" ];
+    extra-trusted-public-keys = [ "clash-lang.cachix.org-1:/2N1uka38B/heaOAC+Ztd/EWLmF0RLfizWgC5tamCBg=" ];
+  };
+  description = ...;
+  inputs = ...;
+  outputs = ...;
+}
+```
+
 # TODO
 
 0.1
