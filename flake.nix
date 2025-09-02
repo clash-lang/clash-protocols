@@ -1,4 +1,4 @@
-{ 
+{
   description = "A flake for the clash-protocols and clash-protocols-base";
   inputs = {
     clash-compiler.url = "github:clash-lang/clash-compiler";
@@ -42,6 +42,9 @@
               clash-protocols = (prev.developPackage {
                 root = ./clash-protocols;
                 overrides = _: _: final;
+                # Remove me when https://github.com/clash-lang/clash-protocols/issues/131
+                # has been solved
+                modifier = drv: drv.overrideAttrs (_: { doCheck = false; });
               }).overrideAttrs override-attrs;
               clash-protocols-base = prev.developPackage {
                 root = ./clash-protocols-base;
