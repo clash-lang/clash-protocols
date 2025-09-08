@@ -11,6 +11,8 @@ module Protocols.Vec (
   unzip3,
   concat,
   unconcat,
+  repeat,
+  replicate,
 ) where
 
 -- base
@@ -18,7 +20,17 @@ import Data.Tuple
 import Prelude ()
 
 -- clash-prelude
-import Clash.Prelude hiding (concat, split, unconcat, unzip, unzip3, zip, zip3)
+import Clash.Prelude hiding (
+  concat,
+  repeat,
+  replicate,
+  split,
+  unconcat,
+  unzip,
+  unzip3,
+  zip,
+  zip3,
+ )
 import Clash.Prelude qualified as C
 
 -- clash-protocols-base
@@ -114,7 +126,7 @@ unconcat SNat = Circuit (swap . bimap (C.unconcat SNat) C.concat)
 uncurry3 :: (a -> b -> c -> d) -> (a, b, c) -> d
 uncurry3 f (a, b, c) = f a b c
 
--- Append three vectors of `a` into one vector of `a`.
+-- | Append three vectors of `a` into one vector of `a`.
 append3Vec ::
   (KnownNat n0, KnownNat n1, KnownNat n2) =>
   C.Vec n0 a ->
@@ -123,7 +135,7 @@ append3Vec ::
   C.Vec (n0 + n1 + n2) a
 append3Vec v0 v1 v2 = v0 ++ v1 ++ v2
 
--- Split a C.Vector of 3-tuples into three vectors of the same length.
+-- | Split a C.Vector of 3-tuples into three vectors of the same length.
 split3Vec ::
   (KnownNat n0, KnownNat n1, KnownNat n2) =>
   C.Vec (n0 + n1 + n2) a ->
@@ -131,3 +143,15 @@ split3Vec ::
 split3Vec v = (v0, v1, v2)
  where
   (v0, splitAtI -> (v1, v2)) = splitAtI v
+
+{- | repeat a circuit for a number of times, the number of times the circuit is repeated
+is determined by the type-level natural number `n`.
+-}
+repeat :: (C.KnownNat n) => Circuit a b -> Circuit (Vec n a) (Vec n b)
+repeat (Circuit function) = Circuit (C.unzip . uncurry (zipWith (curry function)))
+
+{- | replicate a circuit for a given number of times, the number of times the circuit is replicated
+is given by the supplied `SNat n`.
+-}
+replicate :: SNat n -> Circuit a b -> Circuit (Vec n a) (Vec n b)
+replicate SNat = repeat
