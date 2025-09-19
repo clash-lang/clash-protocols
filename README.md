@@ -619,6 +619,33 @@ This project exposes several Nix flake outputs. Most notibly the `clash-protocol
 
 Contributing to `clash-protocols` can be done via the developer shell exposed by the Nix flake. Open a terminal and typing: `nix develop`. Optionally a specific GHC version can be selected as well as a `-minimal` or `-full` version. The `-minimal` shell does **NOT** contain the Haskell Language Server, whilst the `-full` shell does. When using the developer shell, do not forget to remove the `cabal.project` file. This file contains a package source and Cabal prioritizes local package sources over Nix sources. Removing the `cabal.project` file should work fine when developing with Nix.
 
+Compiling Clash and all dependencies related to it may take a long time. To remidy long compilation times, you can make use of the publically available cache on Cachix:
+
+## Cachix (binary cache)
+
+Cachix contains all commits on the main branch of `clash-cores` since the cache has been setup. It is recommended to add the publically available cachix cache to your project/computer to minimize the amount of time manually compiling Clash related dependencies.
+
+You can either add user-wide on your local system via `nix.conf` (usually located under `~/.config/nix`, create it if it does not exist):
+```conf
+extra-substituters = https://clash-lang.cachix.org
+extra-trusted-public-keys = clash-lang.cachix.org-1:/2N1uka38B/heaOAC+Ztd/EWLmF0RLfizWgC5tamCBg=
+```
+
+Or as part of your `flake.nix` in your local project:
+```nix
+{
+  nixConfig = {
+    extra-substituters = [ "https://clash-lang.cachix.org" ];
+    extra-trusted-public-keys = [ "clash-lang.cachix.org-1:/2N1uka38B/heaOAC+Ztd/EWLmF0RLfizWgC5tamCBg=" ];
+  };
+  description = ...;
+  inputs = ...;
+  outputs = ...;
+}
+```
+
+## As a dependency
+
 You can also add this project as a Nix-dependency. This project depends on `clash-compiler`, the recommended way to add this to your project as a Nix dependency is as follows:
 
 First add `clash-compiler` and `clash-protocols` to your flake inputs:
