@@ -25,6 +25,7 @@ import Data.HashMap.Strict qualified as HashMap
 import Data.HashSet qualified as HashSet
 
 -- extra
+import Data.Either (partitionEithers)
 import Data.List (mapAccumL, partition, transpose)
 
 -- deepseq
@@ -419,6 +420,14 @@ prop_partition =
     (genData genSmallInt)
     (partition (> 5))
     (Df.partition @C.System @Int (> 5))
+
+prop_partitionEithers :: Property
+prop_partitionEithers =
+  idWithModel
+    defExpectOptions
+    (genData (Gen.either genSmallInt Gen.alphaNum))
+    partitionEithers
+    (Df.partitionEithers @C.System @Int @Char)
 
 prop_route :: Property
 prop_route =
