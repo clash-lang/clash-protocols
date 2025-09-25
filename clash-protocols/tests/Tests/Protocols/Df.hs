@@ -6,6 +6,7 @@
 module Tests.Protocols.Df where
 
 -- base
+import Data.Bifunctor (Bifunctor (first))
 import Data.Coerce (coerce)
 import Data.Foldable (fold)
 import Data.Maybe (catMaybes, fromMaybe)
@@ -14,7 +15,9 @@ import Prelude
 
 -- clash-prelude
 
-import Clash.Prelude (type (<=))
+import Clash.Explicit.Prelude qualified as E
+import Clash.Explicit.Reset (noReset)
+import Clash.Prelude (Vec (Nil, (:>)), type (<=))
 import Clash.Prelude qualified as C
 
 -- containers
@@ -37,6 +40,7 @@ import Hedgehog.Range qualified as Range
 
 -- tasty
 import Test.Tasty
+import Test.Tasty.HUnit (Assertion, testCase, (@?=))
 import Test.Tasty.Hedgehog (HedgehogTestLimit (HedgehogTestLimit))
 import Test.Tasty.Hedgehog.Extra (testProperty)
 import Test.Tasty.TH (testGroupGenerator)
@@ -318,6 +322,36 @@ prop_roundrobinCollectParallel =
  where
   prop :: [Int] -> [Int] -> PropertyT IO ()
   prop expected actual = HashSet.fromList expected === HashSet.fromList actual
+
+{- | Asserts that roundrobinCollect with Parallel mode behaves in a left-biased
+fashion.
+-}
+case_roundrobinCollectParallel :: Assertion
+case_roundrobinCollectParallel = do
+  expected @?= actual
+ where
+  actual =
+    E.sampleN 5
+      . C.bundle
+      . first C.bundle
+      $ dut (input0 :> input1 :> input2 :> Nil, pure $ Ack True)
+
+  expected =
+    [ (Ack True :> Ack False :> Ack False :> Nil, Just (1 :: Int))
+    , (Ack True :> Ack False :> Ack False :> Nil, Just 2)
+    , (Ack False :> Ack True :> Ack False :> Nil, Just 10)
+    , (Ack False :> Ack True :> Ack False :> Nil, Just 40)
+    , (Ack False :> Ack False :> Ack True :> Nil, Just 100)
+    ]
+
+  input0 = C.fromList @_ @C.System [Just 1, Just 2, Nothing, Nothing, Nothing]
+  input1 = C.fromList @_ @C.System [Just 10, Just 10, Just 10, Just 40, Nothing]
+  input2 = C.fromList @_ @C.System [Just 100, Just 100, Just 100, Just 100, Just 100]
+
+  dut =
+    toSignals $
+      C.withClockResetEnable @C.System C.clockGen noReset C.enableGen $
+        Df.roundrobinCollect @3 Df.Parallel
 
 prop_unbundleVec :: Property
 prop_unbundleVec =

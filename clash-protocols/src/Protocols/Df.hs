@@ -740,7 +740,7 @@ data CollectMode
   | -- | Collect in a /round-robin/ fashion. If a source does not produce
     -- data, skip it and check the next source on the next cycle.
     Skip
-  | -- | Check all sources in parallel. Biased towards the /last/ source.
+  | -- | Check all sources in parallel. Biased towards the /first/ source.
     -- If the number of sources is high, this is more expensive than other
     -- modes.
     Parallel
