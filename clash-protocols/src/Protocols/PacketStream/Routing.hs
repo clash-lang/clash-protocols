@@ -54,7 +54,7 @@ packetArbiterC mode =
       (Df.NoSkip, _) -> satSucc SatWrap i
       (Df.Skip, _) -> satSucc SatWrap i
       (Df.Parallel, _) ->
-        -- Index of last sink with data
+        -- Index of first sink with data
         fromMaybe maxBound
           $ fold @(sources - 1) (<|>) (zipWith (<$) indicesI fwds)
 
