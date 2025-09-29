@@ -77,7 +77,6 @@ module Protocols.Df (
 
   -- * Internals
   forceResetSanity,
-  toMaybe,
 ) where
 
 -- base
@@ -105,6 +104,7 @@ import Data.Coerce qualified as Coerce
 import Data.Kind (Type)
 import Data.List ((\\))
 import Data.Maybe qualified as Maybe
+import Data.Maybe.Extra qualified as Maybe
 import Data.Proxy
 import Prelude qualified as P
 
@@ -144,11 +144,6 @@ instance Backpressure (Df dom a) where
 instance IdleCircuit (Df dom a) where
   idleFwd _ = C.pure Nothing
   idleBwd _ = C.pure (Ack False)
-
--- | Construct a `Just` if bool is True, `Nothing` otherwise.
-toMaybe :: Bool -> a -> Maybe a
-toMaybe False _ = Nothing
-toMaybe True a = Just a
 
 instance (C.KnownDomain dom, C.NFDataX a, C.ShowX a, Show a) => Simulate (Df dom a) where
   type SimulateFwdType (Df dom a) = [Maybe a]
@@ -842,7 +837,7 @@ registerBwd =
     valid = (Maybe.isJust <$> iDat) C..||. fmap not oAck
     iDatX0 = C.fromJustX <$> iDat
     iDatX1 = C.regEn (C.errorX "registerBwd") oAck iDatX0
-    oDat = toMaybe <$> valid <*> C.mux oAck iDatX0 iDatX1
+    oDat = Maybe.toMaybe <$> valid <*> C.mux oAck iDatX0 iDatX1
 
 -- Fourmolu only allows CPP conditions on complete top-level definitions. This
 -- function is not exported.
