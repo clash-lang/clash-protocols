@@ -49,6 +49,7 @@ module Protocols.Df (
   zipWithS,
   zip,
   partition,
+  partitionEithers,
   partitionS,
   route,
   select,
@@ -452,6 +453,23 @@ Example:
 -}
 partition :: forall dom a. (a -> Bool) -> Circuit (Df dom a) (Df dom a, Df dom a)
 partition f = partitionS (C.pure f)
+
+{- | Like 'P.partitionEithers', but over 'Df' streams
+
+Example:
+
+>>> let input = [Left 1, Right 'a', Left 2, Right 'b']
+>>> let output = simulateCS (partitionEithers @C.System @Int @Char) input
+>>> B.bimap (take 2) (take 2) output
+([1,2],"ab")
+-}
+partitionEithers :: forall dom a b. Circuit (Df dom (Either a b)) (Df dom a, Df dom b)
+partitionEithers =
+  Circuit (B.second C.unbundle . C.unbundle . C.liftA go . C.bundle . B.second C.bundle)
+ where
+  go (Nothing, _) = (C.deepErrorX "undefined ack", (Nothing, Nothing))
+  go (Just (Left a), (ackA, _)) = (ackA, (Just a, Nothing))
+  go (Just (Right b), (_, ackB)) = (ackB, (Nothing, Just b))
 
 -- | Like `partition`, but can reason over signals.
 partitionS ::
