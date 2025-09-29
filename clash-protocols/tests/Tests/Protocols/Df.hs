@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -- TODO: Fix warnings introduced by GHC 9.2 w.r.t. incomplete lazy pattern matches
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 -- Hashable (Index n)
@@ -10,8 +11,12 @@ import Data.Bifunctor (Bifunctor (first))
 import Data.Coerce (coerce)
 import Data.Foldable (fold)
 import Data.Maybe (catMaybes, fromMaybe)
+import Data.Tuple (swap)
 import GHC.Stack (HasCallStack)
 import Prelude
+#if !MIN_VERSION_base(4,18,0)
+import Control.Applicative (Applicative(liftA2))
+#endif
 
 -- clash-prelude
 
@@ -512,6 +517,53 @@ prop_fifo =
   idWithModelDf'
     id
     (C.withClockResetEnable C.clockGen C.resetGen C.enableGen Df.fifo (C.SNat @10))
+
+prop_toMaybeFromMaybe :: Property
+prop_toMaybeFromMaybe =
+  propWithModelSingleDomain
+    @C.System
+    defExpectOptions
+    (genData genSmallInt)
+    (\_ _ _ -> fmap (,0))
+    (C.exposeClockResetEnable dut)
+    (\sent received -> prop (fst <$> sent) received)
+ where
+  -- Calculate how many samples were dropped and use that to validate the received
+  -- stream.
+  prop :: [Int] -> [(Int, C.Unsigned 64)] -> PropertyT IO ()
+  prop sents (unzip -> (receiveds, nDroppeds)) = do
+    footnote ("sents: " <> show sents)
+    footnote ("receiveds: " <> show receiveds)
+    footnote ("nDroppeds: " <> show nDroppeds)
+    footnote ("nDroppedSinceLasts: " <> show nDroppedSinceLasts)
+    go sents (zip receiveds nDroppedSinceLasts)
+   where
+    nDroppedSinceLasts :: [C.Unsigned 64]
+    nDroppedSinceLasts = 0 : zipWith (-) nDroppeds (0 : nDroppeds)
+
+    go _ [] = pure ()
+    go sent0 ((received, nDropped) : rest)
+      | (s : ss) <- drop (fromIntegral nDropped) sent0 = do
+          s === received
+          go ss rest
+      | otherwise = fail "Expected more sent values"
+
+  -- XXX: This dut is a bit *meh*, because it inserts the dropped count into
+  --      the Df stream, but it doesn't account for the rule that the data
+  --      only "advances" when data is acked.
+  dut ::
+    (C.SystemClockResetEnable) =>
+    Circuit
+      (Df C.System Int)
+      (Df C.System (Int, C.Unsigned 64))
+  dut =
+    Df.forceResetSanity
+      |> Df.toMaybe
+      |> Df.unsafeFromMaybe
+      |> Circuit (first (,pure ()) . swap . first (fmap go) . first C.bundle)
+   where
+    go :: (Maybe Int, C.Unsigned 64) -> Maybe (Int, C.Unsigned 64)
+    go (a, b) = liftA2 (,) a (Just b)
 
 tests :: TestTree
 tests =
