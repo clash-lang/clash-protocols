@@ -34,6 +34,7 @@ import Clash.Prelude hiding (
 import Clash.Prelude qualified as C
 
 -- clash-protocols-base
+import Protocols.Internal (applyC)
 import Protocols.Plugin
 
 {- | "Bundle" together a 'Vec' of 'Circuit's into a 'Circuit' with 'Vec' input and output.
@@ -46,25 +47,6 @@ vecCircuits :: (C.KnownNat n) => C.Vec n (Circuit a b) -> Circuit (C.Vec n a) (C
 vecCircuits fs = Circuit (\inps -> C.unzip $ f <$> fs <*> uncurry C.zip inps)
  where
   f (Circuit ff) = ff
-
-{- | Applies the mappings @Fwd a -> Fwd b@ and @Bwd b -> Bwd a@ to the circuit's signals.
-
-The idea here is that you want to treat some @a -> b@ as a @Circuit a b@, but @Circuit a b@ is
-actually the type @(Fwd a, Bwd b) -> (Bwd a, Fwd b)@. To bridge this gap, we say that @a -> b@ can
-be our map from @Fwd a -> Fwd b@, but then we need to fill in the @Bwd b -> Bwd a@ still. In almost
-all cases, the former is the function you want to apply, and the latter is the inverse. For
-instance, the '(++)' operator on vectors can be made into a @Circuit a b@ with
-@applyC (uncurry (++)) splitAtI@, since 'splitAtI' is the inverse of '(++)'.
--}
-applyC ::
-  forall a b.
-  (Fwd a -> Fwd b) ->
-  (Bwd b -> Bwd a) ->
-  Circuit a b
-applyC fwdFn bwdFn = Circuit go
- where
-  go :: (Fwd a, Bwd b) -> (Bwd a, Fwd b)
-  go (fwdA, bwdB) = (bwdFn bwdB, fwdFn fwdA)
 
 -- | Append two separate vectors of the same circuits into one vector of circuits
 append ::
