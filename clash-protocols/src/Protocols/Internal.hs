@@ -169,6 +169,26 @@ repeatC ::
 repeatC (Circuit f) =
   Circuit (C.unzip . C.map f . uncurry C.zip)
 
+{- | Applies the mappings @Fwd a -> Fwd b@ and @Bwd b -> Bwd a@ to the circuit's signals.
+
+The idea here is that you want to treat some @a -> b@ as a @Circuit a b@, but @Circuit a b@ is
+actually the type @(Fwd a, Bwd b) -> (Bwd a, Fwd b)@. To bridge this gap, we say that @a -> b@ can
+be our map from @Fwd a -> Fwd b@, but then we need to fill in the @Bwd b -> Bwd a@ still. In almost
+all cases, the former is the function you want to apply, and the latter is the inverse. For
+instance, the 'Clash.Prelude.++' operator on vectors can be made into a @Circuit a b@ with
+@applyC (uncurry (++)) splitAtI@, since 'Clash.Prelude.splitAtI' is the inverse of
+'Clash.Prelude.++'.
+-}
+applyC ::
+  forall a b.
+  (Fwd a -> Fwd b) ->
+  (Bwd b -> Bwd a) ->
+  Circuit a b
+applyC fwdFn bwdFn = Circuit go
+ where
+  go :: (Fwd a, Bwd b) -> (Bwd a, Fwd b)
+  go (fwdA, bwdB) = (bwdFn bwdB, fwdFn fwdA)
+
 {- | Combine two separate circuits into one. If you are looking to combine
 multiple streams into a single stream, checkout 'Protocols.Df.fanin'.
 -}
