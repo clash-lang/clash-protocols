@@ -30,6 +30,7 @@ module Protocols (
   -- * Basic circuits
   idC,
   repeatC,
+  applyC,
   prod2C,
 
   -- * Simulation
