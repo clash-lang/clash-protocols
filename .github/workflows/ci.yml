@@ -142,6 +142,73 @@ jobs:
         run: |
           .ci/test_whitespace.sh
 
+  packages:
+    name: Push package to local cache
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        ghc-version: [ "ghc9101", "ghc982", "ghc964" ]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build & test
+        run: |
+          # The -L flag outputs build logs to stderr
+          nix build -L .#${{ matrix.ghc-version }}.clash-protocols-base
+          nix build -L .#${{ matrix.ghc-version }}.clash-protocols
+      - name: Push package to cache
+        env:
+          ATTIC_TOKEN: ${{ secrets.ATTIC_SECRET }}
+        run: |
+          attic login --set-default public http://192.168.102.136:9200/ "$ATTIC_TOKEN"
+          attic push public $(nix path-info .#${{ matrix.ghc-version }}.clash-protocols-base)
+          attic push public $(nix path-info .#${{ matrix.ghc-version }}.clash-protocols)
+      - name: Push package to cachix
+        env:
+          CACHIX_TOKEN: ${{ secrets.CACHIX_SECRET }}
+        run: |
+          cachix authtoken $CACHIX_TOKEN
+          nix path-info .#${{ matrix.ghc-version }}.clash-protocols-base | cachix push clash-lang
+          nix path-info .#${{ matrix.ghc-version }}.clash-protocols | cachix push clash-lang
+
+  devshells:
+    name: Push Nix developer shell to local cache
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        ghc-version: [ "ghc9101", "ghc982", "ghc964" ]
+    if: github.ref == 'refs/heads/main'
+    steps:
+        # There's no need to configure Nix, the dockerfile handling the GHA has it done for us!
+        # If a dependencies are already cached, we can simply re-use them!
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build devshell
+        run: |
+          # Since the server is x86_64-linux, we can only build the devshell
+          # for that
+          nix build .#devShells.x86_64-linux.${{ matrix.ghc-version }}-full
+        # Pushes the binaries to the local network
+        # url: http://192.168.102.136:9200/public
+        # public key: public:PGGlJMx1gGmU069blMqve8tS1ndzBuriUAwGBHGOo4g=
+      - name: Push devshell to cache
+        env:
+          ATTIC_TOKEN: ${{ secrets.ATTIC_SECRET }}
+        run: |
+          attic login --set-default public http://192.168.102.136:9200/ "$ATTIC_TOKEN"
+          attic push public $(nix path-info .#devShells.x86_64-linux.${{ matrix.ghc-version }}-full)
+        # Pushes the binaries to Cachix
+      - name: Push devshell to cachix
+        env:
+          CACHIX_TOKEN: ${{ secrets.CACHIX_SECRET }}
+        run: |
+          cachix authtoken $CACHIX_TOKEN
+          nix path-info .#devShells.x86_64-linux.${{ matrix.ghc-version }}-full | cachix push clash-lang
+
   # Mandatory check on GitHub
   all:
     name: All jobs finished
@@ -151,6 +218,8 @@ jobs:
         fourmolu,
         linting,
         stack,
+        packages,
+        devshells,
       ]
     runs-on: ubuntu-22.04
     steps:
