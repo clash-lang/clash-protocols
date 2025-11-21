@@ -317,7 +317,7 @@ unsafeFromCSignal ::
   Circuit
     (CSignal dom (Maybe (PacketStreamM2S dataWidth meta)))
     (PacketStream dom dataWidth meta)
-unsafeFromCSignal = Circuit (\(fwdInS, _) -> (pure (), fwdInS))
+unsafeFromCSignal = Circuit (\(fwdInS, _) -> ((), fwdInS))
 
 -- | Converts a 'PacketStream' into a 'CSignal': always acknowledges.
 toCSignal ::
@@ -359,7 +359,7 @@ unsafeAbortOnBackpressureC ::
     (CSignal dom (Maybe (PacketStreamM2S dataWidth meta)))
     (PacketStream dom dataWidth meta)
 unsafeAbortOnBackpressureC =
-  Circuit $ \(fwdInS, bwdInS) -> (pure (), go <$> bundle (fwdInS, bwdInS))
+  Circuit $ \(fwdInS, bwdInS) -> ((), go <$> bundle (fwdInS, bwdInS))
  where
   go (fwdIn, bwdIn) =
     fmap (\pkt -> pkt{_abort = _abort pkt || not (_ready bwdIn)}) fwdIn

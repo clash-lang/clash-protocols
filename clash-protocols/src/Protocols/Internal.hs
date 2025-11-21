@@ -104,7 +104,7 @@ instance (C.KnownNat n, Backpressure a) => Backpressure (C.Vec n a) where
   boolsToBwd _ bs = C.repeat (boolsToBwd (Proxy @a) bs)
 
 instance Backpressure (CSignal dom a) where
-  boolsToBwd _ _ = pure ()
+  boolsToBwd _ _ = ()
 
 {- | Right-to-left circuit composition.
 
@@ -350,7 +350,7 @@ instance (C.KnownDomain dom) => Simulate (CSignal dom a) where
   type SimulateChannels (CSignal dom a) = 1
 
   simToSigFwd Proxy list = C.fromList_lazy list
-  simToSigBwd Proxy () = pure ()
+  simToSigBwd Proxy () = ()
   sigToSimFwd Proxy sig = C.sample_lazy sig
   sigToSimBwd Proxy _ = ()
 
@@ -368,7 +368,7 @@ instance (C.NFDataX a, C.ShowX a, Show a, C.KnownDomain dom) => Drivable (CSigna
      in Circuit (\_ -> ((), fwd1))
 
   sampleC SimulationConfig{resetCycles, ignoreReset} (Circuit f) =
-    let sampled = CE.sample_lazy (snd (f ((), pure ())))
+    let sampled = CE.sample_lazy (snd (f ((), ())))
      in if ignoreReset then drop resetCycles sampled else sampled
 
 {- | Simulate a circuit. Includes samples while reset is asserted.
