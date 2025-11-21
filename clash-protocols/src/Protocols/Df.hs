@@ -960,9 +960,9 @@ unsafeFromMaybe = circuit $ \maybes -> do
   idC -< (as1, droppeds)
  where
   go2 ::
-    (Signal dom (Maybe a), (Signal dom Ack, Signal dom ())) ->
-    (Signal dom (), (Signal dom (Maybe a), Signal dom (C.Unsigned n)))
-  go2 (fwdA, (ackB, _)) = (C.pure (), C.mealyB go1 (Nothing, 0) (fwdA, ackB))
+    (Signal dom (Maybe a), (Signal dom Ack, ())) ->
+    ((), (Signal dom (Maybe a), Signal dom (C.Unsigned n)))
+  go2 (fwdA, (ackB, _)) = ((), C.mealyB go1 (Nothing, 0) (fwdA, ackB))
 
   go1 ::
     (Maybe a, C.Unsigned n) ->

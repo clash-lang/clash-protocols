@@ -64,7 +64,7 @@ instance (C.KnownNat n) => Protocol (C.Vec n a) where
 -- XXX: Type families with Signals on LHS are currently broken on Clash:
 instance Protocol (CSignal dom a) where
   type Fwd (CSignal dom a) = C.Signal dom a
-  type Bwd (CSignal dom a) = C.Signal dom ()
+  type Bwd (CSignal dom a) = ()
 
 -- | @circuit-notation@ plugin repurposed for "Protocols".
 plugin :: GHC.Plugin
