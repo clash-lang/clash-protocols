@@ -560,7 +560,7 @@ prop_toMaybeFromMaybe =
     Df.forceResetSanity
       |> Df.toMaybe
       |> Df.unsafeFromMaybe
-      |> Circuit (first (,pure ()) . swap . first (fmap go) . first C.bundle)
+      |> Circuit (first (,()) . swap . first (fmap go) . first C.bundle)
    where
     go :: (Maybe Int, C.Unsigned 64) -> Maybe (Int, C.Unsigned 64)
     go (a, b) = liftA2 (,) a (Just b)
