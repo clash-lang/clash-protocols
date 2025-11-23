@@ -26,7 +26,7 @@ A battery-included library for writing on-chip protocols, such as AMBA AXI and A
 - [TODO](#todo)
 
 # Introduction
-`clash-protocols` exists to make it easy to develop and use on-chip communication protocols, with a focus on protocols in need of bidirectional communication, such as _AMBA AXI_. To familiarize yourself with `clash-protocols`, read [hackage.haskell.org/package/clash-protocols](http://hackage.haskell.org/package/clash-protocols). To read the next section, read at least:
+`clash-protocols` exists to make it easy to develop and use on-chip communication protocols, with a focus on protocols in need of bidirectional communication, such as _AMBA AXI_. To familiarize yourself with `clash-protocols`, read [hackage.haskell.org/package/clash-protocols](http://hackage.haskell.org/package/clash-protocols) (dead link until this package is published on Hackage). To read the next section, read at least:
 
 * `Protocols`
 * `Protocols.Df`
