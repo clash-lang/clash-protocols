@@ -17,6 +17,10 @@
         # A list of all ghc versions this package supports
         supported-versions = clash-compiler.supportedGhcVersions.${system};
 
+        regular-pkgs = import clash-compiler.inputs.nixpkgs {
+          inherit system;
+        };
+
         all-overlays = builtins.listToAttrs (builtins.map (compiler-version:
           let
             # Remove the -fplugin and Setup.hs settings in the .cabal
@@ -73,13 +77,16 @@
             p.clash-protocols-base
           ];
 
-          nativeBuildInputs =
-            [
-              hs-pkgs.cabal-install
-              hs-pkgs.cabal-plan
-              hs-pkgs.fourmolu
-            ]
-          ;
+          # https://discourse.nixos.org/t/non-interactive-bash-errors-from-flake-nix-mkshell/33310
+          buildInputs = [
+            regular-pkgs.bashInteractive
+          ];
+
+          nativeBuildInputs = [
+            hs-pkgs.cabal-install
+            hs-pkgs.cabal-plan
+            hs-pkgs.fourmolu
+          ];
         };
 
         all-shells = clash-compiler.inputs.nixpkgs.lib.attrsets.concatMapAttrs (name: hs-pkgs: {
