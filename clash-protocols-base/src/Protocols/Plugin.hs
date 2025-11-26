@@ -66,6 +66,22 @@ instance Protocol (CSignal dom a) where
   type Fwd (CSignal dom a) = C.Signal dom a
   type Bwd (CSignal dom a) = ()
 
+instance Protocol (C.Clock dom) where
+  type Fwd (C.Clock dom) = C.Clock dom
+  type Bwd (C.Clock dom) = ()
+
+instance Protocol (C.DiffClock dom) where
+  type Fwd (C.DiffClock dom) = C.DiffClock dom
+  type Bwd (C.DiffClock dom) = ()
+
+instance Protocol (C.Reset dom) where
+  type Fwd (C.Reset dom) = C.Reset dom
+  type Bwd (C.Reset dom) = ()
+
+instance Protocol (C.Enable dom) where
+  type Fwd (C.Enable dom) = C.Enable dom
+  type Bwd (C.Enable dom) = ()
+
 -- | @circuit-notation@ plugin repurposed for "Protocols".
 plugin :: GHC.Plugin
 plugin =
