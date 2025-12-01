@@ -8,6 +8,8 @@ module Protocols.Plugin (
   -- * Circuit types
   Circuit (..),
   Protocol (..),
+  ToConst,
+  ToConstBwd,
 
   -- * clash-prelude related types
   CSignal,
@@ -19,6 +21,8 @@ module Protocols.Plugin (
 ) where
 
 -- base
+
+import Data.Kind (Type)
 import Prelude
 
 -- clash-prelude
@@ -56,6 +60,24 @@ instance Protocol (a, b) where
 
 -- Generate n-tuple instances, where n > 2
 protocolTupleInstances 3 maxTupleSize
+
+{- | A protocol that carries a constant value in the forward direction and no
+information in the backward direction.
+-}
+data ToConst (a :: Type)
+
+instance Protocol (ToConst a) where
+  type Fwd (ToConst a) = a
+  type Bwd (ToConst a) = ()
+
+{- | A protocol that carries no information in the forward direction and a
+constant value in the backward direction.
+-}
+data ToConstBwd (a :: Type)
+
+instance Protocol (ToConstBwd a) where
+  type Fwd (ToConstBwd a) = ()
+  type Bwd (ToConstBwd a) = a
 
 instance (C.KnownNat n) => Protocol (C.Vec n a) where
   type Fwd (C.Vec n a) = C.Vec n (Fwd a)
