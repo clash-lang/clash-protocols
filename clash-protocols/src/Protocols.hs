@@ -26,6 +26,8 @@ module Protocols (
   -- * Protocol types
   CSignal,
   Df,
+  ToConst,
+  ToConstBwd,
 
   -- * Basic circuits
   idC,
