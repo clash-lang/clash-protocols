@@ -28,22 +28,6 @@ divRU dividend divider =
 
 {- | Test whether the following equation holds:
 
-    DivRU (a * b) b ~ a
-
-Given:
-
-    1 <= b
-
-Tests: 'Data.Constraint.Nat.Extra.cancelMulDiv'.
--}
-prop_cancelMulDiv :: Property
-prop_cancelMulDiv = property $ do
-  a <- forAll (genNatural 0)
-  b <- forAll (genNatural 1)
-  divRU (a * b) b === a
-
-{- | Test whether the following equation holds:
-
      Mod a b + 1 <= b
 
 Given:

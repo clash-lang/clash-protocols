@@ -8,7 +8,7 @@ Types modelling the Wishbone bus protocol.
 -}
 module Protocols.Wishbone where
 
-import Clash.Prelude (DivRU, Nat, Type, (:::))
+import Clash.Prelude (Nat, (:::))
 import Prelude hiding (head, not, (&&))
 
 import Clash.Signal.Internal (Signal (..))
@@ -19,17 +19,17 @@ import Protocols.Idle
 import Clash.Prelude qualified as C
 
 -- | Data communicated from a Wishbone Master to a Wishbone Slave
-data WishboneM2S addressWidth selWidth dat = WishboneM2S
-  { addr :: "ADR" ::: C.BitVector addressWidth
+data WishboneM2S addressBits dataBytes = WishboneM2S
+  { addr :: "ADR" ::: C.BitVector addressBits
   -- ^ The address output array [ADR_O()] is used to pass a binary address. The higher array
   --   boundary is specific to the address width of the core, and the lower array boundary is
   --   determined by the data port size and granularity. For example the array size on a 32-bit
   --   data port with BYTE granularity is [ADR_O(n..2)]. In some cases (such as FIFO
   --   interfaces) the array may not be present on the interface.
-  , writeData :: "DAT_MOSI" ::: dat
+  , writeData :: "DAT_MOSI" ::: C.BitVector (dataBytes C.* 8)
   -- ^ The data output array [DAT_O()] is used to pass binary data. The array boundaries are
   --   determined by the port size, with a maximum port size of 64-bits (e.g. [DAT_I(63..0)]).
-  , busSelect :: "SEL" ::: C.BitVector selWidth
+  , busSelect :: "SEL" ::: C.BitVector dataBytes
   -- ^ The select output array [SEL_O()] indicates where valid data is expected on the [DAT_I()]
   --   signal array during READ cycles, and where it is placed on the [DAT_O()] signal array
   --   during WRITE cycles. The array boundaries are determined by the granularity of a port.
@@ -69,16 +69,16 @@ data WishboneM2S addressWidth selWidth dat = WishboneM2S
   deriving (NFData, C.Generic, C.NFDataX, Eq, C.BitPack)
 
 instance
-  (C.ShowX dat, C.KnownNat addressWidth, C.KnownNat selWidth) =>
-  C.ShowX (WishboneM2S addressWidth selWidth dat)
+  (C.KnownNat addressBits, C.KnownNat dataBytes) =>
+  C.ShowX (WishboneM2S addressBits dataBytes)
   where
   showX = show
 
 -- Compact printing for M2S values. This handles undefined values in the
 -- structure too.
 instance
-  (C.ShowX dat, C.KnownNat addressWidth, C.KnownNat selWidth) =>
-  Show (WishboneM2S addressWidth selWidth dat)
+  (C.KnownNat addressBits, C.KnownNat dataBytes) =>
+  Show (WishboneM2S addressBits dataBytes)
   where
   show WishboneM2S{..} =
     "WishboneM2S [ "
@@ -121,8 +121,8 @@ instance
       CycleTypeIdentifier val -> "reserved (" <> C.showX val <> ")"
 
 -- | Data communicated from a Wishbone Slave to a Wishbone Master
-data WishboneS2M dat = WishboneS2M
-  { readData :: "DAT_MISO" ::: dat
+data WishboneS2M dataBytes = WishboneS2M
+  { readData :: "DAT_MISO" ::: C.BitVector (dataBytes C.* 8)
   -- ^ The data output array [DAT_O()] is used to pass binary data. The array boundaries are
   --   determined by the port size, with a maximum port size of 64-bits (e.g. [DAT_I(63..0)]).
   , acknowledge :: "ACK" ::: Bool
@@ -143,12 +143,12 @@ data WishboneS2M dat = WishboneS2M
   }
   deriving (NFData, C.Generic, C.NFDataX, Eq, C.BitPack)
 
-instance (C.ShowX dat) => C.ShowX (WishboneS2M dat) where
+instance (C.KnownNat dataBytes) => C.ShowX (WishboneS2M dataBytes) where
   showX = show
 
 -- Compact printing for S2M values. This handles undefined values in the
 -- structure too.
-instance (C.ShowX dat) => Show (WishboneS2M dat) where
+instance (C.KnownNat dataBytes) => Show (WishboneS2M dataBytes) where
   show WishboneS2M{..} =
     "WishboneS2M [ "
       <> prefix acknowledge
@@ -217,27 +217,27 @@ data
   Wishbone
     (dom :: C.Domain)
     (mode :: WishboneMode)
-    (addressWidth :: Nat)
-    (userType :: Type)
+    (addressBits :: Nat)
+    (dataBytes :: Nat)
 
-instance Protocol (Wishbone dom mode addressWidth dat) where
+instance Protocol (Wishbone dom mode addressBits dataBytes) where
   type
-    Fwd (Wishbone dom mode addressWidth dat) =
-      Signal dom (WishboneM2S addressWidth (C.BitSize dat `DivRU` 8) dat)
+    Fwd (Wishbone dom mode addressBits dataBytes) =
+      Signal dom (WishboneM2S addressBits dataBytes)
 
-  type Bwd (Wishbone dom mode addressWidth dat) = Signal dom (WishboneS2M dat)
+  type Bwd (Wishbone dom mode addressBits dataBytes) = Signal dom (WishboneS2M dataBytes)
 
 instance
-  (C.KnownNat aw, C.KnownNat (C.BitSize dat), C.NFDataX dat) =>
-  IdleCircuit (Wishbone dom mode aw dat)
+  (C.KnownNat aw, C.KnownNat dw) =>
+  IdleCircuit (Wishbone dom mode aw dw)
   where
   idleFwd _ = C.pure emptyWishboneM2S
   idleBwd _ = C.pure emptyWishboneS2M
 
 -- | Construct "default" Wishbone M2S signals
 emptyWishboneM2S ::
-  (C.KnownNat addressWidth, C.KnownNat (C.BitSize dat), C.NFDataX dat) =>
-  WishboneM2S addressWidth (C.BitSize dat `DivRU` 8) dat
+  (C.KnownNat addressBits, C.KnownNat dataBytes) =>
+  WishboneM2S addressBits dataBytes
 emptyWishboneM2S =
   WishboneM2S
     { addr = C.deepErrorX "M2S address not defined"
@@ -252,7 +252,7 @@ emptyWishboneM2S =
     }
 
 -- | Construct "default" Wishbone S2M signals
-emptyWishboneS2M :: (C.NFDataX dat) => WishboneS2M dat
+emptyWishboneS2M :: (C.KnownNat dataBytes) => WishboneS2M dataBytes
 emptyWishboneS2M =
   WishboneS2M
     { readData = C.deepErrorX "S2M readData not defined"
@@ -267,56 +267,55 @@ whether transactions are in progress(returns true for any 'hasTerminateFlag').
 This is useful to determine whether a Wishbone bus is active.
 
 >>> :{
-let m2s = (emptyWishboneM2S @32 @()){busCycle = True, strobe = True}
+let m2s = (emptyWishboneM2S @32 @4){busCycle = True, strobe = True}
     s2m = emptyWishboneS2M{acknowledge = True}
   in hasBusActivity (m2s, s2m)
 :}
 True
 
 >>> :{
-let m2s = (emptyWishboneM2S @32 @()){busCycle = True, strobe = True}
+let m2s = (emptyWishboneM2S @32 @4){busCycle = True, strobe = True}
     s2m = emptyWishboneS2M{retry = True}
   in hasBusActivity (m2s, s2m)
 :}
 True
 
 >>> :{
-let m2s = (emptyWishboneM2S @32 @()){busCycle = True}
+let m2s = (emptyWishboneM2S @32 @4){busCycle = True}
     s2m = emptyWishboneS2M{acknowledge = True}
   in hasBusActivity (m2s, s2m)
 :}
 False
 
 >>> :{
-let m2s = (emptyWishboneM2S @32 @()){busCycle = True, strobe = True}
+let m2s = (emptyWishboneM2S @32 @4){busCycle = True, strobe = True}
     s2m = emptyWishboneS2M
   in hasBusActivity (m2s, s2m)
 :}
 False
 
 >>> :{
-let m2s = emptyWishboneM2S @32 @()
+let m2s = emptyWishboneM2S @32 @4
     s2m = emptyWishboneS2M{acknowledge = True}
   in hasBusActivity (m2s, s2m)
 :}
 False
 -}
-hasBusActivity :: (WishboneM2S addressWidth sel dat, WishboneS2M dat) -> Bool
+hasBusActivity :: (WishboneM2S addressBits dataBytes, WishboneS2M dataBytes) -> Bool
 hasBusActivity (m2s, s2m) = busCycle m2s C.&& strobe m2s C.&& hasTerminateFlag s2m
 
 -- | Helper function to determine whether a Slave signals the termination of a cycle.
-hasTerminateFlag :: WishboneS2M dat -> Bool
+hasTerminateFlag :: WishboneS2M dataBytes -> Bool
 hasTerminateFlag s2m = acknowledge s2m || err s2m || retry s2m
 
 {- | Force a /nack/ on the backward channel and /no data/ on the forward
 channel if reset is asserted.
 -}
 forceResetSanity ::
-  forall dom mode aw a.
+  forall dom mode aw dw.
   ( C.HiddenClockResetEnable dom
   , C.KnownNat aw
-  , C.KnownNat (C.BitSize a)
-  , C.NFDataX a
+  , C.KnownNat dw
   ) =>
-  Circuit (Wishbone dom mode aw a) (Wishbone dom mode aw a)
+  Circuit (Wishbone dom mode aw dw) (Wishbone dom mode aw dw)
 forceResetSanity = forceResetSanityGeneric
