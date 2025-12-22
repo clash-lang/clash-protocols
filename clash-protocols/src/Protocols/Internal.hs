@@ -104,7 +104,7 @@ instance (C.KnownNat n, Backpressure a) => Backpressure (C.Vec n a) where
   boolsToBwd _ bs = C.repeat (boolsToBwd (Proxy @a) bs)
 
 instance Backpressure (CSignal dom a) where
-  boolsToBwd _ _ = pure ()
+  boolsToBwd _ _ = ()
 
 {- | Right-to-left circuit composition.
 
@@ -181,6 +181,26 @@ repeatWithIndexC f =
   Circuit (C.unzip . C.zipWith g C.indicesI . uncurry C.zip)
   where
     g i = case f i of Circuit f' -> f'
+
+{- | Applies the mappings @Fwd a -> Fwd b@ and @Bwd b -> Bwd a@ to the circuit's signals.
+
+The idea here is that you want to treat some @a -> b@ as a @Circuit a b@, but @Circuit a b@ is
+actually the type @(Fwd a, Bwd b) -> (Bwd a, Fwd b)@. To bridge this gap, we say that @a -> b@ can
+be our map from @Fwd a -> Fwd b@, but then we need to fill in the @Bwd b -> Bwd a@ still. In almost
+all cases, the former is the function you want to apply, and the latter is the inverse. For
+instance, the 'Clash.Prelude.++' operator on vectors can be made into a @Circuit a b@ with
+@applyC (uncurry (++)) splitAtI@, since 'Clash.Prelude.splitAtI' is the inverse of
+'Clash.Prelude.++'.
+-}
+applyC ::
+  forall a b.
+  (Fwd a -> Fwd b) ->
+  (Bwd b -> Bwd a) ->
+  Circuit a b
+applyC fwdFn bwdFn = Circuit go
+ where
+  go :: (Fwd a, Bwd b) -> (Bwd a, Fwd b)
+  go (fwdA, bwdB) = (bwdFn bwdB, fwdFn fwdA)
 
 {- | Combine two separate circuits into one. If you are looking to combine
 multiple streams into a single stream, checkout 'Protocols.Df.fanin'.
@@ -343,7 +363,7 @@ instance (C.KnownDomain dom) => Simulate (CSignal dom a) where
   type SimulateChannels (CSignal dom a) = 1
 
   simToSigFwd Proxy list = C.fromList_lazy list
-  simToSigBwd Proxy () = pure ()
+  simToSigBwd Proxy () = ()
   sigToSimFwd Proxy sig = C.sample_lazy sig
   sigToSimBwd Proxy _ = ()
 
@@ -361,7 +381,7 @@ instance (C.NFDataX a, C.ShowX a, Show a, C.KnownDomain dom) => Drivable (CSigna
      in Circuit (\_ -> ((), fwd1))
 
   sampleC SimulationConfig{resetCycles, ignoreReset} (Circuit f) =
-    let sampled = CE.sample_lazy (snd (f ((), pure ())))
+    let sampled = CE.sample_lazy (snd (f ((), ())))
      in if ignoreReset then drop resetCycles sampled else sampled
 
 {- | Simulate a circuit. Includes samples while reset is asserted.

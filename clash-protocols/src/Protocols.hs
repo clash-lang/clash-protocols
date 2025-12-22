@@ -26,11 +26,14 @@ module Protocols (
   -- * Protocol types
   CSignal,
   Df,
+  ToConst,
+  ToConstBwd,
 
   -- * Basic circuits
   idC,
   repeatC,
   repeatWithIndexC,
+  applyC,
   prod2C,
 
   -- * Simulation

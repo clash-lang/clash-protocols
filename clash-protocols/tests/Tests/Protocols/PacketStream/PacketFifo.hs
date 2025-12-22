@@ -117,8 +117,7 @@ prop_packetFifo_no_gaps = property $ do
         genPackets
           1
           10
-          ( genValidPacket defPacketOptions{poAbortMode = NoAbort} Gen.enumBounded (Range.linear 0 10)
-          )
+          (genValidPacket defPacketOptions{poAbortMode = NoAbort} Gen.enumBounded (Range.linear 0 10))
 
   packets :: [PacketStreamM2S 4 Int16] <- forAll gen
 

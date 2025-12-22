@@ -3,6 +3,7 @@
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_GHC -fplugin Protocols.Plugin #-}
 
 {- |
 Defines data structures and operators to create a Dataflow protocol that only
@@ -49,6 +50,7 @@ module Protocols.Df (
   zipWithS,
   zip,
   partition,
+  partitionEithers,
   partitionS,
   route,
   select,
@@ -67,6 +69,8 @@ module Protocols.Df (
   registerFwd,
   registerBwd,
   fifo,
+  toMaybe,
+  unsafeFromMaybe,
 
   -- * Simulation functions
   drive,
@@ -76,7 +80,6 @@ module Protocols.Df (
 
   -- * Internals
   forceResetSanity,
-  toMaybe,
 ) where
 
 -- base
@@ -104,6 +107,7 @@ import Data.Coerce qualified as Coerce
 import Data.Kind (Type)
 import Data.List ((\\))
 import Data.Maybe qualified as Maybe
+import Data.Maybe.Extra qualified as Maybe
 import Data.Proxy
 import Prelude qualified as P
 
@@ -143,11 +147,6 @@ instance Backpressure (Df dom a) where
 instance IdleCircuit (Df dom a) where
   idleFwd _ = C.pure Nothing
   idleBwd _ = C.pure (Ack False)
-
--- | Construct a `Just` if bool is True, `Nothing` otherwise.
-toMaybe :: Bool -> a -> Maybe a
-toMaybe False _ = Nothing
-toMaybe True a = Just a
 
 instance (C.KnownDomain dom, C.NFDataX a, C.ShowX a, Show a) => Simulate (Df dom a) where
   type SimulateFwdType (Df dom a) = [Maybe a]
@@ -453,6 +452,23 @@ Example:
 partition :: forall dom a. (a -> Bool) -> Circuit (Df dom a) (Df dom a, Df dom a)
 partition f = partitionS (C.pure f)
 
+{- | Like 'P.partitionEithers', but over 'Df' streams
+
+Example:
+
+>>> let input = [Left 1, Right 'a', Left 2, Right 'b']
+>>> let output = simulateCS (partitionEithers @C.System @Int @Char) input
+>>> B.bimap (take 2) (take 2) output
+([1,2],"ab")
+-}
+partitionEithers :: forall dom a b. Circuit (Df dom (Either a b)) (Df dom a, Df dom b)
+partitionEithers =
+  Circuit (B.second C.unbundle . C.unbundle . C.liftA go . C.bundle . B.second C.bundle)
+ where
+  go (Nothing, _) = (C.deepErrorX "undefined ack", (Nothing, Nothing))
+  go (Just (Left a), (ackA, _)) = (ackA, (Just a, Nothing))
+  go (Just (Right b), (_, ackB)) = (ackB, (Nothing, Just b))
+
 -- | Like `partition`, but can reason over signals.
 partitionS ::
   forall dom a. Signal dom (a -> Bool) -> Circuit (Df dom a) (Df dom a, Df dom a)
@@ -740,7 +756,7 @@ data CollectMode
   | -- | Collect in a /round-robin/ fashion. If a source does not produce
     -- data, skip it and check the next source on the next cycle.
     Skip
-  | -- | Check all sources in parallel. Biased towards the /last/ source.
+  | -- | Check all sources in parallel. Biased towards the /first/ source.
     -- If the number of sources is high, this is more expensive than other
     -- modes.
     Parallel
@@ -824,7 +840,7 @@ registerBwd =
     valid = (Maybe.isJust <$> iDat) C..||. fmap not oAck
     iDatX0 = C.fromJustX <$> iDat
     iDatX1 = C.regEn (C.errorX "registerBwd") oAck iDatX0
-    oDat = toMaybe <$> valid <*> C.mux oAck iDatX0 iDatX1
+    oDat = Maybe.toMaybe <$> valid <*> C.mux oAck iDatX0 iDatX1
 
 -- Fourmolu only allows CPP conditions on complete top-level definitions. This
 -- function is not exported.
@@ -917,6 +933,58 @@ fifo fifoDepth = Circuit $ C.hideReset circuitFunction
   -- (space left = depth) or full (space left = 0).
   s0 :: (C.Index depth, C.Index depth, C.Index (depth C.+ 1))
   s0 = (0, 0, maxBound)
+
+-- | Convert a 'Df' stream to a 'Maybe' stream. Never stalls LHS.
+toMaybe :: Circuit (Df dom a) (CSignal dom (Maybe a))
+toMaybe = Circuit $ \(maybes, _) -> (C.pure (Ack True), maybes)
+
+{- | Convert a 'Maybe' stream to a 'Df' stream. Not every 'Just' is guaranteed to
+be forwarded to the RHS. The number of dropped 'Just's is exported as an
+unsigned number. Note that this circuit needs a clock to latch the incoming
+'Maybe' values in case of backpressure from the RHS.
+-}
+unsafeFromMaybe ::
+  forall n a dom.
+  ( C.HiddenClockResetEnable dom
+  , C.NFDataX a
+  , C.KnownNat n
+  ) =>
+  Circuit
+    (CSignal dom (Maybe a))
+    ( Df dom a
+    , CSignal dom (C.Unsigned n)
+    )
+unsafeFromMaybe = circuit $ \maybes -> do
+  (as0, droppeds) <- Circuit go2 -< maybes
+  as1 <- forceResetSanity -< as0
+  idC -< (as1, droppeds)
+ where
+  go2 ::
+    (Signal dom (Maybe a), (Signal dom Ack, ())) ->
+    ((), (Signal dom (Maybe a), Signal dom (C.Unsigned n)))
+  go2 (fwdA, (ackB, _)) = ((), C.mealyB go1 (Nothing, 0) (fwdA, ackB))
+
+  go1 ::
+    (Maybe a, C.Unsigned n) ->
+    (Maybe a, Ack) ->
+    ( (Maybe a, C.Unsigned n)
+    , (Maybe a, C.Unsigned n)
+    )
+  go1 (s0, !n0) ~(i, ~(Ack ack)) = ((s1, n1), (o, n1))
+   where
+    -- We're dropping a value if we have a stored value (s0), the LHS sends a
+    -- new value (i), and the RHS does not acknowledge (not ack).
+    n1
+      | Maybe.isJust s0 && Maybe.isJust i && not ack = n0 + 1
+      | otherwise = n0
+
+    o = s0 <|> i
+
+    s1
+      | Maybe.isJust s0 && not ack = s0
+      | Maybe.isJust s0 && ack = i
+      | Maybe.isJust i && ack = Nothing
+      | otherwise = i
 
 --------------------------------- SIMULATE -------------------------------------
 

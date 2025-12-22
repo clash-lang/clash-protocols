@@ -8,6 +8,8 @@ module Protocols.Plugin (
   -- * Circuit types
   Circuit (..),
   Protocol (..),
+  ToConst,
+  ToConstBwd,
 
   -- * clash-prelude related types
   CSignal,
@@ -19,6 +21,8 @@ module Protocols.Plugin (
 ) where
 
 -- base
+
+import Data.Kind (Type)
 import Prelude
 
 -- clash-prelude
@@ -57,6 +61,24 @@ instance Protocol (a, b) where
 -- Generate n-tuple instances, where n > 2
 protocolTupleInstances 3 maxTupleSize
 
+{- | A protocol that carries a constant value in the forward direction and no
+information in the backward direction.
+-}
+data ToConst (a :: Type)
+
+instance Protocol (ToConst a) where
+  type Fwd (ToConst a) = a
+  type Bwd (ToConst a) = ()
+
+{- | A protocol that carries no information in the forward direction and a
+constant value in the backward direction.
+-}
+data ToConstBwd (a :: Type)
+
+instance Protocol (ToConstBwd a) where
+  type Fwd (ToConstBwd a) = ()
+  type Bwd (ToConstBwd a) = a
+
 instance (C.KnownNat n) => Protocol (C.Vec n a) where
   type Fwd (C.Vec n a) = C.Vec n (Fwd a)
   type Bwd (C.Vec n a) = C.Vec n (Bwd a)
@@ -64,7 +86,23 @@ instance (C.KnownNat n) => Protocol (C.Vec n a) where
 -- XXX: Type families with Signals on LHS are currently broken on Clash:
 instance Protocol (CSignal dom a) where
   type Fwd (CSignal dom a) = C.Signal dom a
-  type Bwd (CSignal dom a) = C.Signal dom ()
+  type Bwd (CSignal dom a) = ()
+
+instance Protocol (C.Clock dom) where
+  type Fwd (C.Clock dom) = C.Clock dom
+  type Bwd (C.Clock dom) = ()
+
+instance Protocol (C.DiffClock dom) where
+  type Fwd (C.DiffClock dom) = C.DiffClock dom
+  type Bwd (C.DiffClock dom) = ()
+
+instance Protocol (C.Reset dom) where
+  type Fwd (C.Reset dom) = C.Reset dom
+  type Bwd (C.Reset dom) = ()
+
+instance Protocol (C.Enable dom) where
+  type Fwd (C.Enable dom) = C.Enable dom
+  type Bwd (C.Enable dom) = ()
 
 -- | @circuit-notation@ plugin repurposed for "Protocols".
 plugin :: GHC.Plugin

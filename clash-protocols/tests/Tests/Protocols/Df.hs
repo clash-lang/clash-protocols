@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -- TODO: Fix warnings introduced by GHC 9.2 w.r.t. incomplete lazy pattern matches
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 -- Hashable (Index n)
@@ -6,15 +7,22 @@
 module Tests.Protocols.Df where
 
 -- base
+import Data.Bifunctor (Bifunctor (first))
 import Data.Coerce (coerce)
 import Data.Foldable (fold)
 import Data.Maybe (catMaybes, fromMaybe)
+import Data.Tuple (swap)
 import GHC.Stack (HasCallStack)
 import Prelude
+#if !MIN_VERSION_base(4,18,0)
+import Control.Applicative (Applicative(liftA2))
+#endif
 
 -- clash-prelude
 
-import Clash.Prelude (type (<=))
+import Clash.Explicit.Prelude qualified as E
+import Clash.Explicit.Reset (noReset)
+import Clash.Prelude (Vec (Nil, (:>)), type (<=))
 import Clash.Prelude qualified as C
 
 -- containers
@@ -22,6 +30,7 @@ import Data.HashMap.Strict qualified as HashMap
 import Data.HashSet qualified as HashSet
 
 -- extra
+import Data.Either (partitionEithers)
 import Data.List (mapAccumL, partition, transpose)
 
 -- deepseq
@@ -37,6 +46,7 @@ import Hedgehog.Range qualified as Range
 
 -- tasty
 import Test.Tasty
+import Test.Tasty.HUnit (Assertion, testCase, (@?=))
 import Test.Tasty.Hedgehog (HedgehogTestLimit (HedgehogTestLimit))
 import Test.Tasty.Hedgehog.Extra (testProperty)
 import Test.Tasty.TH (testGroupGenerator)
@@ -319,6 +329,36 @@ prop_roundrobinCollectParallel =
   prop :: [Int] -> [Int] -> PropertyT IO ()
   prop expected actual = HashSet.fromList expected === HashSet.fromList actual
 
+{- | Asserts that roundrobinCollect with Parallel mode behaves in a left-biased
+fashion.
+-}
+case_roundrobinCollectParallel :: Assertion
+case_roundrobinCollectParallel = do
+  expected @?= actual
+ where
+  actual =
+    E.sampleN 5
+      . C.bundle
+      . first C.bundle
+      $ dut (input0 :> input1 :> input2 :> Nil, pure $ Ack True)
+
+  expected =
+    [ (Ack True :> Ack False :> Ack False :> Nil, Just (1 :: Int))
+    , (Ack True :> Ack False :> Ack False :> Nil, Just 2)
+    , (Ack False :> Ack True :> Ack False :> Nil, Just 10)
+    , (Ack False :> Ack True :> Ack False :> Nil, Just 40)
+    , (Ack False :> Ack False :> Ack True :> Nil, Just 100)
+    ]
+
+  input0 = C.fromList @_ @C.System [Just 1, Just 2, Nothing, Nothing, Nothing]
+  input1 = C.fromList @_ @C.System [Just 10, Just 10, Just 10, Just 40, Nothing]
+  input2 = C.fromList @_ @C.System [Just 100, Just 100, Just 100, Just 100, Just 100]
+
+  dut =
+    toSignals $
+      C.withClockResetEnable @C.System C.clockGen noReset C.enableGen $
+        Df.roundrobinCollect @3 Df.Parallel
+
 prop_unbundleVec :: Property
 prop_unbundleVec =
   idWithModelSingleDomain
@@ -385,6 +425,14 @@ prop_partition =
     (genData genSmallInt)
     (partition (> 5))
     (Df.partition @C.System @Int (> 5))
+
+prop_partitionEithers :: Property
+prop_partitionEithers =
+  idWithModel
+    defExpectOptions
+    (genData (Gen.either genSmallInt Gen.alphaNum))
+    partitionEithers
+    (Df.partitionEithers @C.System @Int @Char)
 
 prop_route :: Property
 prop_route =
@@ -469,6 +517,53 @@ prop_fifo =
   idWithModelDf'
     id
     (C.withClockResetEnable C.clockGen C.resetGen C.enableGen Df.fifo (C.SNat @10))
+
+prop_toMaybeFromMaybe :: Property
+prop_toMaybeFromMaybe =
+  propWithModelSingleDomain
+    @C.System
+    defExpectOptions
+    (genData genSmallInt)
+    (\_ _ _ -> fmap (,0))
+    (C.exposeClockResetEnable dut)
+    (\sent received -> prop (fst <$> sent) received)
+ where
+  -- Calculate how many samples were dropped and use that to validate the received
+  -- stream.
+  prop :: [Int] -> [(Int, C.Unsigned 64)] -> PropertyT IO ()
+  prop sents (unzip -> (receiveds, nDroppeds)) = do
+    footnote ("sents: " <> show sents)
+    footnote ("receiveds: " <> show receiveds)
+    footnote ("nDroppeds: " <> show nDroppeds)
+    footnote ("nDroppedSinceLasts: " <> show nDroppedSinceLasts)
+    go sents (zip receiveds nDroppedSinceLasts)
+   where
+    nDroppedSinceLasts :: [C.Unsigned 64]
+    nDroppedSinceLasts = 0 : zipWith (-) nDroppeds (0 : nDroppeds)
+
+    go _ [] = pure ()
+    go sent0 ((received, nDropped) : rest)
+      | (s : ss) <- drop (fromIntegral nDropped) sent0 = do
+          s === received
+          go ss rest
+      | otherwise = fail "Expected more sent values"
+
+  -- XXX: This dut is a bit *meh*, because it inserts the dropped count into
+  --      the Df stream, but it doesn't account for the rule that the data
+  --      only "advances" when data is acked.
+  dut ::
+    (C.SystemClockResetEnable) =>
+    Circuit
+      (Df C.System Int)
+      (Df C.System (Int, C.Unsigned 64))
+  dut =
+    Df.forceResetSanity
+      |> Df.toMaybe
+      |> Df.unsafeFromMaybe
+      |> Circuit (first (,()) . swap . first (fmap go) . first C.bundle)
+   where
+    go :: (Maybe Int, C.Unsigned 64) -> Maybe (Int, C.Unsigned 64)
+    go (a, b) = liftA2 (,) a (Just b)
 
 tests :: TestTree
 tests =

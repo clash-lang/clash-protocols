@@ -22,10 +22,11 @@ A battery-included library for writing on-chip protocols, such as AMBA AXI and A
 - [License](#license)
 - [Project goals](#project-goals)
 - [Contributing](#contributing)
+- [Nix](#nix)
 - [TODO](#todo)
 
 # Introduction
-`clash-protocols` exists to make it easy to develop and use on-chip communication protocols, with a focus on protocols in need of bidirectional communication, such as _AMBA AXI_. To familiarize yourself with `clash-protocols`, read [hackage.haskell.org/package/clash-protocols](http://hackage.haskell.org/package/clash-protocols). To read the next section, read at least:
+`clash-protocols` exists to make it easy to develop and use on-chip communication protocols, with a focus on protocols in need of bidirectional communication, such as _AMBA AXI_. To familiarize yourself with `clash-protocols`, read [hackage.haskell.org/package/clash-protocols](http://hackage.haskell.org/package/clash-protocols) (dead link until this package is published on Hackage). To read the next section, read at least:
 
 * `Protocols`
 * `Protocols.Df`
@@ -612,6 +613,60 @@ This project does not aim to:
 
 # Contributing
 No formal guidelines yet, but feel free to open a PR!
+
+# Nix
+This project exposes several Nix flake outputs. Most notibly the `clash-protocols` and `clash-protocols-base` packages themselves. These packages are exposed individually, or as an overlay (which you need to apply on top of clash-compiler).
+
+Contributing to `clash-protocols` can be done via the developer shell exposed by the Nix flake. Open a terminal and typing: `nix develop`. Optionally a specific GHC version can be selected as well as a `-minimal` or `-full` version. The `-minimal` shell does **NOT** contain the Haskell Language Server, whilst the `-full` shell does. When using the developer shell, do not forget to remove the `cabal.project` file. This file contains a package source and Cabal prioritizes local package sources over Nix sources. Removing the `cabal.project` file should work fine when developing with Nix.
+
+You can also add this project as a Nix-dependency. This project depends on `clash-compiler`, the recommended way to add this to your project as a Nix dependency is as follows:
+
+First add `clash-compiler` and `clash-protocols` to your flake inputs:
+```nix
+inputs = {
+  clash-compiler.url = "github:clash-lang/clash-compiler"
+  clash-protocols = {
+    url = "github:clash-lang/clash-protocols"
+    inputs.clash-compiler.follows = "clash-compiler";
+  };
+};
+```
+
+It is important to have clash-protocols follow the same clash-compiler version as your project, this ensures you do not get different Haskell package hashes. Afterwards, use the `clashPackages` as a baseline for your Haskell packages and overlay this project's overlay ontop of it:
+
+```nix
+let
+  # The GHC version you would like to use
+  # This has to be be one of the supported versions of clash-compiler
+  compiler-version = "ghc9101";
+
+  # Import the normal and Haskell package set from clash-compiler
+  pkgs = (import clash-compiler.inputs.nixpkgs {
+  inherit system;
+  }).extend clash-compiler.overlays.${compiler-version};
+  clash-pkgs = pkgs."clashPackages-${compiler-version}";
+
+  # Define your Haskell package
+  overlay = final: prev: {
+    # Your haskell package here
+    my-package = prev.developPackage {
+      root = ./my-source;
+      overrides = _: _: final;
+    };
+  }
+  # Make sure to include the clash-protocols overlay!
+  # This is what brings the clash-protocols packages into scope
+  // clash-protocols.overlays.${system}.default final prev;
+
+  # The final Haskell package set, containing your project as well as all Clash dependencies
+  hs-pkgs = clash-pkgs.extend overlay;
+in
+  {
+    # .. your outputs
+  }
+```
+
+And that's it!
 
 # TODO
 

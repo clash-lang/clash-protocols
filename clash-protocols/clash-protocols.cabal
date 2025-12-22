@@ -125,16 +125,6 @@ library
     Protocols.Axi4.WriteAddress
     Protocols.Axi4.WriteData
     Protocols.Axi4.WriteResponse
-    Protocols.PacketStream
-    Protocols.PacketStream.Base
-    Protocols.PacketStream.AsyncFifo
-    Protocols.PacketStream.Converters
-    Protocols.PacketStream.Depacketizers
-    Protocols.PacketStream.Hedgehog
-    Protocols.PacketStream.PacketFifo
-    Protocols.PacketStream.Packetizers
-    Protocols.PacketStream.Padding
-    Protocols.PacketStream.Routing
     Protocols.BiDf
     Protocols.Df
     Protocols.DfConv
@@ -143,6 +133,17 @@ library
     Protocols.Idle
     Protocols.Internal
     Protocols.Internal.TH
+    Protocols.PacketStream
+    Protocols.PacketStream.AsyncFifo
+    Protocols.PacketStream.Base
+    Protocols.PacketStream.Converters
+    Protocols.PacketStream.Depacketizers
+    Protocols.PacketStream.Hedgehog
+    Protocols.PacketStream.PacketFifo
+    Protocols.PacketStream.Packetizers
+    Protocols.PacketStream.Padding
+    Protocols.PacketStream.Routing
+    Protocols.ToConst
     Protocols.Vec
     Protocols.Wishbone
     Protocols.Wishbone.Standard
