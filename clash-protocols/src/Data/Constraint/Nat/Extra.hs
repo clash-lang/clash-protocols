@@ -12,12 +12,6 @@ import Clash.Prelude
 import Data.Constraint
 import Unsafe.Coerce (unsafeCoerce)
 
-{- | Postulates that multiplying some number /a/ by some constant /b/, and
-subsequently dividing that result by /b/ equals /a/.
--}
-cancelMulDiv :: forall a b. (1 <= b) => Dict (DivRU (a * b) b ~ a)
-cancelMulDiv = unsafeCoerce (Dict :: Dict (0 ~ 0))
-
 -- | if (1 <= b) then (Mod a b + 1 <= b)
 leModulusDivisor :: forall a b. (1 <= b) => Dict (Mod a b + 1 <= b)
 leModulusDivisor = unsafeCoerce (Dict :: Dict (0 <= 0))

@@ -1,5 +1,4 @@
 {-# LANGUAGE ApplicativeDo #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -fconstraint-solver-iterations=10 #-}
 
 -- | Circuits and utils for working with Standard mode wishbone circuits.
@@ -13,17 +12,16 @@ import Prelude hiding (head, not, repeat, (!!), (&&), (||))
 
 -- | Distribute requests amongst N slave circuits
 roundrobin ::
-  forall n dom addressWidth a.
+  forall n dom addressBits dataBytes.
   ( KnownNat n
   , HiddenClockResetEnable dom
-  , KnownNat addressWidth
-  , KnownNat (BitSize a)
-  , NFDataX a
+  , KnownNat addressBits
+  , KnownNat dataBytes
   , 1 <= n
   ) =>
   Circuit
-    (Wishbone dom 'Standard addressWidth a)
-    (Vec n (Wishbone dom 'Standard addressWidth a))
+    (Wishbone dom 'Standard addressBits dataBytes)
+    (Vec n (Wishbone dom 'Standard addressBits dataBytes))
 roundrobin = Circuit $ \(m2s, s2ms) -> B.first head $ fn (singleton m2s, s2ms)
  where
   Circuit fn = sharedBus selectFn
@@ -35,26 +33,25 @@ roundrobin = Circuit $ \(m2s, s2ms) -> B.first head $ fn (singleton m2s, s2ms)
   A selector signal is used to compute the next M-S pair.
 -}
 sharedBus ::
-  forall n m dom addressWidth a.
+  forall n m dom addressBits dataBytes.
   ( KnownNat n
   , KnownNat m
   , HiddenClockResetEnable dom
-  , KnownNat addressWidth
-  , KnownNat (BitSize a)
-  , NFDataX a
+  , KnownNat addressBits
+  , KnownNat dataBytes
   ) =>
   -- | Funcion to select which M-S pair should be connected next.
   ( Signal
       dom
       ( Index n
       , Index m
-      , Vec n (WishboneM2S addressWidth (BitSize a `DivRU` 8) a)
+      , Vec n (WishboneM2S addressBits dataBytes)
       ) ->
     Signal dom (Index n, Index m)
   ) ->
   Circuit
-    (Vec n (Wishbone dom 'Standard addressWidth a))
-    (Vec m (Wishbone dom 'Standard addressWidth a))
+    (Vec n (Wishbone dom 'Standard addressBits dataBytes))
+    (Vec m (Wishbone dom 'Standard addressBits dataBytes))
 sharedBus selectFn = Circuit go
  where
   go (bundle -> m2ss0, bundle -> s2ms0) = (unbundle s2ms1, unbundle m2ss1)
@@ -74,19 +71,18 @@ sharedBus selectFn = Circuit go
 
 -- | Crossbar-Switch circuit, allowing to dynamically route N masters to N slaves
 crossbarSwitch ::
-  forall n m dom addressWidth a.
+  forall n m dom addressBits dataBytes.
   ( KnownNat n
   , KnownNat m
   , KnownDomain dom
-  , KnownNat addressWidth
-  , NFDataX a
-  , KnownNat (BitSize a)
+  , KnownNat addressBits
+  , KnownNat dataBytes
   ) =>
   Circuit
     ( CSignal dom (Vec n (Index m)) -- route
-    , Vec n (Wishbone dom 'Standard addressWidth a) -- masters
+    , Vec n (Wishbone dom 'Standard addressBits dataBytes) -- masters
     )
-    (Vec m (Wishbone dom 'Standard addressWidth a)) -- slaves
+    (Vec m (Wishbone dom 'Standard addressBits dataBytes)) -- slaves
 crossbarSwitch = Circuit go
  where
   go ((route, bundle -> m2ss0), bundle -> s2ms0) =
@@ -108,26 +104,24 @@ data MemoryDelayState = Wait | AckRead
   The data rate could be increased by using registered feedback cycles or
   by using a pipelined circuit which would eliminate one wait cycle.
 
-  Since the underlying block RAM operates on values of @a@ directly, the only
+  Since the underlying block RAM operates on the whole bitvector, the only
   accepted bus selector value is 'maxBound'. All other bus selector values
   will cause an ERR response.
 
   TODO create pipelined memory circuit
 -}
 memoryWb ::
-  forall dom a addressWidth.
-  ( BitPack a
-  , NFDataX a
-  , KnownDomain dom
-  , KnownNat addressWidth
+  forall dom addressBits dataBytes.
+  ( KnownDomain dom
+  , KnownNat addressBits
+  , KnownNat dataBytes
   , HiddenClockResetEnable dom
-  , Default a
   ) =>
-  ( Signal dom (BitVector addressWidth) ->
-    Signal dom (Maybe (BitVector addressWidth, a)) ->
-    Signal dom a
+  ( Signal dom (BitVector addressBits) ->
+    Signal dom (Maybe (BitVector addressBits, BitVector (dataBytes * 8))) ->
+    Signal dom (BitVector (dataBytes * 8))
   ) ->
-  Circuit (Wishbone dom 'Standard addressWidth a) ()
+  Circuit (Wishbone dom 'Standard addressBits dataBytes) ()
 memoryWb ram = Circuit go
  where
   go (m2s, ()) = (s2m1, ())
@@ -136,7 +130,7 @@ memoryWb ram = Circuit go
     s2m1 = (\s2m dat -> s2m{readData = dat}) <$> s2m0 <*> readValue
     readValue = ram readAddr write
 
-  fsm st m2s
+  fsm st (m2s :: WishboneM2S addressBits dataBytes)
     -- Manager must be active if we're in this state
     | AckRead <- st = (Wait, (0, Nothing, noS2M{acknowledge = True}))
     -- Stay in Wait for invalid transactions
@@ -147,7 +141,7 @@ memoryWb ram = Circuit go
     | isRead = (AckRead, (m2s.addr, Nothing, noS2M))
     | otherwise = (Wait, (0, Nothing, noS2M))
    where
-    noS2M = emptyWishboneS2M @()
+    noS2M = emptyWishboneS2M :: WishboneS2M dataBytes
     managerActive = m2s.busCycle && m2s.strobe
     isError = managerActive && (m2s.busSelect /= maxBound)
     isWrite = managerActive && m2s.writeEnable

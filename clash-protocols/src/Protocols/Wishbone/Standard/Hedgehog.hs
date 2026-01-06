@@ -64,9 +64,7 @@ import Clash.Signal.Internal (Signal ((:-)))
 import Control.DeepSeq (NFData)
 import Data.Bifunctor qualified as B
 import Data.List.Extra
-import Data.Proxy (Proxy (..))
 import Data.String.Interpolate (i)
-import Data.Type.Equality ((:~:) (Refl))
 import GHC.Stack (HasCallStack)
 import Hedgehog ((===))
 import Hedgehog qualified as H
@@ -78,27 +76,27 @@ import Protocols.Wishbone
 import Prelude as P hiding (cycle)
 
 -- | Datatype representing a single transaction request sent from a Wishbone Master to a Wishbone Slave
-data WishboneMasterRequest addressWidth dat
-  = Read (BitVector addressWidth) (BitVector (BitSize dat `DivRU` 8))
-  | Write (BitVector addressWidth) (BitVector (BitSize dat `DivRU` 8)) dat
+data WishboneMasterRequest addressBits dataBytes
+  = Read (BitVector addressBits) (BitVector dataBytes)
+  | Write (BitVector addressBits) (BitVector dataBytes) (BitVector (dataBytes * 8))
   deriving stock (C.Generic)
   deriving anyclass (NFData, C.BitPack)
 
 deriving instance
-  (KnownNat addressWidth, KnownNat (BitSize a), C.NFDataX a) =>
-  (C.NFDataX (WishboneMasterRequest addressWidth a))
+  (KnownNat addressBits, KnownNat dataBytes) =>
+  (C.NFDataX (WishboneMasterRequest addressBits dataBytes))
 
 deriving instance
-  (KnownNat addressWidth, KnownNat (BitSize a), Show a) =>
-  (Show (WishboneMasterRequest addressWidth a))
+  (KnownNat addressBits, KnownNat dataBytes) =>
+  (Show (WishboneMasterRequest addressBits dataBytes))
 
 deriving instance
-  (KnownNat addressWidth, KnownNat (BitSize a), ShowX a) =>
-  (ShowX (WishboneMasterRequest addressWidth a))
+  (KnownNat addressBits, KnownNat dataBytes) =>
+  (ShowX (WishboneMasterRequest addressBits dataBytes))
 
 deriving instance
-  (KnownNat addressWidth, KnownNat (BitSize a), Eq a) =>
-  (Eq (WishboneMasterRequest addressWidth a))
+  (KnownNat addressBits, KnownNat dataBytes) =>
+  (Eq (WishboneMasterRequest addressBits dataBytes))
 
 {- | Checks equality for relevant parts of a 'WishboneS2M' response based on the
 corresponding 'WishboneMasterRequest'. For a 'Protocols.Wishbone.Standard.Hedgehog.Write' request, the 'readData' field
@@ -110,20 +108,20 @@ let
   readReqA = Read (0 :: BitVector 32) (0b1111 :: BitVector 4)
   readReqB = Read (0 :: BitVector 32) (0b0001 :: BitVector 4)
   writeReq = Write (0 :: BitVector 32) (0b1111 :: BitVector 4) (0x12345678 :: BitVector 32)
-  s2mA = (emptyWishboneS2M @())
-    { readData = 0x00FF :: BitVector 32
+  s2mA = (emptyWishboneS2M @4)
+    { readData = 0x00FF
     , acknowledge = True
     , err = False
     , retry = False
     }
-  s2mB = (emptyWishboneS2M @())
-    { readData = 0xFFFF :: BitVector 32
+  s2mB = (emptyWishboneS2M @4)
+    { readData = 0xFFFF
     , acknowledge = True
     , err = False
     , retry = False
     }
-  s2mC = (emptyWishboneS2M @())
-    { readData = deepErrorX "" :: BitVector 32
+  s2mC = (emptyWishboneS2M @4)
+    { readData = deepErrorX ""
     , acknowledge = True
     , err = False
     , retry = False
@@ -140,28 +138,28 @@ True
 True
 -}
 eqWishboneS2M ::
-  forall (addressWidth :: Natural) (nBytes :: Natural) a.
-  (KnownNat nBytes, BitPack a, BitSize a ~ nBytes * 8) =>
+  forall (addressBits :: Natural) (dataBytes :: Natural).
+  (KnownNat dataBytes) =>
   -- | Request that determines which fields to check
-  WishboneMasterRequest addressWidth a ->
+  WishboneMasterRequest addressBits dataBytes ->
   -- | Wishbone Subordinate response A
-  WishboneS2M a ->
+  WishboneS2M dataBytes ->
   -- | Wishbone Subordinate response B
-  WishboneS2M a ->
+  WishboneS2M dataBytes ->
   Bool
-eqWishboneS2M (Write _ _ _) s2mA s2mB =
-  s2mA{readData = ()} == s2mB{readData = ()}
+eqWishboneS2M Write{} s2mA s2mB =
+  s2mA{readData = 0 :: BitVector 0} == s2mB{readData = 0 :: BitVector 0}
 eqWishboneS2M (Read _ sel) s2mA s2mB =
-  case sameNat (Proxy @(DivRU (BitSize a) 8)) (Proxy @nBytes) of
-    Nothing -> C.errorX "eqWishboneS2M: nBytes is not divisible by 8"
-    Just Refl ->
-      let
-        maskBytes wb = wb{readData = mux (unpack sel) (bitCoerce wb.readData) nullBytes}
-        nullBytes = C.repeat (0 :: BitVector 8)
-       in
-        if s2mA.acknowledge
-          then maskBytes s2mA == maskBytes s2mB
-          else s2mA{readData = ()} == s2mB{readData = ()}
+  let
+    maskBytes wb = wb{readData = pack $ mux (unpack sel) vecBytes (C.repeat 0)}
+     where
+      vecBytes :: Vec dataBytes (BitVector 8)
+      vecBytes = unpack wb.readData
+   in
+    if s2mA.acknowledge
+      then maskBytes s2mA == maskBytes s2mB
+      else
+        s2mA{readData = 0 :: BitVector 0} == s2mB{readData = 0 :: BitVector 0}
 
 -- Validation for (lenient) spec compliance
 --
@@ -174,8 +172,8 @@ data LenientValidationState
 
 nextStateLenient ::
   LenientValidationState ->
-  WishboneM2S addressWidth (BitSize a `DivRU` 8) a ->
-  WishboneS2M a ->
+  WishboneM2S addressBits dataBytes ->
+  WishboneS2M dataBytes ->
   Either String (Bool, LenientValidationState)
 --               ^ go to next cycle
 nextStateLenient _ m2s s2m
@@ -215,11 +213,11 @@ data CommonSenseValidationState
   deriving (Eq, Show, Generic, NFDataX)
 
 nextStateCommonSense ::
-  forall a addressWidth.
-  (BitPack a) =>
+  forall addressBits dataBytes.
+  (KnownNat dataBytes) =>
   CommonSenseValidationState ->
-  WishboneM2S addressWidth (BitSize a `DivRU` 8) a ->
-  WishboneS2M a ->
+  WishboneM2S addressBits dataBytes ->
+  WishboneS2M dataBytes ->
   Either CommonSenseValidationError (Bool, CommonSenseValidationState)
 --                                    ^ go to next cycle
 nextStateCommonSense _ _ s2m
@@ -268,22 +266,22 @@ nextStateCommonSense state m2s@WishboneM2S{..} s2m@WishboneS2M{..} = case state 
   contain defined data.
 -}
 selectValidData ::
-  forall a.
-  (HasCallStack, KnownNat (BitSize a), BitPack a) =>
-  BitVector (BitSize a `DivRU` 8) ->
-  a ->
+  forall dataBytes.
+  (HasCallStack, KnownNat dataBytes) =>
+  BitVector dataBytes ->
+  BitVector (dataBytes * 8) ->
   Bool
 selectValidData byteSelect rawDat =
   all
-    (== False)
+    not
     [ hasUndefined part
     | idx <- indices byteSelect
     , let part = dat ! idx
     ]
  where
-  dat :: C.Vec (BitSize a `DivRU` 8) (BitVector 8)
+  dat :: C.Vec dataBytes (BitVector 8)
   dat = case maybeIsX rawDat of
-    Just val -> bitCoerce $ resize (bitCoerce val :: BitVector (BitSize a))
+    Just val -> bitCoerce val
     Nothing -> C.deepErrorX "value to be 'select-checked' has an undefined spine"
 
   indices :: forall n. (KnownNat n) => BitVector n -> [Index n]
@@ -291,19 +289,16 @@ selectValidData byteSelect rawDat =
 
 -- | Create a stalling wishbone 'Standard' circuit.
 stallStandard ::
-  forall dom a addressWidth.
-  ( C.ShowX a
-  , Show a
-  , C.NFDataX a
-  , C.KnownNat addressWidth
+  forall dom addressBits dataBytes.
+  ( C.KnownNat addressBits
   , C.KnownDomain dom
-  , C.KnownNat (C.BitSize a)
+  , C.KnownNat dataBytes
   ) =>
   -- | Number of cycles to stall the master for on each valid bus-cycle
   [Int] ->
   Circuit
-    (Wishbone dom 'Standard addressWidth a)
-    (Wishbone dom 'Standard addressWidth a)
+    (Wishbone dom 'Standard addressBits dataBytes)
+    (Wishbone dom 'Standard addressBits dataBytes)
 stallStandard stallsPerCycle =
   Circuit $
     B.second (emptyWishboneM2S :-)
@@ -311,11 +306,11 @@ stallStandard stallsPerCycle =
  where
   go ::
     [Int] ->
-    Maybe (WishboneS2M a) ->
-    Signal dom (WishboneM2S addressWidth (BitSize a `DivRU` 8) a) ->
-    Signal dom (WishboneS2M a) ->
-    ( Signal dom (WishboneS2M a)
-    , Signal dom (WishboneM2S addressWidth (BitSize a `DivRU` 8) a)
+    Maybe (WishboneS2M dataBytes) ->
+    Signal dom (WishboneM2S addressBits dataBytes) ->
+    Signal dom (WishboneS2M dataBytes) ->
+    ( Signal dom (WishboneS2M dataBytes)
+    , Signal dom (WishboneM2S addressBits dataBytes)
     )
 
   go [] lastRep (_ :- m2s) ~(_ :- s2m) =
@@ -377,38 +372,35 @@ stallStandard stallsPerCycle =
     -- master cancelled cycle
     | otherwise = B.bimap (emptyWishboneS2M :-) (m :-) (go stalls Nothing m2s s2m)
 
-data DriverState addressWidth a
+data DriverState addressBits dataBytes
   = -- | State in which the driver still needs to perform N resets
-    DSReset Int [(WishboneMasterRequest addressWidth a, Int)]
+    DSReset Int [(WishboneMasterRequest addressBits dataBytes, Int)]
   | -- | State in which the driver is issuing a new request to the slave
     DSNewRequest
-      (WishboneMasterRequest addressWidth a)
+      (WishboneMasterRequest addressBits dataBytes)
       Int
-      [(WishboneMasterRequest addressWidth a, Int)]
+      [(WishboneMasterRequest addressBits dataBytes, Int)]
   | -- | State in which the driver is waiting (and holding the request) for the slave to reply
     DSWaitForReply
-      (WishboneMasterRequest addressWidth a)
+      (WishboneMasterRequest addressBits dataBytes)
       Int
-      [(WishboneMasterRequest addressWidth a, Int)]
+      [(WishboneMasterRequest addressBits dataBytes, Int)]
   | -- | State in which the driver is waiting for N cycles before starting a new request
-    DSStall Int [(WishboneMasterRequest addressWidth a, Int)]
+    DSStall Int [(WishboneMasterRequest addressBits dataBytes, Int)]
   | -- | State in which the driver has no more work to do
     DSDone
 
 -- | Create a wishbone 'Standard' circuit to drive other circuits.
 driveStandard ::
-  forall dom a addressWidth.
-  ( C.ShowX a
-  , Show a
-  , C.NFDataX a
-  , C.KnownNat addressWidth
+  forall dom addressBits dataBytes.
+  ( C.KnownNat addressBits
   , C.KnownDomain dom
-  , C.KnownNat (C.BitSize a)
+  , C.KnownNat dataBytes
   ) =>
   ExpectOptions ->
   -- | Requests to send out
-  [(WishboneMasterRequest addressWidth a, Int)] ->
-  Circuit () (Wishbone dom 'Standard addressWidth a)
+  [(WishboneMasterRequest addressBits dataBytes, Int)] ->
+  Circuit () (Wishbone dom 'Standard addressBits dataBytes)
 driveStandard ExpectOptions{..} requests =
   Circuit $
     ((),)
@@ -423,17 +415,14 @@ driveStandard ExpectOptions{..} requests =
      in m2s : (s2m `C.seqX` go st1 s2ms)
 
   transferToSignals ::
-    forall b addrWidth.
-    ( C.ShowX b
-    , Show b
-    , C.NFDataX b
-    , C.KnownNat addrWidth
-    , C.KnownNat (C.BitSize b)
+    forall addrWidth dw.
+    ( C.KnownNat addrWidth
+    , C.KnownNat dw
     ) =>
-    WishboneMasterRequest addrWidth b ->
-    WishboneM2S addrWidth (BitSize b `DivRU` 8) b
+    WishboneMasterRequest addrWidth dw ->
+    WishboneM2S addrWidth dw
   transferToSignals (Read addr sel) =
-    (emptyWishboneM2S @addrWidth @b)
+    (emptyWishboneM2S @addrWidth @dw)
       { busCycle = True
       , strobe = True
       , addr = addr
@@ -441,7 +430,7 @@ driveStandard ExpectOptions{..} requests =
       , writeEnable = False
       }
   transferToSignals (Write addr sel dat) =
-    (emptyWishboneM2S @addrWidth @b)
+    (emptyWishboneM2S @addrWidth @dw)
       { busCycle = True
       , strobe = True
       , addr = addr
@@ -451,10 +440,10 @@ driveStandard ExpectOptions{..} requests =
       }
 
   step ::
-    DriverState addressWidth a ->
+    DriverState addressBits dataBytes ->
     -- \| respone from *last* cycle
-    WishboneS2M a ->
-    (DriverState addressWidth a, WishboneM2S addressWidth (BitSize a `DivRU` 8) a)
+    WishboneS2M dataBytes ->
+    (DriverState addressBits dataBytes, WishboneM2S addressBits dataBytes)
   step (DSReset _ []) _s2m = (DSDone, emptyWishboneM2S)
   step (DSReset 0 ((req, n) : reqs)) s2m = step (DSNewRequest req n reqs) s2m
   step (DSReset n reqs) _s2m = (DSReset (n - 1) reqs, emptyWishboneM2S)
@@ -476,15 +465,15 @@ driveStandard ExpectOptions{..} requests =
   N.B. Not synthesisable.
 -}
 validatorCircuit ::
-  forall dom addressWidth a.
+  forall dom addressBits dataBytes.
   ( HasCallStack
   , HiddenClockResetEnable dom
-  , KnownNat addressWidth
-  , BitPack a
-  , NFDataX a
-  , ShowX a
+  , KnownNat addressBits
+  , KnownNat dataBytes
   ) =>
-  Circuit (Wishbone dom 'Standard addressWidth a) (Wishbone dom 'Standard addressWidth a)
+  Circuit
+    (Wishbone dom 'Standard addressBits dataBytes)
+    (Wishbone dom 'Standard addressBits dataBytes)
 validatorCircuit =
   Circuit $ mealyB go (0 :: Integer, (emptyWishboneM2S, emptyWishboneS2M), CSVSQuiet)
  where
@@ -513,15 +502,15 @@ validatorCircuit =
   N.B. Not synthesisable.
 -}
 validatorCircuitLenient ::
-  forall dom addressWidth a.
+  forall dom addressBits dataBytes.
   ( HasCallStack
   , HiddenClockResetEnable dom
-  , KnownNat addressWidth
-  , BitPack a
-  , NFDataX a
-  , ShowX a
+  , KnownNat addressBits
+  , KnownNat dataBytes
   ) =>
-  Circuit (Wishbone dom 'Standard addressWidth a) (Wishbone dom 'Standard addressWidth a)
+  Circuit
+    (Wishbone dom 'Standard addressBits dataBytes)
+    (Wishbone dom 'Standard addressBits dataBytes)
 validatorCircuitLenient =
   Circuit $ mealyB go (0 :: Integer, (emptyWishboneM2S, emptyWishboneS2M), LVSQuiet)
  where
@@ -544,26 +533,25 @@ validatorCircuitLenient =
 
 -- | Test a wishbone 'Standard' circuit against a pure model.
 wishbonePropWithModel ::
-  forall dom a addressWidth st m.
-  ( Eq a
-  , C.ShowX a
-  , Show a
-  , C.NFDataX a
-  , C.KnownNat addressWidth
+  forall dom addressBits dataBytes st m.
+  ( C.KnownNat addressBits
   , C.HiddenClockResetEnable dom
-  , C.KnownNat (C.BitSize a)
-  , C.BitPack a
+  , C.KnownNat dataBytes
   , Monad m
   ) =>
   ExpectOptions ->
   -- | Check whether a S2M signal for a given request is matching a pure model using @st@
   --   as its state.
   --   Return an error message 'Left' or the updated state 'Right'
-  (WishboneMasterRequest addressWidth a -> WishboneS2M a -> st -> Either String st) ->
+  ( WishboneMasterRequest addressBits dataBytes ->
+    WishboneS2M dataBytes ->
+    st ->
+    Either String st
+  ) ->
   -- | The circuit to run the test against.
-  Circuit (Wishbone dom 'Standard addressWidth a) () ->
+  Circuit (Wishbone dom 'Standard addressBits dataBytes) () ->
   -- | Inputs to the circuit and model
-  H.Gen [WishboneMasterRequest addressWidth a] ->
+  H.Gen [WishboneMasterRequest addressBits dataBytes] ->
   -- | Initial state of the model
   st ->
   H.PropertyT m ()
@@ -589,8 +577,8 @@ wishbonePropWithModel eOpts model circuit0 inputGen st = do
  where
   matchModel ::
     Int ->
-    [WishboneS2M a] ->
-    [WishboneMasterRequest addressWidth a] ->
+    [WishboneS2M dataBytes] ->
+    [WishboneMasterRequest addressBits dataBytes] ->
     st ->
     Either (Int, String) ()
   matchModel cyc (s : s2m) (req : reqs0) state
@@ -612,11 +600,12 @@ wishbonePropWithModel eOpts model circuit0 inputGen st = do
 sample their forward and backward channel lazily.
 -}
 observeComposedWishboneCircuit ::
+  forall dom mode addressBits dataBytes.
   (KnownDomain dom) =>
-  Circuit () (Wishbone dom mode addressWidth a) ->
-  Circuit (Wishbone dom mode addressWidth a) () ->
-  ( [WishboneM2S addressWidth (BitSize a `DivRU` 8) a]
-  , [WishboneS2M a]
+  Circuit () (Wishbone dom mode addressBits dataBytes) ->
+  Circuit (Wishbone dom mode addressBits dataBytes) () ->
+  ( [WishboneM2S addressBits dataBytes]
+  , [WishboneS2M dataBytes]
   )
 observeComposedWishboneCircuit (Circuit master) (Circuit slave) =
   let ~((), m2s) = master ((), s2m)
@@ -625,14 +614,13 @@ observeComposedWishboneCircuit (Circuit master) (Circuit slave) =
 
 -- | Generate a random Wishbone transfer based on an address range and a payload generator.
 genWishboneTransfer ::
-  (KnownNat addressWidth, KnownNat (BitSize a)) =>
-  Range.Range (Unsigned addressWidth) ->
-  H.Gen a ->
-  H.Gen (WishboneMasterRequest addressWidth a)
-genWishboneTransfer addrRange genA = do
+  (KnownNat addressBits, KnownNat dataBytes) =>
+  Range.Range (Unsigned addressBits) ->
+  H.Gen (WishboneMasterRequest addressBits dataBytes)
+genWishboneTransfer addrRange = do
   addr <- genUnsigned addrRange
   sel <- genDefinedBitVector
-  dat <- genA
+  dat <- genDefinedBitVector
   Gen.choice
     [ pure $ Read (pack addr) sel
     , pure $ Write (pack addr) sel dat
@@ -642,9 +630,9 @@ genWishboneTransfer addrRange genA = do
 Only works for valid requests and performs no checks.
 -}
 m2sToRequest ::
-  (KnownNat addressWidth, KnownNat (BitSize a), BitPack a) =>
-  WishboneM2S addressWidth (BitSize a `DivRU` 8) a ->
-  WishboneMasterRequest addressWidth a
+  (KnownNat addressBits, KnownNat dataBytes) =>
+  WishboneM2S addressBits dataBytes ->
+  WishboneMasterRequest addressBits dataBytes
 m2sToRequest m2s
   | m2s.writeEnable = Write m2s.addr m2s.busSelect m2s.writeData
   | otherwise = Read m2s.addr m2s.busSelect
@@ -656,9 +644,9 @@ for a version that includes all cycles, see 'sampleUnfiltered'.
 sample ::
   (KnownDomain dom) =>
   ExpectOptions ->
-  Circuit () (Wishbone dom mode addressWidth a) ->
-  Circuit (Wishbone dom mode addressWidth a) () ->
-  [(WishboneM2S addressWidth (BitSize a `DivRU` 8) a, WishboneS2M a)]
+  Circuit () (Wishbone dom mode addressBits dataBytes) ->
+  Circuit (Wishbone dom mode addressBits dataBytes) () ->
+  [(WishboneM2S addressBits dataBytes, WishboneS2M dataBytes)]
 sample eOpts manager subordinate =
   P.filter hasBusActivity $
     sampleUnfiltered eOpts manager subordinate
@@ -670,9 +658,9 @@ see 'sample'.
 sampleUnfiltered ::
   (KnownDomain dom) =>
   ExpectOptions ->
-  Circuit () (Wishbone dom mode addressWidth a) ->
-  Circuit (Wishbone dom mode addressWidth a) () ->
-  [(WishboneM2S addressWidth (BitSize a `DivRU` 8) a, WishboneS2M a)]
+  Circuit () (Wishbone dom mode addressBits dataBytes) ->
+  Circuit (Wishbone dom mode addressBits dataBytes) () ->
+  [(WishboneM2S addressBits dataBytes, WishboneS2M dataBytes)]
 sampleUnfiltered eOpts manager subordinate =
   takeWhileAnyInWindow (expectedEmptyCycles eOpts) hasBusActivity $
     P.take eOpts.eoSampleMax $
