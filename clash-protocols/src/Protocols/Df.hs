@@ -677,10 +677,10 @@ faninS ::
   Circuit (C.Vec n (Df dom a)) (Df dom a)
 faninS fS = bundleVec |> mapS (C.fold @(n C.- 1) <$> fS)
 
--- | Merge data of multiple 'Df' streams using Monoid's '<>'.
+-- | Merge data of multiple 'Df' streams using Semigroup's '<>'.
 mfanin ::
   forall n dom a.
-  (C.KnownNat n, Monoid a, 1 <= n) =>
+  (C.KnownNat n, Semigroup a, 1 <= n) =>
   Circuit (C.Vec n (Df dom a)) (Df dom a)
 mfanin = fanin (<>)
 
