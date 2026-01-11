@@ -335,7 +335,7 @@ pure a = Circuit (P.const ((), P.pure (Just a)))
 consume :: (C.HiddenReset dom) => Circuit (Df dom a) ()
 consume = Circuit (P.const (P.pure (Ack True), ()))
 
--- | Never acknowledge values.
+-- | Acknowledge but ignore values when out of reset, otherwise give backpressure.
 void :: (C.HiddenReset dom) => Circuit (Df dom a) ()
 void =
   Circuit

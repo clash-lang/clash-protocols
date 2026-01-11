@@ -857,7 +857,7 @@ pure df a =
   Df.pure a
     |> dfToDfConvOtp df
 
--- | Ignore incoming data
+-- | Acknowledge but ignore values when out of reset, otherwise give backpressure.
 void ::
   ( DfConv df
   , HiddenClockResetEnable (Dom df)
