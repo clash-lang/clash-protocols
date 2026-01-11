@@ -180,7 +180,7 @@ forceResetSanity = forceResetSanityGeneric
 
 -- | Coerce the payload of a Df stream.
 coerce :: (Coerce.Coercible a b) => Circuit (Df dom a) (Df dom b)
-coerce = fromSignals $ \(fwdA, bwdB) -> (Coerce.coerce bwdB, Coerce.coerce fwdA)
+coerce = fromSignals $ \(fwdA, bwdB) -> (bwdB, Coerce.coerce fwdA)
 
 {- | Takes one or more values from the left and "compresses" it into a single
 value that is occasionally sent to the right. Useful for taking small high-speed
