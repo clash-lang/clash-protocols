@@ -112,7 +112,7 @@ prop_avalon_convert_manager_subordinate =
     (C.HiddenClockResetEnable dom) =>
     Circuit
       (AvalonMmManager dom ManagerConfig)
-      (AvalonMmSubordinate dom 0 SubordinateConfig)
+      (AvalonMmSubordinate dom SubordinateConfig)
   ckt = DfConv.convert Proxy Proxy
 
 -- feed ReadReqImpt's to a manager-to-subordinate converter, and see that the
@@ -136,7 +136,7 @@ prop_avalon_convert_manager_subordinate_rev =
     (C.HiddenClockResetEnable dom) =>
     Circuit
       (AvalonMmManager dom ManagerConfig)
-      (AvalonMmSubordinate dom 0 SubordinateConfig)
+      (AvalonMmSubordinate dom SubordinateConfig)
   ckt = DfConv.convert Proxy Proxy
 
 -- feed ReadImpt's to a subordinate-to-manager converter, and see that the fwd
@@ -159,7 +159,7 @@ prop_avalon_convert_subordinate_manager =
   ckt ::
     (C.HiddenClockResetEnable dom) =>
     Circuit
-      (AvalonMmSubordinate dom 0 SubordinateConfig)
+      (AvalonMmSubordinate dom SubordinateConfig)
       (AvalonMmManager dom ManagerConfig)
   ckt = DfConv.convert Proxy Proxy
 
@@ -183,7 +183,7 @@ prop_avalon_convert_subordinate_manager_rev =
   ckt ::
     (C.HiddenClockResetEnable dom) =>
     Circuit
-      (AvalonMmSubordinate dom 0 SubordinateConfig)
+      (AvalonMmSubordinate dom SubordinateConfig)
       (AvalonMmManager dom ManagerConfig)
   ckt = DfConv.convert Proxy Proxy
 

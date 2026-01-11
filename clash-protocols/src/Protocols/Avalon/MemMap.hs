@@ -1172,7 +1172,6 @@ data AvalonMmManager (dom :: Domain) (config :: AvalonMmManagerConfig)
 data
   AvalonMmSubordinate
     (dom :: Domain)
-    (fixedWaitTime :: Nat)
     (config :: AvalonMmSubordinateConfig)
   = AvalonMmSubordinate
 
@@ -1180,17 +1179,17 @@ instance Protocol (AvalonMmManager dom config) where
   type Fwd (AvalonMmManager dom config) = Signal dom (AvalonManagerOut config)
   type Bwd (AvalonMmManager dom config) = Signal dom (AvalonManagerIn config)
 
-instance Protocol (AvalonMmSubordinate dom fixedWaitTime config) where
+instance Protocol (AvalonMmSubordinate dom config) where
   type
-    Fwd (AvalonMmSubordinate dom fixedWaitTime config) =
+    Fwd (AvalonMmSubordinate dom config) =
       Signal dom (AvalonSubordinateIn config)
   type
-    Bwd (AvalonMmSubordinate dom fixedWaitTime config) =
+    Bwd (AvalonMmSubordinate dom config) =
       Signal dom (AvalonSubordinateOut config)
 
 instance
   (KnownSubordinateConfig config, KeepWaitRequest config ~ 'True) =>
-  Backpressure (AvalonMmSubordinate dom 0 config)
+  Backpressure (AvalonMmSubordinate dom config)
   where
   boolsToBwd _ = C.fromList_lazy . fmap boolToMmSubordinateAck
 
@@ -1213,14 +1212,14 @@ instance
 -- would need to store incoming read data in an arbitrarily-large buffer.
 instance
   (KnownSubordinateConfig config, config ~ RemoveNonDfSubordinate config) =>
-  DfConv.DfConv (AvalonMmSubordinate dom 0 config)
+  DfConv.DfConv (AvalonMmSubordinate dom config)
   where
-  type Dom (AvalonMmSubordinate dom 0 config) = dom
+  type Dom (AvalonMmSubordinate dom config) = dom
   type
-    BwdPayload (AvalonMmSubordinate dom 0 config) =
+    BwdPayload (AvalonMmSubordinate dom config) =
       AvalonReadImpt (SShared config)
   type
-    FwdPayload (AvalonMmSubordinate dom 0 config) =
+    FwdPayload (AvalonMmSubordinate dom config) =
       Either
         (AvalonReadReqImpt (KeepAddr config) (SShared config))
         (AvalonWriteImpt (KeepAddr config) (SShared config))
@@ -1432,15 +1431,15 @@ instance
   , KnownDomain dom
   , config ~ RemoveNonDfSubordinate config
   ) =>
-  Simulate (AvalonMmSubordinate dom 0 config)
+  Simulate (AvalonMmSubordinate dom config)
   where
   type
-    SimulateFwdType (AvalonMmSubordinate dom 0 config) =
+    SimulateFwdType (AvalonMmSubordinate dom config) =
       [AvalonSubordinateIn config]
   type
-    SimulateBwdType (AvalonMmSubordinate dom 0 config) =
+    SimulateBwdType (AvalonMmSubordinate dom config) =
       [AvalonSubordinateOut config]
-  type SimulateChannels (AvalonMmSubordinate dom 0 config) = 1
+  type SimulateChannels (AvalonMmSubordinate dom config) = 1
 
   simToSigFwd _ = fromList_lazy
   simToSigBwd _ = fromList_lazy
@@ -1469,7 +1468,7 @@ instance
 
 instance
   (KnownSubordinateConfig config) =>
-  IdleCircuit (AvalonMmSubordinate dom fixedWaitTime config)
+  IdleCircuit (AvalonMmSubordinate dom config)
   where
   idleFwd _ = pure mmSubordinateInNoData
   idleBwd _ = pure $ boolToMmSubordinateAck False
