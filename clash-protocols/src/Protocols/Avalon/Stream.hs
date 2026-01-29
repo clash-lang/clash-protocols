@@ -259,6 +259,6 @@ channel if reset is asserted.
 -}
 forceResetSanity ::
   forall dom conf dataType.
-  (C.HiddenClockResetEnable dom) =>
+  (KnownDomain dom, HiddenReset dom) =>
   Circuit (AvalonStream dom conf dataType) (AvalonStream dom conf dataType)
 forceResetSanity = forceResetSanityGeneric

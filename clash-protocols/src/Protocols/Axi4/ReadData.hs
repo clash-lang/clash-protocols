@@ -161,7 +161,7 @@ channel if reset is asserted.
 -}
 forceResetSanity ::
   forall dom conf userType dataType.
-  (C.HiddenClockResetEnable dom) =>
+  (C.KnownDomain dom, C.HiddenReset dom) =>
   Circuit
     (Axi4ReadData dom conf userType dataType)
     (Axi4ReadData dom conf userType dataType)

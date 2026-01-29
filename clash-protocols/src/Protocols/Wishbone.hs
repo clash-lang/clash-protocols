@@ -313,7 +313,8 @@ channel if reset is asserted.
 -}
 forceResetSanity ::
   forall dom mode aw a.
-  ( C.HiddenClockResetEnable dom
+  ( C.KnownDomain dom
+  , C.HiddenReset dom
   , C.KnownNat aw
   , C.KnownNat (C.BitSize a)
   , C.NFDataX a
