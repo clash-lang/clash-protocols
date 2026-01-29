@@ -108,6 +108,9 @@ instance
   -- TODO: simulate channel is checked at a time.
   expectN Proxy opts = mapM (expectN (Proxy @a) opts)
 
+instance Test () where
+  expectN _ _ _ = pure ()
+
 instance
   ( Test a
   , Test b
