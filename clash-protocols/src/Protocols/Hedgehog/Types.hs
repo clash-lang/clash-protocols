@@ -62,8 +62,6 @@ class
   ( Drivable a
   , TestType (SimulateFwdType a)
   , TestType (ExpectType a)
-  , -- Foldable requirement on Vec :(
-    1 C.<= SimulateChannels a
   ) =>
   Test a
   where
