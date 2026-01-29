@@ -1027,11 +1027,10 @@ sample ::
   Circuit () (Df dom b) ->
   [Maybe b]
 sample SimulationConfig{..} c =
-  P.take timeoutAfter $
-    CE.sample_lazy $
-      ignoreWhileInReset $
-        P.snd $
-          toSignals c ((), Ack <$> rst_n)
+  CE.sampleN_lazy timeoutAfter $
+    ignoreWhileInReset $
+      P.snd $
+        toSignals c ((), Ack <$> rst_n)
  where
   ignoreWhileInReset s =
     uncurry (bool Nothing)
