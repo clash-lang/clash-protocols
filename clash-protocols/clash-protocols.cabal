@@ -104,6 +104,7 @@ library
     , hedgehog >= 1.0.2
     , lifted-async
     , mtl
+    , monad-control
     , pretty-show
     , strict-tuple
     , tagged
