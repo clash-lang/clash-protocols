@@ -313,7 +313,8 @@ channel if reset is asserted.
 -}
 forceResetSanity ::
   forall dom mode aw dw.
-  ( C.HiddenClockResetEnable dom
+  ( C.KnownDomain dom
+  , C.HiddenReset dom
   , C.KnownNat aw
   , C.KnownNat dw
   ) =>

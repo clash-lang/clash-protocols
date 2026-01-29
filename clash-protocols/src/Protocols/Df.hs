@@ -174,7 +174,9 @@ channel if reset is asserted.
 -}
 forceResetSanity ::
   forall dom a.
-  (C.HiddenClockResetEnable dom) =>
+  ( C.KnownDomain dom
+  , C.HiddenReset dom
+  ) =>
   Circuit (Df dom a) (Df dom a)
 forceResetSanity = forceResetSanityGeneric
 

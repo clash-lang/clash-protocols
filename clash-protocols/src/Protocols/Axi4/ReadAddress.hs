@@ -376,6 +376,6 @@ channel if reset is asserted.
 -}
 forceResetSanity ::
   forall dom conf userType.
-  (C.HiddenClockResetEnable dom) =>
+  (C.KnownDomain dom, C.HiddenReset dom) =>
   Circuit (Axi4ReadAddress dom conf userType) (Axi4ReadAddress dom conf userType)
 forceResetSanity = forceResetSanityGeneric
