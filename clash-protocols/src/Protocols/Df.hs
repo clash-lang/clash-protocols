@@ -121,6 +121,8 @@ import Clash.Signal.Internal (Signal (..))
 -- me
 import Protocols.Idle
 import Protocols.Internal
+import Data.String.Interpolate (i)
+import qualified Debug.Trace as Debug
 
 {-# ANN module "HLint: ignore Use const" #-}
 
@@ -168,6 +170,18 @@ instance (C.KnownDomain dom, C.NFDataX a, C.ShowX a, Show a) => Drivable (Df dom
 
   driveC = drive
   sampleC = sample
+
+instance (C.KnownDomain dom, C.ShowX a) => Traceable (Df dom a) where
+  trace name = C.withClockResetEnable C.clockGen C.resetGen C.enableGen
+    $ Circuit Proxy Proxy
+    $ C.unbundle . C.mealy go (0 :: Int) . C.bundle
+   where
+
+    go cnt (fwd, bwd) = (cnt + 1, (bwd, fwd'))
+     where
+      fwd' = case fwd of
+        Just a -> Debug.trace [i| #{name} | #{cnt}: #{C.showX a} #{bwd}|] fwd
+        Nothing -> Nothing
 
 {- | Force a /nack/ on the backward channel and /no data/ on the forward
 channel if reset is asserted.
@@ -247,7 +261,7 @@ compander ::
   -- Return `Just` to send the produced value off to the right.
   (s -> i -> (s, Maybe o, Bool)) ->
   Circuit (Df dom i) (Df dom o)
-compander s0 f = forceResetSanity |> Circuit (C.unbundle . go . C.bundle)
+compander s0 f = forceResetSanity |> Circuit Proxy Proxy (C.unbundle . go . C.bundle)
  where
   go :: Signal dom (Maybe i, Ack) -> Signal dom (Ack, Maybe o)
   go = C.mealy f' s0
@@ -266,7 +280,7 @@ map f = mapS (C.pure f)
 
 -- | Like 'map', but can reason over signals.
 mapS :: Signal dom (a -> b) -> Circuit (Df dom a) (Df dom b)
-mapS fS = Circuit (C.unbundle . liftA2 go fS . C.bundle)
+mapS fS = Circuit Proxy Proxy (C.unbundle . liftA2 go fS . C.bundle)
  where
   go f (fwd, bwd) = (bwd, f <$> fwd)
 
@@ -315,7 +329,7 @@ secondS fS = mapS (B.second <$> fS)
 -- | Acknowledge but ignore data from LHS protocol. Send a static value /b/.
 const :: (C.HiddenReset dom) => b -> Circuit (Df dom a) (Df dom b)
 const b =
-  Circuit
+  Circuit Proxy Proxy
     ( P.const
         ( Ack
             <$> C.unsafeToActiveLow C.hasReset
@@ -325,20 +339,19 @@ const b =
 
 -- | Never produce a value.
 empty :: Circuit () (Df dom a)
-empty = Circuit (P.const ((), P.pure Nothing))
+empty = Circuit Proxy Proxy (P.const ((), P.pure Nothing))
 
 -- | Drive a constant value composed of /a/.
 pure :: a -> Circuit () (Df dom a)
-pure a = Circuit (P.const ((), P.pure (Just a)))
-
+pure a = Circuit Proxy Proxy (P.const ((), P.pure (Just a)))
 -- | Always acknowledge and ignore values.
 consume :: (C.HiddenReset dom) => Circuit (Df dom a) ()
-consume = Circuit (P.const (P.pure (Ack True), ()))
+consume = Circuit Proxy Proxy (P.const (P.pure (Ack True), ()))
 
 -- | Never acknowledge values.
 void :: (C.HiddenReset dom) => Circuit (Df dom a) ()
 void =
-  Circuit
+  Circuit Proxy Proxy
     ( P.const
         ( Ack
             <$> C.unsafeToActiveLow C.hasReset
@@ -354,7 +367,7 @@ Example:
 [1,3]
 -}
 catMaybes :: Circuit (Df dom (Maybe a)) (Df dom a)
-catMaybes = Circuit (C.unbundle . fmap go . C.bundle)
+catMaybes = Circuit Proxy Proxy (C.unbundle . fmap go . C.bundle)
  where
   go (Nothing, _) = (C.deepErrorX "undefined ack", Nothing)
   go (Just Nothing, _) = (Ack True, Nothing)
@@ -376,7 +389,7 @@ filter f = filterS (C.pure f)
 
 -- | Like `filter`, but can reason over signals.
 filterS :: forall dom a. Signal dom (a -> Bool) -> Circuit (Df dom a) (Df dom a)
-filterS fS = Circuit (C.unbundle . liftA2 go fS . C.bundle)
+filterS fS = Circuit Proxy Proxy (C.unbundle . liftA2 go fS . C.bundle)
  where
   go _ (Nothing, _) = (C.deepErrorX "undefined ack", Nothing)
   go f (Just d, ack)
@@ -431,7 +444,7 @@ zipWithS ::
     (Df dom a, Df dom b)
     (Df dom c)
 zipWithS fS =
-  Circuit (B.first C.unbundle . C.unbundle . liftA2 go fS . C.bundle . B.first C.bundle)
+  Circuit Proxy Proxy (B.first C.unbundle . C.unbundle . liftA2 go fS . C.bundle . B.first C.bundle)
  where
   go f ((Just a, Just b), ack) = ((ack, ack), Just (f a b))
   go _ _ = ((Ack False, Ack False), Nothing)
@@ -463,7 +476,7 @@ Example:
 -}
 partitionEithers :: forall dom a b. Circuit (Df dom (Either a b)) (Df dom a, Df dom b)
 partitionEithers =
-  Circuit (B.second C.unbundle . C.unbundle . C.liftA go . C.bundle . B.second C.bundle)
+  Circuit Proxy Proxy (B.second C.unbundle . C.unbundle . C.liftA go . C.bundle . B.second C.bundle)
  where
   go (Nothing, _) = (C.deepErrorX "undefined ack", (Nothing, Nothing))
   go (Just (Left a), (ackA, _)) = (ackA, (Just a, Nothing))
@@ -473,7 +486,7 @@ partitionEithers =
 partitionS ::
   forall dom a. Signal dom (a -> Bool) -> Circuit (Df dom a) (Df dom a, Df dom a)
 partitionS fS =
-  Circuit (B.second C.unbundle . C.unbundle . liftA2 go fS . C.bundle . B.second C.bundle)
+  Circuit Proxy Proxy (B.second C.unbundle . C.unbundle . liftA2 go fS . C.bundle . B.second C.bundle)
  where
   go f (Just a, (ackT, ackF))
     | f a = (ackT, (Just a, Nothing))
@@ -494,7 +507,7 @@ route ::
   (C.KnownNat n) =>
   Circuit (Df dom (C.Index n, a)) (C.Vec n (Df dom a))
 route =
-  Circuit (B.second C.unbundle . C.unbundle . fmap go . C.bundle . B.second C.bundle)
+  Circuit Proxy Proxy (B.second C.unbundle . C.unbundle . fmap go . C.bundle . B.second C.bundle)
  where
   -- go :: (Data (C.Index n, a), C.Vec n (Ack a)) -> (Ack (C.Index n, a), C.Vec n (Data a))
   go (Just (i, a), acks) =
@@ -541,7 +554,7 @@ selectN ::
     (C.Vec n (Df dom a), Df dom (C.Index n, C.Index selectN))
     (Df dom a)
 selectN =
-  Circuit
+  Circuit Proxy Proxy
     ( B.first (B.first C.unbundle . C.unbundle)
         . C.mealyB go (0 :: C.Index (selectN C.+ 1))
         . B.first (C.bundle . B.first C.bundle)
@@ -606,7 +619,7 @@ selectUntilS ::
     (C.Vec n (Df dom a), Df dom (C.Index n))
     (Df dom a)
 selectUntilS fS =
-  Circuit
+  Circuit Proxy Proxy
     ( B.first (B.first C.unbundle . C.unbundle)
         . C.unbundle
         . liftA2 go fS
@@ -638,7 +651,7 @@ fanout ::
 fanout = forceResetSanity |> goC
  where
   goC =
-    Circuit $ \(s2r, r2s) ->
+    Circuit Proxy Proxy $ \(s2r, r2s) ->
       B.second C.unbundle (C.mealyB f initState (s2r, C.bundle r2s))
 
   initState = C.repeat False
@@ -690,7 +703,7 @@ bundleVec ::
   (C.KnownNat n, 1 <= n) =>
   Circuit (C.Vec n (Df dom a)) (Df dom (C.Vec n a))
 bundleVec =
-  Circuit (B.first C.unbundle . C.unbundle . fmap go . C.bundle . B.first C.bundle)
+  Circuit Proxy Proxy (B.first C.unbundle . C.unbundle . fmap go . C.bundle . B.first C.bundle)
  where
   go (iDats0, iAck) = (C.repeat oAck, dat)
    where
@@ -703,7 +716,7 @@ unbundleVec ::
   (C.KnownNat n, C.NFDataX a, C.HiddenClockResetEnable dom, 1 <= n) =>
   Circuit (Df dom (C.Vec n a)) (C.Vec n (Df dom a))
 unbundleVec =
-  Circuit (B.second C.unbundle . C.mealyB go initState . B.second C.bundle)
+  Circuit Proxy Proxy (B.second C.unbundle . C.mealyB go initState . B.second C.bundle)
  where
   initState :: C.Vec n Bool
   initState = C.repeat False
@@ -732,7 +745,7 @@ roundrobin ::
   (C.KnownNat n, C.HiddenClockResetEnable dom, 1 <= n) =>
   Circuit (Df dom a) (C.Vec n (Df dom a))
 roundrobin =
-  Circuit
+  Circuit Proxy Proxy
     ( B.second C.unbundle
         . C.mealyB go (minBound :: C.Index n)
         . B.second C.bundle
@@ -770,7 +783,7 @@ roundrobinCollect ::
   CollectMode ->
   Circuit (C.Vec n (Df dom a)) (Df dom a)
 roundrobinCollect NoSkip =
-  Circuit (B.first C.unbundle . C.mealyB go minBound . B.first C.bundle)
+  Circuit Proxy Proxy (B.first C.unbundle . C.mealyB go minBound . B.first C.bundle)
  where
   go (i :: C.Index n) (dats, Ack ack) =
     case dats C.!! i of
@@ -784,7 +797,7 @@ roundrobinCollect NoSkip =
       Nothing ->
         (i, (C.repeat (Ack False), Nothing))
 roundrobinCollect Skip =
-  Circuit (B.first C.unbundle . C.mealyB go minBound . B.first C.bundle)
+  Circuit Proxy Proxy (B.first C.unbundle . C.mealyB go minBound . B.first C.bundle)
  where
   go (i :: C.Index n) (dats, Ack ack) =
     case dats C.!! i of
@@ -798,7 +811,7 @@ roundrobinCollect Skip =
       Nothing ->
         (C.satSucc C.SatWrap i, (C.repeat (Ack False), Nothing))
 roundrobinCollect Parallel =
-  Circuit (B.first C.unbundle . C.mealyB go Nothing . B.first C.bundle)
+  Circuit Proxy Proxy (B.first C.unbundle . C.mealyB go Nothing . B.first C.bundle)
  where
   go im (fwds, bwd@(Ack ack)) = (nextIm, (bwds, fwd))
    where
@@ -819,7 +832,7 @@ registerFwd ::
   (C.NFDataX a, C.HiddenClockResetEnable dom) =>
   Circuit (Df dom a) (Df dom a)
 registerFwd =
-  forceResetSanity |> Circuit (C.mealyB go Nothing)
+  forceResetSanity |> Circuit Proxy Proxy (C.mealyB go Nothing)
  where
   go s0 (iDat, Ack iAck) = (s1, (Ack oAck, s0))
    where
@@ -832,7 +845,7 @@ registerBwd ::
   (C.NFDataX a, C.HiddenClockResetEnable dom) =>
   Circuit (Df dom a) (Df dom a)
 registerBwd =
-  forceResetSanity |> Circuit go
+  forceResetSanity |> Circuit Proxy Proxy go
  where
   go (iDat, iAck) = (Ack <$> oAck, oDat)
    where
@@ -872,7 +885,7 @@ fifo ::
   (C.HiddenClockResetEnable dom, C.KnownNat depth, C.NFDataX a, 1 C.<= depth) =>
   C.SNat depth ->
   Circuit (Df dom a) (Df dom a)
-fifo fifoDepth = Circuit $ C.hideReset circuitFunction
+fifo fifoDepth = Circuit Proxy Proxy $ C.hideReset circuitFunction
  where
   -- implemented using a fixed-size array
   --   write location and read location are both stored
@@ -936,7 +949,7 @@ fifo fifoDepth = Circuit $ C.hideReset circuitFunction
 
 -- | Convert a 'Df' stream to a 'Maybe' stream. Never stalls LHS.
 toMaybe :: Circuit (Df dom a) (CSignal dom (Maybe a))
-toMaybe = Circuit $ \(maybes, _) -> (C.pure (Ack True), maybes)
+toMaybe = Circuit Proxy Proxy $ \(maybes, _) -> (C.pure (Ack True), maybes)
 
 {- | Convert a 'Maybe' stream to a 'Df' stream. Not every 'Just' is guaranteed to
 be forwarded to the RHS. The number of dropped 'Just's is exported as an
@@ -947,6 +960,7 @@ unsafeFromMaybe ::
   forall n a dom.
   ( C.HiddenClockResetEnable dom
   , C.NFDataX a
+  , C.ShowX a
   , C.KnownNat n
   ) =>
   Circuit
@@ -955,8 +969,8 @@ unsafeFromMaybe ::
     , CSignal dom (C.Unsigned n)
     )
 unsafeFromMaybe = circuit $ \maybes -> do
-  (as0, droppeds) <- Circuit go2 -< maybes
-  as1 <- forceResetSanity -< as0
+  (as0, droppeds) <- Circuit Proxy Proxy go2 -< maybes
+  as1 <- forceResetSanity <| trace "test" -< as0
   idC -< (as1, droppeds)
  where
   go2 ::
@@ -998,7 +1012,7 @@ drive ::
   [Maybe a] ->
   Circuit () (Df dom a)
 drive SimulationConfig{resetCycles} s0 =
-  Circuit $
+  Circuit Proxy Proxy $
     ((),)
       . C.fromList_lazy
       . go s0 resetCycles
@@ -1058,7 +1072,7 @@ stall ::
   [Int] ->
   Circuit (Df dom a) (Df dom a)
 stall SimulationConfig{..} stallAck stalls =
-  Circuit $
+  Circuit Proxy Proxy $
     uncurry (go stallAcks stalls resetCycles)
  where
   stallAcks

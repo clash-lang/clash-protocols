@@ -197,7 +197,7 @@ toDfCircuitHelper ::
     )
     df
 toDfCircuitHelper _ s0 blankOtp stateFn =
-  Circuit
+  Circuit Proxy Proxy
     $ (unbundle *** unbundle)
     . unbundle
     . hideReset cktFn
@@ -272,10 +272,10 @@ instance (DfConv a) => DfConv (Reverse a) where
 instance (NFDataX dat) => DfConv (Df dom dat) where
   type Dom (Df dom dat) = dom
   type FwdPayload (Df dom dat) = dat
-  toDfCircuit _ = Circuit (uncurry f)
+  toDfCircuit _ = Circuit Proxy Proxy (uncurry f)
    where
     f ~(a, _) c = ((c, P.pure Nothing), a)
-  fromDfCircuit _ = Circuit (uncurry f)
+  fromDfCircuit _ = Circuit Proxy Proxy (uncurry f)
    where
     f a ~(b, _) = (b, (a, P.pure (Ack False)))
 
@@ -663,7 +663,7 @@ tupFromDfConv (argsA, argsB) =
 
 -- | Circuit converting a pair of items into a @Vec 2@
 tupToVec :: Circuit (a, a) (Vec 2 a)
-tupToVec = Circuit ((f *** g) . swap)
+tupToVec = Circuit Proxy Proxy ((f *** g) . swap)
  where
   f :: Vec 2 p -> (p, p)
   f (x :> y :> Nil) = (x, y)
@@ -672,7 +672,7 @@ tupToVec = Circuit ((f *** g) . swap)
 
 -- | Circuit converting a @Vec 2@ into a pair of items
 vecToTup :: Circuit (Vec 2 a) (a, a)
-vecToTup = Circuit ((g *** f) . swap)
+vecToTup = Circuit Proxy Proxy ((g *** f) . swap)
  where
   f :: Vec 2 p -> (p, p)
   f (x :> y :> Nil) = (x, y)
@@ -1094,12 +1094,12 @@ route dfA dfB =
     |> vecToDfConv dfB
 
 selectHelperA :: Circuit ((a, b), (c, d)) ((a, c), (b, d))
-selectHelperA = Circuit ((f *** f) . swap)
+selectHelperA = Circuit Proxy Proxy ((f *** f) . swap)
  where
   f ((a, b), (c, d)) = ((a, c), (b, d))
 
 selectHelperB :: Circuit (Vec (n + 1) a) (Vec n a, a)
-selectHelperB = Circuit ((f *** g) . swap)
+selectHelperB = Circuit Proxy Proxy ((f *** g) . swap)
  where
   f :: (Vec n q, q) -> Vec (n + 1) q
   f (t, h) = h :> t
@@ -1560,7 +1560,7 @@ dfConvTestBench dfA dfB bwdAcks bwdPayload circ =
     Circuit (Reverse ()) (Reverse (Df (Dom dfA) (BwdPayload dfA)))
   ackCircuit _ =
     reverseCircuit
-      $ Circuit
+      $ Circuit Proxy Proxy
       $ P.const
         ( boolsToBwd (Proxy @(Df _ _)) bwdAcks
         , ()
@@ -1602,7 +1602,7 @@ dfConvTestBenchRev dfA dfB fwdPayload fwdAcks circ =
   driveCircuit = driveC def fwdPayload
   ackCircuit :: Proxy dfB -> Circuit (Df (Dom dfB) (FwdPayload dfB)) ()
   ackCircuit _ =
-    Circuit
+    Circuit Proxy Proxy
       $ P.const
         ( boolsToBwd (Proxy @(Df _ _)) fwdAcks
         , ()

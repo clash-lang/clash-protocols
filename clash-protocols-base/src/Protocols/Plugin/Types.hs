@@ -12,6 +12,7 @@ module Protocols.Plugin.Types where
 
 import Clash.Signal
 import Data.Kind (Type)
+import Data.Proxy (Proxy)
 
 -- | A protocol describes the in- and outputs of one side of a 'Circuit'.
 class Protocol a where
@@ -129,8 +130,8 @@ types:
 
   2. It eliminates the need for manually routing acknowledgement lines
 -}
-newtype Circuit a b
-  = Circuit ((Fwd a, Bwd b) -> (Bwd a, Fwd b))
+data Circuit a b
+  = Circuit (Proxy a) (Proxy b) ((Fwd a, Bwd b) -> (Bwd a, Fwd b))
 
 {- | Circuit protocol with /Signal dom a/ in its forward direction, and
 /()/ in its backward direction. Convenient for exposing protocol

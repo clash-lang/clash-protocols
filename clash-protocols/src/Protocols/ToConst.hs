@@ -10,22 +10,23 @@ module Protocols.ToConst (
   fromBwd,
 ) where
 
+import Data.Proxy
 import Protocols.Plugin (Circuit (..), ToConst, ToConstBwd)
 
 -- | Convert a value to a 'Circuit' that produces a constant value.
 to :: a -> Circuit () (ToConst a)
-to a = Circuit (\_ -> ((), a))
+to a = Circuit Proxy Proxy (\_ -> ((), a))
 
 -- | Extract the constant value
 from :: Circuit () (ToConst a) -> a
-from (Circuit f) = snd (f ((), ()))
+from (Circuit Proxy Proxy f) = snd (f ((), ()))
 
 {- | Convert a value to a 'Circuit' that produces a constant value in the
 backward direction.
 -}
 toBwd :: a -> Circuit (ToConstBwd a) ()
-toBwd a = Circuit (\_ -> (a, ()))
+toBwd a = Circuit Proxy Proxy (\_ -> (a, ()))
 
 -- | Extract the constant value from the backward direction.
 fromBwd :: Circuit (ToConstBwd a) () -> a
-fromBwd (Circuit f) = fst (f ((), ()))
+fromBwd (Circuit Proxy Proxy f) = fst (f ((), ()))

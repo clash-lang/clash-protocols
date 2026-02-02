@@ -9,6 +9,7 @@ import Clash.Explicit.Prelude
 import Data.Tagged
 import GHC.Base (Any)
 import Protocols.Plugin.Types
+import Data.Data (Proxy(..))
 
 {- | Picked up by "Protocols.Plugin" to process protocol DSL. See
 "Protocols.Plugin" for more information.
@@ -25,7 +26,7 @@ circuit =
   error "(-<) called: did you forget to enable \"Protocols.Plugin\"?"
 
 {- | Convenience type alias. A circuit where all parts are decorated with a
-tag, referring to the @a@ and @b@ in its main signature. This is (indirectly)
+tag, referring to the @a@ and @b@ in its main signature. This is (indirectly)z
 used by the plugin to help GHC's type inference.
 -}
 type TaggedCircuitT a b =
@@ -34,13 +35,13 @@ type TaggedCircuitT a b =
 
 -- | Remove tags from a tagged "Circuit", leaving just a "Circuit".
 unTaggedCircuit :: TaggedCircuitT a b -> Circuit a b
-unTaggedCircuit f = Circuit $ \(aFwd, bBwd) ->
+unTaggedCircuit f = Circuit Proxy Proxy $ \(aFwd, bBwd) ->
   let (Tagged aBwd, Tagged bFwd) = f (Tagged aFwd, Tagged bBwd)
    in (aBwd, bFwd)
 
 -- | Add tags to a "Circuit", making a "TaggedCircuitT".
 taggedCircuit :: Circuit a b -> TaggedCircuitT a b
-taggedCircuit (Circuit c) (aFwd, bBwd) =
+taggedCircuit (Circuit Proxy Proxy c) (aFwd, bBwd) =
   let (aBwd, bFwd) = c (unTagged aFwd, unTagged bBwd)
    in (Tagged aBwd, Tagged bFwd)
 

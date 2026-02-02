@@ -93,7 +93,7 @@ library
     CPP-Options: -DLARGE_TUPLES
 
   build-depends:
-    , clash-protocols-base
+    , clash-protocols-base ^>= 0.1
     , circuit-notation
     , clash-prelude-hedgehog
     , constraints
@@ -108,6 +108,7 @@ library
     , strict-tuple
     , tagged
     , template-haskell
+    , th-lift
 
       -- To be removed; we need 'Test.Tasty.Hedgehog.Extra' to fix upstream issues
     , tasty >= 1.2 && < 1.6

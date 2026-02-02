@@ -64,6 +64,7 @@ import Clash.Signal.Internal (Signal ((:-)))
 import Control.DeepSeq (NFData)
 import Data.Bifunctor qualified as B
 import Data.List.Extra
+import Data.Proxy
 import Data.String.Interpolate (i)
 import GHC.Stack (HasCallStack)
 import Hedgehog ((===))
@@ -300,7 +301,7 @@ stallStandard ::
     (Wishbone dom 'Standard addressBits dataBytes)
     (Wishbone dom 'Standard addressBits dataBytes)
 stallStandard stallsPerCycle =
-  Circuit $
+  Circuit Proxy Proxy $
     B.second (emptyWishboneM2S :-)
       . uncurry (go stallsPerCycle Nothing)
  where
@@ -402,7 +403,7 @@ driveStandard ::
   [(WishboneMasterRequest addressBits dataBytes, Int)] ->
   Circuit () (Wishbone dom 'Standard addressBits dataBytes)
 driveStandard ExpectOptions{..} requests =
-  Circuit $
+  Circuit Proxy Proxy $
     ((),)
       . C.fromList_lazy
       . (emptyWishboneM2S :)
@@ -475,7 +476,7 @@ validatorCircuit ::
     (Wishbone dom 'Standard addressBits dataBytes)
     (Wishbone dom 'Standard addressBits dataBytes)
 validatorCircuit =
-  Circuit $ mealyB go (0 :: Integer, (emptyWishboneM2S, emptyWishboneS2M), CSVSQuiet)
+  Circuit Proxy Proxy $ mealyB go (0 :: Integer, (emptyWishboneM2S, emptyWishboneS2M), CSVSQuiet)
  where
   go (cycle, (m2s0, s2m0), state0) (m2s1, s2m1) =
     case nextStateCommonSense state0 m2s0 s2m0 of
@@ -512,7 +513,7 @@ validatorCircuitLenient ::
     (Wishbone dom 'Standard addressBits dataBytes)
     (Wishbone dom 'Standard addressBits dataBytes)
 validatorCircuitLenient =
-  Circuit $ mealyB go (0 :: Integer, (emptyWishboneM2S, emptyWishboneS2M), LVSQuiet)
+  Circuit Proxy Proxy $ mealyB go (0 :: Integer, (emptyWishboneM2S, emptyWishboneS2M), LVSQuiet)
  where
   go (cycle, (m2s0, s2m0), state0) (m2s1, s2m1) =
     case nextStateLenient state0 m2s0 s2m0 of
@@ -607,7 +608,7 @@ observeComposedWishboneCircuit ::
   ( [WishboneM2S addressBits dataBytes]
   , [WishboneS2M dataBytes]
   )
-observeComposedWishboneCircuit (Circuit master) (Circuit slave) =
+observeComposedWishboneCircuit (Circuit Proxy Proxy master) (Circuit Proxy Proxy slave) =
   let ~((), m2s) = master ((), s2m)
       ~(s2m, ()) = slave (m2s, ())
    in (sample_lazy m2s, sample_lazy s2m)
@@ -647,9 +648,9 @@ sample ::
   Circuit () (Wishbone dom mode addressBits dataBytes) ->
   Circuit (Wishbone dom mode addressBits dataBytes) () ->
   [(WishboneM2S addressBits dataBytes, WishboneS2M dataBytes)]
-sample eOpts manager subordinate =
+sample eOpts (Circuit Proxy Proxy manager) (Circuit Proxy Proxy subordinate) =
   P.filter hasBusActivity $
-    sampleUnfiltered eOpts manager subordinate
+    sampleUnfiltered eOpts (Circuit Proxy Proxy manager) (Circuit Proxy Proxy subordinate)
 
 {- | Simulates a wishbone manager and subordinate and the state of the bus for
 every cycle. For a time independent version that only includes transactions,
@@ -661,8 +662,8 @@ sampleUnfiltered ::
   Circuit () (Wishbone dom mode addressBits dataBytes) ->
   Circuit (Wishbone dom mode addressBits dataBytes) () ->
   [(WishboneM2S addressBits dataBytes, WishboneS2M dataBytes)]
-sampleUnfiltered eOpts manager subordinate =
+sampleUnfiltered eOpts (Circuit Proxy Proxy manager) (Circuit Proxy Proxy subordinate) =
   takeWhileAnyInWindow (expectedEmptyCycles eOpts) hasBusActivity $
     P.take eOpts.eoSampleMax $
       uncurry P.zip $
-        observeComposedWishboneCircuit manager subordinate
+        observeComposedWishboneCircuit (Circuit Proxy Proxy manager) (Circuit Proxy Proxy subordinate)

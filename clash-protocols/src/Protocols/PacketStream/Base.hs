@@ -317,7 +317,7 @@ unsafeFromCSignal ::
   Circuit
     (CSignal dom (Maybe (PacketStreamM2S dataWidth meta)))
     (PacketStream dom dataWidth meta)
-unsafeFromCSignal = Circuit (\(fwdInS, _) -> ((), fwdInS))
+unsafeFromCSignal = Circuit Proxy Proxy (\(fwdInS, _) -> ((), fwdInS))
 
 -- | Converts a 'PacketStream' into a 'CSignal': always acknowledges.
 toCSignal ::
@@ -326,7 +326,7 @@ toCSignal ::
   Circuit
     (PacketStream dom dataWidth meta)
     (CSignal dom (Maybe (PacketStreamM2S dataWidth meta)))
-toCSignal = forceResetSanity |> Circuit (\(fwdIn, _) -> (pure (PacketStreamS2M True), fwdIn))
+toCSignal = forceResetSanity |> Circuit Proxy Proxy (\(fwdIn, _) -> (pure (PacketStreamS2M True), fwdIn))
 
 -- | Drop all backpressure signals.
 unsafeDropBackpressure ::
@@ -359,7 +359,7 @@ unsafeAbortOnBackpressureC ::
     (CSignal dom (Maybe (PacketStreamM2S dataWidth meta)))
     (PacketStream dom dataWidth meta)
 unsafeAbortOnBackpressureC =
-  Circuit $ \(fwdInS, bwdInS) -> ((), go <$> bundle (fwdInS, bwdInS))
+  Circuit Proxy Proxy $ \(fwdInS, bwdInS) -> ((), go <$> bundle (fwdInS, bwdInS))
  where
   go (fwdIn, bwdIn) =
     fmap (\pkt -> pkt{_abort = _abort pkt || not (_ready bwdIn)}) fwdIn
@@ -429,7 +429,7 @@ zeroOutInvalidBytesC ::
   Circuit
     (PacketStream dom dataWidth meta)
     (PacketStream dom dataWidth meta)
-zeroOutInvalidBytesC = Circuit $ \(fwdIn, bwdIn) -> (bwdIn, fmap (go <$>) fwdIn)
+zeroOutInvalidBytesC = Circuit Proxy Proxy $ \(fwdIn, bwdIn) -> (bwdIn, fmap (go <$>) fwdIn)
  where
   go transferIn = transferIn{_data = dataOut}
    where
@@ -455,7 +455,7 @@ truncateAbortedPackets ::
   Circuit
     (PacketStream dom dataWidth meta)
     (PacketStream dom dataWidth meta)
-truncateAbortedPackets = forceResetSanity |> Circuit (unbundle . mealy go Forwarding . bundle)
+truncateAbortedPackets = forceResetSanity |> Circuit Proxy Proxy (unbundle . mealy go Forwarding . bundle)
  where
   go state (Nothing, _) = (state, (deepErrorX "truncateAbortedPackets: undefined ack", Nothing))
   go Truncating (Just m2s, _) = (nextState, (PacketStreamS2M True, Nothing))
@@ -537,11 +537,11 @@ registerBoth = registerBwd |> registerFwd
 
 -- | Never produces a value.
 empty :: Circuit () (PacketStream dom dataWidth meta)
-empty = Circuit (const ((), pure Nothing))
+empty = Circuit Proxy Proxy (const ((), pure Nothing))
 
 -- | Always acknowledges incoming data.
 consume :: (HiddenReset dom) => Circuit (PacketStream dom dataWidth meta) ()
-consume = Circuit (const (pure (PacketStreamS2M True), ()))
+consume = Circuit Proxy Proxy (const (pure (PacketStreamS2M True), ()))
 
 -- | Never acknowledges incoming data.
 void :: (HiddenClockResetEnable dom) => Circuit (PacketStream dom dataWidth meta) ()
@@ -570,7 +570,7 @@ mapMetaS ::
   -- | Function to apply on the metadata, wrapped in a @Signal@
   Signal dom (metaIn -> metaOut) ->
   Circuit (PacketStream dom dataWidth metaIn) (PacketStream dom dataWidth metaOut)
-mapMetaS fS = Circuit $ \(fwdIn, bwdIn) -> (bwdIn, go <$> bundle (fwdIn, fS))
+mapMetaS fS = Circuit Proxy Proxy $ \(fwdIn, bwdIn) -> (bwdIn, go <$> bundle (fwdIn, fS))
  where
   go (inp, f) = (\inPkt -> inPkt{_meta = f (_meta inPkt)}) <$> inp
 
@@ -590,7 +590,7 @@ filterMetaS ::
   --   wrapped in a @Signal@
   Signal dom (meta -> Bool) ->
   Circuit (PacketStream dom dataWidth meta) (PacketStream dom dataWidth meta)
-filterMetaS pS = Circuit $ \(fwdIn, bwdIn) -> unbundle (go <$> bundle (fwdIn, bwdIn, pS))
+filterMetaS pS = Circuit Proxy Proxy $ \(fwdIn, bwdIn) -> unbundle (go <$> bundle (fwdIn, bwdIn, pS))
  where
   go (Nothing, bwdIn, _) = (bwdIn, Nothing)
   go (Just inPkt, bwdIn, predicate)

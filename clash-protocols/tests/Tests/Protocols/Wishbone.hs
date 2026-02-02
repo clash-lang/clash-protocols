@@ -10,6 +10,7 @@ import Control.Exception (SomeException, evaluate, try)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Either (isLeft)
 import Data.List qualified as L
+import Data.Proxy (Proxy(..))
 import Hedgehog
 import Hedgehog.Gen qualified as Gen
 import Hedgehog.Range qualified as Range
@@ -50,7 +51,7 @@ addrReadIdWb ::
   forall dom addressBits dataBytes.
   (KnownNat addressBits, KnownNat dataBytes) =>
   Circuit (Wishbone dom 'Standard addressBits dataBytes) ()
-addrReadIdWb = Circuit go
+addrReadIdWb = Circuit Proxy Proxy go
  where
   go (m2s, ()) = (reply <$> m2s, ())
 
@@ -145,7 +146,7 @@ prop_memoryWb_model =
 --
 
 (|>>) :: Circuit () b -> Circuit b () -> (Fwd b, Bwd b)
-Circuit aFn |>> Circuit bFn = (s2rAb, r2sBc)
+Circuit Proxy Proxy aFn |>> Circuit Proxy Proxy bFn = (s2rAb, r2sBc)
  where
   ~((), s2rAb) = aFn ((), r2sBc)
   ~(r2sBc, ()) = bFn (s2rAb, ())
@@ -269,7 +270,7 @@ prop_specViolation_lenient = property $ do
  where
   -- a circuit that terminates a cycle with more than one termination signal
   invalidCircuit :: Circuit (Wishbone dom 'Standard 8 1) ()
-  invalidCircuit = Circuit go
+  invalidCircuit = Circuit Proxy Proxy go
    where
     go (m2s, ()) = (reply <$> m2s, ())
 

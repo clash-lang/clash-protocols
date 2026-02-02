@@ -11,6 +11,7 @@ import Data.Bifunctor (Bifunctor (first))
 import Data.Coerce (coerce)
 import Data.Foldable (fold)
 import Data.Maybe (catMaybes, fromMaybe)
+import Data.Proxy (Proxy(..))
 import Data.Tuple (swap)
 import GHC.Stack (HasCallStack)
 import Prelude
@@ -560,7 +561,7 @@ prop_toMaybeFromMaybe =
     Df.forceResetSanity
       |> Df.toMaybe
       |> Df.unsafeFromMaybe
-      |> Circuit (first (,()) . swap . first (fmap go) . first C.bundle)
+      |> Circuit Proxy Proxy (first (,()) . swap . first (fmap go) . first C.bundle)
    where
     go :: (Maybe Int, C.Unsigned 64) -> Maybe (Int, C.Unsigned 64)
     go (a, b) = liftA2 (,) a (Just b)

@@ -70,8 +70,8 @@ simulateTupleInstance n =
   bwdPat0 = tupP $ map (\i -> varP $ mkName $ "bwd" <> show i) [1 .. n]
   fwdExpr = map (\i -> varE $ mkName $ "fwd" <> show i) [1 .. n]
   bwdExpr = map (\i -> varE $ mkName $ "bwd" <> show i) [1 .. n]
-  fwdExpr1 = map (\i -> varE $ mkName $ "fwdStalled" <> show i) [1 .. n]
-  bwdExpr1 = map (\i -> varE $ mkName $ "bwdStalled" <> show i) [1 .. n]
+  fwdExpr1 = map (\i -> varE $ mkName $ "fwdStalled" <> show i) [1 .. n] :: [Q Exp]
+  bwdExpr1 = map (\i -> varE $ mkName $ "bwdStalled" <> show i) [1 .. n] :: [Q Exp]
 
   -- stallC Declaration: Split off the stall vectors from the large input vector
   mkStallVec i ty =
@@ -88,18 +88,18 @@ simulateTupleInstance n =
   -- stallC Declaration: Generate stalling circuits
   mkStallCircuit i ty =
     [d|
-      $[p|Circuit $(varP $ mkName $ "stalled" <> show i)|] =
+      $[p|Circuit Proxy Proxy $(varP $ mkName $ "stalled" <> show i)|] =
         stallC @($ty) conf $(varE $ mkName $ "stalls" <> show i)
       |]
 
-  -- Generate the stallC expression
+  stallCExpr :: Q Exp
   stallCExpr = do
     stallVecs <-
       concat <$> zipWithM mkStallVec [1 .. n] circTys
     stallCircuits <-
       concat <$> zipWithM mkStallCircuit [1 .. n] circTys
     LetE (stallVecs <> stallCircuits)
-      <$> [e|Circuit $ \($fwdPat0, $bwdPat0) -> $circuitResExpr|]
+      <$> [e|Circuit Proxy Proxy $ \($fwdPat0, $bwdPat0) -> $circuitResExpr|]
 
   circuitResExpr = do
     stallCResultDecs <- concatMapM mkStallCResultDec [1 .. n]
@@ -133,13 +133,13 @@ drivableTupleInstance n =
       fromSimulateType Proxy $(tupP circPats) = $fromSimulateExpr
 
       driveC $(varP $ mkName "conf") $(tupP fwdPats) = $(letE driveCDecs driveCExpr)
-      sampleC conf (Circuit f) =
+      sampleC conf (Circuit Proxy Proxy f) =
         let
           $(varP $ mkName "bools") = replicate (resetCycles conf) False <> repeat True
           $(tupP fwdPats) = snd $ f ((), $(tupE $ map mkSampleCExpr circTys))
          in
           $( tupE $
-              zipWith (\ty fwd -> [|sampleC @($ty) conf (Circuit $ const ((), $fwd))|]) circTys fwdExprs
+              zipWith (\ty fwd -> [|sampleC @($ty) conf (Circuit Proxy Proxy $ const ((), $fwd))|]) circTys fwdExprs
            )
     |]
  where
@@ -158,13 +158,13 @@ drivableTupleInstance n =
   driveCDecs =
     pure $
       valD
-        (tupP $ map (\p -> [p|(Circuit $p)|]) circPats)
+        (tupP $ map (\p -> [p|(Circuit Proxy Proxy $p)|]) circPats)
         (normalB $ tupE $ zipWith (\ty fwd -> [e|driveC @($ty) conf $fwd|]) circTys fwdExprs)
         []
 
   driveCExpr =
     [e|
-      Circuit $ \(_, $(tildeP $ tupP bwdPats)) -> ((), $(tupE $ zipWith mkDriveCExpr circExprs bwdExprs))
+      Circuit Proxy Proxy $ \(_, $(tildeP $ tupP bwdPats)) -> ((), $(tupE $ zipWith mkDriveCExpr circExprs bwdExprs))
       |]
   mkDriveCExpr c bwd = [e|snd ($c ((), $bwd))|]
   toSimulateExpr = tupE $ zipWith (\ty c -> [|toSimulateType (Proxy @($ty)) $c|]) circTys circExprs

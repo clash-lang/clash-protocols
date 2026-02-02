@@ -22,6 +22,7 @@ import Protocols.PacketStream.Base
 
 import Data.Bifunctor qualified as B
 import Data.Maybe
+import Data.Proxy
 
 -- | Merges multiple packet streams into one, respecting packet boundaries.
 packetArbiterC ::
@@ -35,7 +36,7 @@ packetArbiterC ::
     (Vec sources (PacketStream dom dataWidth meta))
     (PacketStream dom dataWidth meta)
 packetArbiterC mode =
-  Circuit (B.first unbundle . mealyB go (maxBound, True) . B.first bundle)
+  Circuit Proxy Proxy (B.first unbundle . mealyB go (maxBound, True) . B.first bundle)
  where
   go (i, first) (fwds, bwd@(PacketStreamS2M ack)) = ((i', continue), (bwds, fwd))
    where
@@ -79,7 +80,7 @@ packetDispatcherC ::
     (PacketStream dom dataWidth meta)
     (Vec sinks (PacketStream dom dataWidth meta))
 packetDispatcherC predicates =
-  Circuit (B.second unbundle . unbundle . fmap go . bundle . B.second bundle)
+  Circuit Proxy Proxy (B.second unbundle . unbundle . fmap go . bundle . B.second bundle)
  where
   idleOtp = repeat Nothing
   go (Nothing, _) = (deepErrorX "undefined ack", idleOtp)

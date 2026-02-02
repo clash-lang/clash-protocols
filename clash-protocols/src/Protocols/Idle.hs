@@ -6,6 +6,7 @@ Functionalities to easily create idle circuits for protocols.
 module Protocols.Idle (
   -- * Type classes
   IdleCircuit (..),
+  Traceable (..),
 
   -- * Utility functions
   idleSource,
@@ -38,12 +39,11 @@ idleCircuitTupleInstances 3 maxTupleSize
 
 -- | Idle state of a source, this circuit does not produce any data.
 idleSource :: forall p. (IdleCircuit p) => Circuit () p
-idleSource = Circuit $ const ((), idleFwd $ Proxy @p)
+idleSource = Circuit Proxy Proxy $ const ((), idleFwd $ Proxy @p)
 
 -- | Idle state of a sink, this circuit does not consume any data.
 idleSink :: forall p. (IdleCircuit p) => Circuit p ()
-idleSink = Circuit $ const (idleBwd $ Proxy @p, ())
-
+idleSink = Circuit Proxy Proxy $ const (idleBwd $ Proxy @p, ())
 {- | Force a /nack/ on the backward channel and /no data/ on the forward
 channel if reset is asserted.
 -}
@@ -56,7 +56,7 @@ forceResetSanityGeneric ::
   , Bwd a ~ Signal dom bwd
   ) =>
   Circuit a a
-forceResetSanityGeneric = Circuit go
+forceResetSanityGeneric = Circuit Proxy Proxy go
  where
   go (fwd, bwd) =
     unbundle
@@ -70,3 +70,9 @@ forceResetSanityGeneric = Circuit go
 #else
   rstAsserted = unsafeToHighPolarity hasReset
 #endif
+
+
+class (Protocol p) => Traceable p where
+  -- | Convert a value of protocol p to a human-readable string.
+  trace :: String -> Circuit p p
+

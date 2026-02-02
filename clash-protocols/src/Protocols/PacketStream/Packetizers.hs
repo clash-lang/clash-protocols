@@ -26,6 +26,7 @@ import Data.Constraint (Dict (Dict))
 import Data.Constraint.Nat.Extra (leModulusDivisor, strictlyPositiveDivRu)
 import Data.Maybe
 import Data.Maybe.Extra
+import Data.Proxy
 import Data.Type.Equality ((:~:) (Refl))
 
 type PacketizerCt (header :: Type) (headerBytes :: Nat) (dataWidth :: Nat) =
@@ -422,7 +423,7 @@ packetizeFromDfC toMetaOut toHeader = case strictlyPositiveDivRu @headerBytes @d
   Dict -> case compareSNat (SNat @headerBytes) (SNat @dataWidth) of
     -- We don't need a state machine in this case, as we are able to packetize
     -- the entire payload in one clock cycle.
-    SNatLE -> Circuit (unbundle . fmap go . bundle)
+    SNatLE -> Circuit Proxy Proxy (unbundle . fmap go . bundle)
      where
       go (Nothing, _) = (deepErrorX "undefined ack", Nothing)
       go (Just dataIn, bwdIn) = (Ack (_ready bwdIn), Just outPkt)

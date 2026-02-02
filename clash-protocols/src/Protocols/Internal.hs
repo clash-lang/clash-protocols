@@ -41,11 +41,10 @@ import Protocols.Plugin.TaggedBundle
 import Protocols.Plugin.Units
 
 import Control.Arrow ((***))
-import Data.Coerce (coerce)
 import Data.Default (Default (def))
 import Data.Functor.Identity (Identity (..), runIdentity)
 import Data.Kind (Type)
-import Data.Tuple (swap)
+import Data.Tuple (swap)t
 import GHC.Generics (Generic)
 
 {- $setup
@@ -85,7 +84,7 @@ instance Default Ack where
 infixr 1 |>
 
 (|>) :: Circuit a b -> Circuit b c -> Circuit a c
-(Circuit fab) |> (Circuit fbc) = Circuit $ \(s2rAc, r2sAc) ->
+(Circuit Proxy Proxy fab) |> (Circuit Proxy Proxy fbc) = Circuit Proxy Proxy $ \(s2rAc, r2sAc) ->
   let
     ~(r2sAb, s2rAb) = fab (s2rAc, r2sBc)
     ~(r2sBc, s2rBc) = fbc (s2rAb, r2sAc)
@@ -133,11 +132,11 @@ infixr 1 <|
 
 -- | View Circuit as its internal representation.
 toSignals :: Circuit a b -> ((Fwd a, Bwd b) -> (Bwd a, Fwd b))
-toSignals = coerce
+toSignals (Circuit Proxy Proxy f) = f
 
 -- | View signals as a Circuit
 fromSignals :: ((Fwd a, Bwd b) -> (Bwd a, Fwd b)) -> Circuit a b
-fromSignals = coerce
+fromSignals f = Circuit Proxy Proxy f
 
 {- | Circuit equivalent of 'id'. Useful for explicitly assigning a type to
 another protocol, or to return a result when using the circuit-notation
@@ -156,7 +155,7 @@ swap = circuit $ \(a, b) -> do
 @
 -}
 idC :: forall a. Circuit a a
-idC = Circuit swap
+idC = Circuit Proxy Proxy swap
 
 {- | Copy a circuit /n/ times. Note that this will copy hardware. If you are
 looking for a circuit that turns a single channel into multiple, check out
@@ -166,8 +165,8 @@ repeatC ::
   forall n a b.
   Circuit a b ->
   Circuit (C.Vec n a) (C.Vec n b)
-repeatC (Circuit f) =
-  Circuit (C.unzip . C.map f . uncurry C.zip)
+repeatC (Circuit Proxy Proxy f) =
+  Circuit Proxy Proxy (C.unzip . C.map f . uncurry C.zip)
 
 {- | Applies the mappings @Fwd a -> Fwd b@ and @Bwd b -> Bwd a@ to the circuit's signals.
 
@@ -184,7 +183,7 @@ applyC ::
   (Fwd a -> Fwd b) ->
   (Bwd b -> Bwd a) ->
   Circuit a b
-applyC fwdFn bwdFn = Circuit go
+applyC fwdFn bwdFn = Circuit Proxy Proxy go
  where
   go :: (Fwd a, Bwd b) -> (Bwd a, Fwd b)
   go (fwdA, bwdB) = (bwdFn bwdB, fwdFn fwdA)
@@ -270,10 +269,10 @@ instance (Simulate a, Simulate b) => Simulate (a, b) where
   stallC conf stalls =
     let
       (stallsL, stallsR) = C.splitAtI @(SimulateChannels a) @(SimulateChannels b) stalls
-      Circuit stalledL = stallC @a conf stallsL
-      Circuit stalledR = stallC @b conf stallsR
+      Circuit Proxy Proxy  stalledL = stallC @a conf stallsL
+      Circuit Proxy Proxy  stalledR = stallC @b conf stallsR
      in
-      Circuit $ \((fwdL0, fwdR0), (bwdL0, bwdR0)) ->
+      Circuit Proxy Proxy $ \((fwdL0, fwdR0), (bwdL0, bwdR0)) ->
         let
           (fwdL1, bwdL1) = stalledL (fwdL0, bwdL0)
           (fwdR1, bwdR1) = stalledR (fwdR0, bwdR0)
@@ -296,16 +295,16 @@ instance (Drivable a, Drivable b) => Drivable (a, b) where
     )
 
   driveC conf (fwd1, fwd2) =
-    let (Circuit f1, Circuit f2) = (driveC @a conf fwd1, driveC @b conf fwd2)
-     in Circuit (\(_, ~(bwd1, bwd2)) -> ((), (snd (f1 ((), bwd1)), snd (f2 ((), bwd2)))))
+    let (Circuit Proxy Proxy f1, Circuit Proxy Proxy f2) = (driveC @a conf fwd1, driveC @b conf fwd2)
+     in Circuit Proxy Proxy (\(_, ~(bwd1, bwd2)) -> ((), (snd (f1 ((), bwd1)), snd (f2 ((), bwd2)))))
 
-  sampleC conf (Circuit f) =
+  sampleC conf (Circuit Proxy Proxy f) =
     let
       bools = replicate (resetCycles conf) False <> repeat True
       (_, (fwd1, fwd2)) = f ((), (boolsToBwd (Proxy @a) bools, boolsToBwd (Proxy @b) bools))
      in
-      ( sampleC @a conf (Circuit $ \_ -> ((), fwd1))
-      , sampleC @b conf (Circuit $ \_ -> ((), fwd2))
+      ( sampleC @a conf (Circuit Proxy Proxy $ \_ -> ((), fwd1))
+      , sampleC @b conf (Circuit Proxy Proxy $ \_ -> ((), fwd2))
       )
 
 drivableTupleInstances 3 maxTupleSize
@@ -325,7 +324,7 @@ instance (CE.KnownNat n, Simulate a) => Simulate (C.Vec n a) where
       stalls1 = C.unconcatI @n @(SimulateChannels a) stalls0
       stalled = C.map (toSignals . stallC @a conf) stalls1
      in
-      Circuit $ \(fwds, bwds) -> C.unzip (C.zipWith ($) stalled (C.zip fwds bwds))
+      Circuit Proxy Proxy $ \(fwds, bwds) -> C.unzip (C.zipWith ($) stalled (C.zip fwds bwds))
 
 instance (C.KnownNat n, Drivable a) => Drivable (C.Vec n a) where
   type ExpectType (C.Vec n a) = C.Vec n (ExpectType a)
@@ -335,14 +334,14 @@ instance (C.KnownNat n, Drivable a) => Drivable (C.Vec n a) where
 
   driveC conf fwds =
     let circuits = C.map (($ ()) . curry . (toSignals @_ @a) . driveC conf) fwds
-     in Circuit (\(_, bwds) -> ((), C.map snd (C.zipWith ($) circuits bwds)))
+     in Circuit Proxy Proxy $ \(_, bwds) -> ((), C.map snd (C.zipWith ($) circuits bwds))
 
-  sampleC conf (Circuit f) =
+  sampleC conf (Circuit Proxy Proxy f) =
     let
       bools = replicate (resetCycles conf) False <> repeat True
       (_, fwds) = f ((), (C.repeat (boolsToBwd (Proxy @a) bools)))
      in
-      C.map (\fwd -> sampleC @a conf (Circuit $ \_ -> ((), fwd))) fwds
+      C.map (\fwd -> sampleC @a conf (Circuit Proxy Proxy $ \_ -> ((), fwd))) fwds
 
 instance (C.KnownDomain dom) => Simulate (CSignal dom a) where
   type SimulateFwdType (CSignal dom a) = [a]
@@ -365,9 +364,9 @@ instance (C.NFDataX a, C.ShowX a, Show a, C.KnownDomain dom) => Drivable (CSigna
   driveC _conf [] = error "CSignal.driveC: Can't drive with empty list"
   driveC SimulationConfig{resetCycles} fwd0@(f : _) =
     let fwd1 = C.fromList_lazy (replicate resetCycles f <> fwd0 <> repeat f)
-     in Circuit (\_ -> ((), fwd1))
+     in Circuit Proxy Proxy $ \_ -> ((), fwd1)
 
-  sampleC SimulationConfig{resetCycles, ignoreReset} (Circuit f) =
+  sampleC SimulationConfig{resetCycles, ignoreReset} (Circuit Proxy Proxy f) =
     let sampled = CE.sample_lazy (snd (f ((), ())))
      in if ignoreReset then drop resetCycles sampled else sampled
 
@@ -558,7 +557,7 @@ Input and output of the underlying circuit are the same,
 but with the order of the tuple switched in both cases.
 -}
 reverseCircuit :: Circuit a b -> Circuit (Reverse b) (Reverse a)
-reverseCircuit ckt = Circuit (swap . toSignals ckt . swap)
+reverseCircuit ckt = Circuit Proxy Proxy (swap . toSignals ckt . swap)
 
 {- | If two protocols, @a@ and @a'@, have the same 'Fwd' and 'Bwd' values,
 convert a @Circuit a@ to a @Circuit a'@ without changing the underlying function at all.
@@ -567,7 +566,7 @@ coerceCircuit ::
   (Fwd a ~ Fwd a', Bwd a ~ Bwd a', Fwd b ~ Fwd b', Bwd b ~ Bwd b') =>
   Circuit a b ->
   Circuit a' b'
-coerceCircuit (Circuit f) = Circuit f
+coerceCircuit (Circuit Proxy Proxy f) = Circuit Proxy Proxy f
 
 {- | Change a circuit by changing its underlying function's inputs and outputs.
 It takes 4 functions as input: @ia@, @oa@, @ob@, and @ib@.
@@ -581,13 +580,13 @@ mapCircuit ::
   (Bwd b' -> Bwd b) ->
   Circuit a b ->
   Circuit a' b'
-mapCircuit ia oa ob ib (Circuit f) = Circuit ((oa *** ob) . f . (ia *** ib))
+mapCircuit ia oa ob ib (Circuit Proxy Proxy f) = Circuit Proxy Proxy ((oa *** ob) . f . (ia *** ib))
 
 {- | "Bundle" together a pair of 'Circuit's into a 'Circuit' with two inputs and outputs.
 The 'Circuit's run in parallel.
 -}
 tupCircuits :: Circuit a b -> Circuit c d -> Circuit (a, c) (b, d)
-tupCircuits (Circuit f) (Circuit g) = Circuit (reorder . (f *** g) . reorder)
+tupCircuits (Circuit Proxy Proxy f) (Circuit Proxy Proxy g) = Circuit Proxy Proxy (reorder . (f *** g) . reorder)
  where
   reorder ~(~(a, b), ~(c, d)) = ((a, c), (b, d))
 
@@ -595,4 +594,4 @@ tupCircuits (Circuit f) (Circuit g) = Circuit (reorder . (f *** g) . reorder)
 circuitMonitor ::
   (Protocol p, Fwd p ~ C.Signal dom fwd, Bwd p ~ C.Signal dom bwd) =>
   Circuit p (p, CSignal dom (fwd, bwd))
-circuitMonitor = Circuit (\ ~(fwd, (bwd, _)) -> (bwd, (fwd, C.bundle (fwd, bwd))))
+circuitMonitor = Circuit Proxy Proxy (\ ~(fwd, (bwd, _)) -> (bwd, (fwd, C.bundle (fwd, bwd))))

@@ -6,6 +6,7 @@ module Protocols.Wishbone.Standard where
 
 import Clash.Prelude
 import Data.Bifunctor qualified as B
+import Data.Proxy (Proxy (..))
 import Protocols
 import Protocols.Wishbone
 import Prelude hiding (head, not, repeat, (!!), (&&), (||))
@@ -22,9 +23,9 @@ roundrobin ::
   Circuit
     (Wishbone dom 'Standard addressBits dataBytes)
     (Vec n (Wishbone dom 'Standard addressBits dataBytes))
-roundrobin = Circuit $ \(m2s, s2ms) -> B.first head $ fn (singleton m2s, s2ms)
+roundrobin = Circuit Proxy Proxy $ \(m2s, s2ms) -> B.first head $ fn (singleton m2s, s2ms)
  where
-  Circuit fn = sharedBus selectFn
+  Circuit Proxy Proxy fn = sharedBus selectFn
   selectFn (unbundle -> (mIdx, sIdx, _)) =
     liftA2 (,) mIdx (satSucc SatWrap <$> sIdx)
 
@@ -52,7 +53,7 @@ sharedBus ::
   Circuit
     (Vec n (Wishbone dom 'Standard addressBits dataBytes))
     (Vec m (Wishbone dom 'Standard addressBits dataBytes))
-sharedBus selectFn = Circuit go
+sharedBus selectFn = Circuit Proxy Proxy go
  where
   go (bundle -> m2ss0, bundle -> s2ms0) = (unbundle s2ms1, unbundle m2ss1)
    where
@@ -83,7 +84,7 @@ crossbarSwitch ::
     , Vec n (Wishbone dom 'Standard addressBits dataBytes) -- masters
     )
     (Vec m (Wishbone dom 'Standard addressBits dataBytes)) -- slaves
-crossbarSwitch = Circuit go
+crossbarSwitch = Circuit Proxy Proxy go
  where
   go ((route, bundle -> m2ss0), bundle -> s2ms0) =
     (((), unbundle s2ms1), unbundle m2ss1)
@@ -122,7 +123,7 @@ memoryWb ::
     Signal dom (BitVector (dataBytes * 8))
   ) ->
   Circuit (Wishbone dom 'Standard addressBits dataBytes) ()
-memoryWb ram = Circuit go
+memoryWb ram = Circuit Proxy Proxy go
  where
   go (m2s, ()) = (s2m1, ())
    where
