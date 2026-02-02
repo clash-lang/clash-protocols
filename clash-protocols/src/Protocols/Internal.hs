@@ -44,7 +44,7 @@ import Control.Arrow ((***))
 import Data.Default (Default (def))
 import Data.Functor.Identity (Identity (..), runIdentity)
 import Data.Kind (Type)
-import Data.Tuple (swap)t
+import Data.Tuple (swap)
 import GHC.Generics (Generic)
 
 {- $setup
