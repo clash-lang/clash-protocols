@@ -60,8 +60,6 @@ prop_axi4_convert_write_id =
     id
     ( C.withClockResetEnable @C.System C.clockGen C.resetGen C.enableGen $
         DfConv.dfConvTestBench
-          Proxy
-          Proxy
           (repeat True)
           (repeat $ Just (toKeepType ROkay, 0))
           ckt
@@ -78,7 +76,7 @@ prop_axi4_convert_write_id =
       , Axi4WriteData dom ConfW Int
       , Reverse (Axi4WriteResponse dom ConfB Int)
       )
-  ckt = DfConv.convert Proxy Proxy
+  ckt = DfConv.convert
 
   genInfo =
     (,,,,)
@@ -134,8 +132,6 @@ prop_axi4_convert_write_id_rev =
     id
     ( C.withClockResetEnable @C.System C.clockGen C.resetGen C.enableGen $
         DfConv.dfConvTestBenchRev
-          Proxy
-          Proxy
           (repeat $ Just fwdInfo)
           (repeat True)
           ckt
@@ -152,7 +148,7 @@ prop_axi4_convert_write_id_rev =
       , Axi4WriteData dom ConfW Int
       , Reverse (Axi4WriteResponse dom ConfB Int)
       )
-  ckt = DfConv.convert Proxy Proxy
+  ckt = DfConv.convert
 
   genInfo = (,) <$> genResp <*> DfTest.genSmallInt
   genResp =
@@ -200,8 +196,6 @@ prop_axi4_convert_read_id =
     id
     ( C.withClockResetEnable @C.System C.clockGen C.resetGen C.enableGen $
         DfConv.dfConvTestBench
-          Proxy
-          Proxy
           (repeat True)
           (repeat $ Just (0, 0, toKeepType ROkay))
           ckt
@@ -216,7 +210,7 @@ prop_axi4_convert_read_id =
       ( Axi4ReadAddress dom ConfAR Int
       , Reverse (Axi4ReadData dom ConfR Int Int)
       )
-  ckt = DfConv.convert Proxy Proxy
+  ckt = DfConv.convert
 
   genInfo =
     Axi4ReadAddressInfo
@@ -263,8 +257,6 @@ prop_axi4_convert_read_id_rev =
     id
     ( C.withClockResetEnable @C.System C.clockGen C.resetGen C.enableGen $
         DfConv.dfConvTestBenchRev
-          Proxy
-          Proxy
           (repeat $ Just fwdInfo)
           (repeat True)
           ckt
@@ -279,7 +271,7 @@ prop_axi4_convert_read_id_rev =
       ( Axi4ReadAddress dom ConfAR Int
       , Reverse (Axi4ReadData dom ConfR Int Int)
       )
-  ckt = DfConv.convert Proxy Proxy
+  ckt = DfConv.convert
 
   genInfo =
     (,,)
@@ -336,7 +328,7 @@ prop_axi4_stream_fifo_id =
     Circuit
       (Axi4Stream dom ('Axi4StreamConfig 5 2 2) Int)
       (Axi4Stream dom ('Axi4StreamConfig 5 2 2) Int)
-  ckt = DfConv.fifo Proxy Proxy (C.SNat @10)
+  ckt = DfConv.fifo (C.SNat @10)
 
   genInfo =
     Axi4StreamM2S

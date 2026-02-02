@@ -101,8 +101,6 @@ prop_avalon_convert_manager_subordinate =
     id
     ( C.withClockResetEnable @C.System C.clockGen C.resetGen C.enableGen $
         DfConv.dfConvTestBench
-          Proxy
-          Proxy
           (repeat True)
           (repeat (Just readImpt))
           ckt
@@ -113,7 +111,7 @@ prop_avalon_convert_manager_subordinate =
     Circuit
       (AvalonMmManager dom ManagerConfig)
       (AvalonMmSubordinate dom 0 SubordinateConfig)
-  ckt = DfConv.convert Proxy Proxy
+  ckt = DfConv.convert
 
 -- feed ReadReqImpt's to a manager-to-subordinate converter, and see that the
 -- bwd data is preserved
@@ -125,8 +123,6 @@ prop_avalon_convert_manager_subordinate_rev =
     id
     ( C.withClockResetEnable @C.System C.clockGen C.resetGen C.enableGen $
         DfConv.dfConvTestBenchRev
-          Proxy
-          Proxy
           (repeat (Just $ Left readReqImpt))
           (repeat True)
           ckt
@@ -137,7 +133,7 @@ prop_avalon_convert_manager_subordinate_rev =
     Circuit
       (AvalonMmManager dom ManagerConfig)
       (AvalonMmSubordinate dom 0 SubordinateConfig)
-  ckt = DfConv.convert Proxy Proxy
+  ckt = DfConv.convert
 
 -- feed ReadImpt's to a subordinate-to-manager converter, and see that the fwd
 -- data is preserved
@@ -149,8 +145,6 @@ prop_avalon_convert_subordinate_manager =
     id
     ( C.withClockResetEnable @C.System C.clockGen C.resetGen C.enableGen $
         DfConv.dfConvTestBench
-          Proxy
-          Proxy
           (repeat True)
           (repeat (Just readImpt))
           ckt
@@ -161,7 +155,7 @@ prop_avalon_convert_subordinate_manager =
     Circuit
       (AvalonMmSubordinate dom 0 SubordinateConfig)
       (AvalonMmManager dom ManagerConfig)
-  ckt = DfConv.convert Proxy Proxy
+  ckt = DfConv.convert
 
 -- feed ReadReqImpt's to a subordinate-to-manager converter, and see that the
 -- bwd data is preserved
@@ -173,8 +167,6 @@ prop_avalon_convert_subordinate_manager_rev =
     id
     ( C.withClockResetEnable @C.System C.clockGen C.resetGen C.enableGen $
         DfConv.dfConvTestBenchRev
-          Proxy
-          Proxy
           (repeat (Just $ Left readReqImpt))
           (repeat True)
           ckt
@@ -185,7 +177,7 @@ prop_avalon_convert_subordinate_manager_rev =
     Circuit
       (AvalonMmSubordinate dom 0 SubordinateConfig)
       (AvalonMmManager dom ManagerConfig)
-  ckt = DfConv.convert Proxy Proxy
+  ckt = DfConv.convert
 
 -- also test out the DfConv instance for AvalonStream
 
@@ -204,7 +196,7 @@ prop_avalon_stream_fifo_id =
     Circuit
       (AvalonStream dom ('AvalonStreamConfig 2 2 'True 'True 2 0) Int)
       (AvalonStream dom ('AvalonStreamConfig 2 2 'True 'True 2 0) Int)
-  ckt = DfConv.fifo Proxy Proxy (C.SNat @10)
+  ckt = DfConv.fifo (C.SNat @10)
 
   genInfo =
     AvalonStreamM2S

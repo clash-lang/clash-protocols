@@ -1225,7 +1225,7 @@ instance
         (AvalonReadReqImpt (KeepAddr config) (SShared config))
         (AvalonWriteImpt (KeepAddr config) (SShared config))
 
-  toDfCircuit proxy = DfConv.toDfCircuitHelper proxy s0 blankOtp stateFn
+  toDfCircuit = DfConv.toDfCircuitHelper Proxy s0 blankOtp stateFn
    where
     s0 = (Nothing, False)
     -- Nothing: readDatStored:
@@ -1282,7 +1282,7 @@ instance
         , False
         )
 
-  fromDfCircuit proxy = DfConv.fromDfCircuitHelper proxy s0 blankOtp stateFn
+  fromDfCircuit = DfConv.fromDfCircuitHelper Proxy s0 blankOtp stateFn
    where
     s0 = False -- dfAckSt -- read request might be acked before read is sent back
     blankOtp = boolToMmSubordinateAck False
@@ -1323,7 +1323,7 @@ instance
         (AvalonReadReqImpt 'True (MShared config))
         (AvalonWriteImpt 'True (MShared config))
 
-  toDfCircuit proxy = DfConv.toDfCircuitHelper proxy s0 blankOtp stateFn
+  toDfCircuit = DfConv.toDfCircuitHelper Proxy s0 blankOtp stateFn
    where
     s0 = (Nothing, False)
     -- Nothing: readDatStored:
@@ -1380,7 +1380,7 @@ instance
         , False
         )
 
-  fromDfCircuit proxy = DfConv.fromDfCircuitHelper proxy s0 blankOtp stateFn
+  fromDfCircuit = DfConv.fromDfCircuitHelper Proxy s0 blankOtp stateFn
    where
     s0 = False -- dfAckSt -- read request might be acked before read is sent back
     blankOtp = boolToMmManagerAck False
@@ -1425,7 +1425,7 @@ instance
 
   stallC conf (head -> (stallAck, stalls)) =
     withClockResetEnable clockGen resetGen enableGen
-      $ DfConv.stall Proxy Proxy conf stallAck stalls
+      $ DfConv.stall conf stallAck stalls
 
 instance
   ( KnownSubordinateConfig config
@@ -1449,7 +1449,7 @@ instance
 
   stallC conf (head -> (stallAck, stalls)) =
     withClockResetEnable clockGen resetGen enableGen
-      $ DfConv.stall Proxy Proxy conf stallAck stalls
+      $ DfConv.stall conf stallAck stalls
 
 -- NOTE: Unfortunately, we can't write a 'Drivable' instance (and, by extension,
 -- a 'Test' instance) for 'AvalonMmManager' or 'AvalonMmSubordinate'.  This is

@@ -59,7 +59,7 @@ prop_df_map_inc =
     (C.withClockResetEnable C.clockGen C.resetGen C.enableGen ckt)
  where
   ckt :: (C.HiddenClockResetEnable dom) => Circuit (Df dom Int) (Df dom Int)
-  ckt = DfConv.map Proxy Proxy (+ 1)
+  ckt = DfConv.map (+ 1)
 
 prop_df_filter_over_5 :: Property
 prop_df_filter_over_5 =
@@ -68,7 +68,7 @@ prop_df_filter_over_5 =
     (C.withClockResetEnable C.clockGen C.resetGen C.enableGen ckt)
  where
   ckt :: (C.HiddenClockResetEnable dom) => Circuit (Df dom Int) (Df dom Int)
-  ckt = DfConv.filter Proxy Proxy (> 5)
+  ckt = DfConv.filter (> 5)
 
 prop_df_mapmaybe_inc_over_5 :: Property
 prop_df_mapmaybe_inc_over_5 =
@@ -77,7 +77,7 @@ prop_df_mapmaybe_inc_over_5 =
     (C.withClockResetEnable C.clockGen C.resetGen C.enableGen ckt)
  where
   ckt :: (C.HiddenClockResetEnable dom) => Circuit (Df dom Int) (Df dom Int)
-  ckt = DfConv.mapMaybe Proxy Proxy (\n -> if n > 5 then Just (n + 1) else Nothing)
+  ckt = DfConv.mapMaybe (\n -> if n > 5 then Just (n + 1) else Nothing)
 
 prop_df_zipwith_add :: Property
 prop_df_zipwith_add =
@@ -93,7 +93,7 @@ prop_df_zipwith_add =
     (C.withClockResetEnable @C.System C.clockGen C.resetGen C.enableGen ckt)
  where
   ckt :: (C.HiddenClockResetEnable dom) => Circuit (Df dom Int, Df dom Int) (Df dom Int)
-  ckt = DfConv.zipWith (Proxy, Proxy) Proxy (+)
+  ckt = DfConv.zipWith (+)
 
 prop_df_fanout1 :: Property
 prop_df_fanout1 =
@@ -105,7 +105,7 @@ prop_df_fanout1 =
     (C.exposeClockResetEnable ckt)
  where
   ckt :: (C.HiddenClockResetEnable dom) => Circuit (Df dom Int) (C.Vec 1 (Df dom Int))
-  ckt = DfConv.fanout Proxy Proxy
+  ckt = DfConv.fanout
 
 prop_df_fanout2 :: Property
 prop_df_fanout2 =
@@ -117,7 +117,7 @@ prop_df_fanout2 =
     (C.exposeClockResetEnable ckt)
  where
   ckt :: (C.HiddenClockResetEnable dom) => Circuit (Df dom Int) (C.Vec 2 (Df dom Int))
-  ckt = DfConv.fanout Proxy Proxy
+  ckt = DfConv.fanout
 
 prop_df_fanout7 :: Property
 prop_df_fanout7 =
@@ -129,7 +129,7 @@ prop_df_fanout7 =
     (C.exposeClockResetEnable ckt)
  where
   ckt :: (C.HiddenClockResetEnable dom) => Circuit (Df dom Int) (C.Vec 7 (Df dom Int))
-  ckt = DfConv.fanout Proxy Proxy
+  ckt = DfConv.fanout
 
 prop_df_partition :: Property
 prop_df_partition =
@@ -141,7 +141,7 @@ prop_df_partition =
     (C.exposeClockResetEnable ckt)
  where
   ckt :: (C.HiddenClockResetEnable dom) => Circuit (Df dom Int) (Df dom Int, Df dom Int)
-  ckt = DfConv.partition Proxy (Proxy, Proxy) (> 5)
+  ckt = DfConv.partition (> 5)
 
 prop_df_fanin :: Property
 prop_df_fanin =
@@ -153,7 +153,7 @@ prop_df_fanin =
     (C.exposeClockResetEnable ckt)
  where
   ckt :: (C.HiddenClockResetEnable dom) => Circuit (C.Vec 3 (Df dom Int)) (Df dom Int)
-  ckt = DfConv.fanin Proxy Proxy (+)
+  ckt = DfConv.fanin (+)
 
 prop_df_fifo_id :: Property
 prop_df_fifo_id =
@@ -166,7 +166,7 @@ prop_df_fifo_id =
     (\a b -> tally a === tally b)
  where
   ckt :: (C.HiddenClockResetEnable dom) => Circuit (Df dom Int) (Df dom Int)
-  ckt = DfConv.fifo Proxy Proxy (C.SNat @10)
+  ckt = DfConv.fifo (C.SNat @10)
 
 prop_select :: Property
 prop_select =
@@ -179,7 +179,7 @@ prop_select =
   ckt ::
     (C.HiddenClockResetEnable dom) =>
     Circuit (C.Vec 3 (Df dom Int), Df dom (C.Index 3)) (Df dom Int)
-  ckt = DfConv.select (Proxy @(Df _ Int), Proxy @(Df _ (C.Index 3))) (Proxy @(Df _ Int))
+  ckt = DfConv.select
 
   goModel :: C.Vec 3 [Int] -> C.Index 3 -> (C.Vec 3 [Int], Int)
   goModel vec ix = let (i : is) = vec C.!! ix in (C.replace ix is vec, i)
@@ -200,11 +200,11 @@ prop_reverse_df_convert_id =
     id
     (C.withClockResetEnable C.clockGen C.resetGen C.enableGen ckt)
  where
-  ckt :: (C.HiddenClockResetEnable dom) => Circuit (Df dom Int) (Df dom Int)
+  ckt :: forall dom. (C.HiddenClockResetEnable dom) => Circuit (Df dom Int) (Df dom Int)
   ckt =
     coerceCircuit $
-      reverseCircuit $
-        DfConv.convert (Proxy @(Reverse (Df _ _))) (Proxy @(Reverse (Df _ _)))
+      reverseCircuit
+        (DfConv.convert @(Reverse (Df dom Int)) @(Reverse (Df dom Int)))
 
 -- test out the test bench
 prop_test_bench_id :: Property
@@ -215,8 +215,6 @@ prop_test_bench_id =
     id
     ( C.withClockResetEnable @C.System C.clockGen C.resetGen C.enableGen $
         DfConv.dfConvTestBench
-          Proxy
-          Proxy
           (repeat True)
           (repeat (Just 0))
           ckt
@@ -227,7 +225,7 @@ prop_test_bench_id =
     Circuit
       (Df dom Int, Reverse (Df dom Int))
       (Df dom Int, Reverse (Df dom Int))
-  ckt = DfConv.convert Proxy Proxy
+  ckt = DfConv.convert
 
 prop_test_bench_rev_id :: Property
 prop_test_bench_rev_id =
@@ -237,8 +235,6 @@ prop_test_bench_rev_id =
     id
     ( C.withClockResetEnable @C.System C.clockGen C.resetGen C.enableGen $
         DfConv.dfConvTestBenchRev
-          Proxy
-          Proxy
           (repeat (Just 0))
           (repeat True)
           ckt
@@ -249,7 +245,7 @@ prop_test_bench_rev_id =
     Circuit
       (Df dom Int, Reverse (Df dom Int))
       (Df dom Int, Reverse (Df dom Int))
-  ckt = DfConv.convert Proxy Proxy
+  ckt = DfConv.convert
 
 tests :: TestTree
 tests =

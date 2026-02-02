@@ -222,7 +222,7 @@ instance DfConv.DfConv (PacketStream dom dataWidth meta) where
   type Dom (PacketStream dom dataWidth meta) = dom
   type FwdPayload (PacketStream dom dataWidth meta) = PacketStreamM2S dataWidth meta
 
-  toDfCircuit _ = fromSignals go
+  toDfCircuit = fromSignals go
    where
     go (fwdIn, bwdIn) =
       (
@@ -232,7 +232,7 @@ instance DfConv.DfConv (PacketStream dom dataWidth meta) where
       , P.fst fwdIn
       )
 
-  fromDfCircuit _ = fromSignals go
+  fromDfCircuit = fromSignals go
    where
     go (fwdIn, bwdIn) =
       ( coerce <$> P.fst bwdIn
@@ -259,7 +259,7 @@ instance
 
   stallC conf (head -> (stallAck, stalls)) =
     withClockResetEnable clockGen resetGen enableGen
-      $ DfConv.stall Proxy Proxy conf stallAck stalls
+      $ DfConv.stall conf stallAck stalls
 
 instance
   (KnownDomain dom) =>
@@ -274,10 +274,10 @@ instance
 
   driveC conf vals =
     withClockResetEnable clockGen resetGen enableGen
-      $ DfConv.drive Proxy conf vals
+      $ DfConv.drive conf vals
   sampleC conf ckt =
     withClockResetEnable clockGen resetGen enableGen
-      $ DfConv.sample Proxy conf ckt
+      $ DfConv.sample conf ckt
 
 instance
   ( KnownNat dataWidth
@@ -489,7 +489,7 @@ fanout ::
   Circuit
     (PacketStream dom dataWidth meta)
     (Vec n (PacketStream dom dataWidth meta))
-fanout = DfConv.fanout Proxy Proxy
+fanout = DfConv.fanout
 
 {- |
 Place a register on the /forward/ part of a circuit.
@@ -501,7 +501,7 @@ registerFwd ::
   (KnownNat dataWidth) =>
   (NFDataX meta) =>
   Circuit (PacketStream dom dataWidth meta) (PacketStream dom dataWidth meta)
-registerFwd = DfConv.registerFwd Proxy Proxy
+registerFwd = DfConv.registerFwd
 
 {- |
 Place a register on the /backward/ part of a circuit.
@@ -513,7 +513,7 @@ registerBwd ::
   (KnownNat dataWidth) =>
   (NFDataX meta) =>
   Circuit (PacketStream dom dataWidth meta) (PacketStream dom dataWidth meta)
-registerBwd = DfConv.registerBwd Proxy Proxy
+registerBwd = DfConv.registerBwd
 
 {- |
 A pipeline skid buffer: places registers on both the /backward/ and /forward/
@@ -545,7 +545,7 @@ consume = Circuit Proxy Proxy (const (pure (PacketStreamS2M True), ()))
 
 -- | Never acknowledges incoming data.
 void :: (HiddenClockResetEnable dom) => Circuit (PacketStream dom dataWidth meta) ()
-void = DfConv.void Proxy
+void = DfConv.void
 
 -- | Like 'P.fst', but over the metadata of a 'PacketStream'.
 fstMeta :: Circuit (PacketStream dom dataWidth (a, b)) (PacketStream dom dataWidth a)

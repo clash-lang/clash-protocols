@@ -166,7 +166,7 @@ instance
     FwdPayload (AvalonStream dom conf dataType) =
       AvalonStreamM2S conf dataType
 
-  toDfCircuit proxy = DfConv.toDfCircuitHelper proxy s0 blankOtp stateFn
+  toDfCircuit = DfConv.toDfCircuitHelper Proxy s0 blankOtp stateFn
    where
     s0 = C.repeat @(ReadyLatency conf + 1) False
     blankOtp = Nothing
@@ -179,7 +179,7 @@ instance
         , C.last ackQueue
         )
 
-  fromDfCircuit proxy = DfConv.fromDfCircuitHelper proxy s0 blankOtp stateFn
+  fromDfCircuit = DfConv.fromDfCircuitHelper Proxy s0 blankOtp stateFn
    where
     s0 = Nothing
     blankOtp = AvalonStreamS2M{_ready = False}
@@ -212,7 +212,7 @@ instance
 
   stallC conf (head -> (stallAck, stalls)) =
     withClockResetEnable clockGen resetGen enableGen
-      $ DfConv.stall Proxy Proxy conf stallAck stalls
+      $ DfConv.stall conf stallAck stalls
 
 instance
   ( ReadyLatency conf ~ 0
@@ -231,10 +231,10 @@ instance
 
   driveC conf vals =
     withClockResetEnable clockGen resetGen enableGen
-      $ DfConv.drive Proxy conf vals
+      $ DfConv.drive conf vals
   sampleC conf ckt =
     withClockResetEnable clockGen resetGen enableGen
-      $ DfConv.sample Proxy conf ckt
+      $ DfConv.sample conf ckt
 
 instance
   ( ReadyLatency conf ~ 0

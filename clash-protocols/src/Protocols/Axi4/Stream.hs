@@ -121,14 +121,14 @@ instance
     FwdPayload (Axi4Stream dom conf userType) =
       Axi4StreamM2S conf userType
 
-  toDfCircuit proxy = DfConv.toDfCircuitHelper proxy s0 blankOtp stateFn
+  toDfCircuit = DfConv.toDfCircuitHelper Proxy s0 blankOtp stateFn
    where
     s0 = ()
     blankOtp = Nothing
     stateFn ack _ otpItem =
       pure (otpItem, Nothing, Maybe.isJust otpItem C.&& _tready ack)
 
-  fromDfCircuit proxy = DfConv.fromDfCircuitHelper proxy s0 blankOtp stateFn
+  fromDfCircuit = DfConv.fromDfCircuitHelper Proxy s0 blankOtp stateFn
    where
     s0 = ()
     blankOtp = Axi4StreamS2M{_tready = False}
@@ -152,7 +152,7 @@ instance
 
   stallC conf (C.head -> (stallAck, stalls)) =
     withClockResetEnable clockGen resetGen enableGen $
-      DfConv.stall Proxy Proxy conf stallAck stalls
+      DfConv.stall conf stallAck stalls
 
 instance
   (KnownAxi4StreamConfig conf, NFDataX userType, KnownDomain dom) =>
@@ -167,10 +167,10 @@ instance
 
   driveC conf vals =
     withClockResetEnable clockGen resetGen enableGen $
-      DfConv.drive Proxy conf vals
+      DfConv.drive conf vals
   sampleC conf ckt =
     withClockResetEnable clockGen resetGen enableGen $
-      DfConv.sample Proxy conf ckt
+      DfConv.sample conf ckt
 
 instance
   ( KnownAxi4StreamConfig conf

@@ -151,7 +151,6 @@ class (Protocol df) => DfConv df where
   -- fwd channel should stay the same between clock cycles unless acknowledged.
   toDfCircuit ::
     (HiddenClockResetEnable (Dom df)) =>
-    Proxy df ->
     Circuit
       (Df (Dom df) (FwdPayload df), Reverse (Df (Dom df) (BwdPayload df)))
       df
@@ -160,7 +159,6 @@ class (Protocol df) => DfConv df where
   -- of the right side.
   fromDfCircuit ::
     (HiddenClockResetEnable (Dom df)) =>
-    Proxy df ->
     Circuit
       df
       (Df (Dom df) (FwdPayload df), Reverse (Df (Dom df) (BwdPayload df)))
@@ -255,8 +253,8 @@ instance DfConv (Df dom a, Reverse (Df dom b)) where
   type Dom (Df dom a, Reverse (Df dom b)) = dom
   type BwdPayload (Df dom a, Reverse (Df dom b)) = b
   type FwdPayload (Df dom a, Reverse (Df dom b)) = a
-  toDfCircuit _ = idC
-  fromDfCircuit _ = idC
+  toDfCircuit = idC
+  fromDfCircuit = idC
 
 -- DfConv instance for Reverse
 
@@ -264,18 +262,18 @@ instance (DfConv a) => DfConv (Reverse a) where
   type Dom (Reverse a) = Dom a
   type BwdPayload (Reverse a) = FwdPayload a
   type FwdPayload (Reverse a) = BwdPayload a
-  toDfCircuit _ = mapCircuit swap swap id id $ reverseCircuit $ fromDfCircuit (Proxy @a)
-  fromDfCircuit _ = mapCircuit id id swap swap $ reverseCircuit $ toDfCircuit (Proxy @a)
+  toDfCircuit = mapCircuit swap swap id id $ reverseCircuit $ fromDfCircuit @a
+  fromDfCircuit = mapCircuit id id swap swap $ reverseCircuit $ toDfCircuit @a
 
 -- DfConv instances for Df
 
 instance (NFDataX dat) => DfConv (Df dom dat) where
   type Dom (Df dom dat) = dom
   type FwdPayload (Df dom dat) = dat
-  toDfCircuit _ = Circuit Proxy Proxy (uncurry f)
+  toDfCircuit = Circuit Proxy Proxy (uncurry f)
    where
     f ~(a, _) c = ((c, P.pure Nothing), a)
-  fromDfCircuit _ = Circuit Proxy Proxy (uncurry f)
+  fromDfCircuit = Circuit Proxy Proxy (uncurry f)
    where
     f a ~(b, _) = (b, (a, P.pure (Ack False)))
 
@@ -329,7 +327,7 @@ instance
 
   -- MANAGER PORT
 
-  toDfCircuit proxy = toDfCircuitHelper proxy s0 blankOtp stateFn
+  toDfCircuit = toDfCircuitHelper Proxy s0 blankOtp stateFn
    where
     s0 = (False, False) -- address received, data received
     blankOtp =
@@ -390,7 +388,7 @@ instance
 
   -- SUBORDINATE PORT
 
-  fromDfCircuit proxy = fromDfCircuitHelper proxy s0 blankOtp stateFn
+  fromDfCircuit = fromDfCircuitHelper Proxy s0 blankOtp stateFn
    where
     -- (info about write address given most recently, ID to send write response to)
     s0 = (Nothing, Nothing)
@@ -483,7 +481,7 @@ instance
 
   -- MANAGER PORT
 
-  toDfCircuit proxy = toDfCircuitHelper proxy s0 blankOtp stateFn
+  toDfCircuit = toDfCircuitHelper Proxy s0 blankOtp stateFn
    where
     s0 = ()
 
@@ -510,7 +508,7 @@ instance
 
   -- SUBORDINATE PORT
 
-  fromDfCircuit proxy = fromDfCircuitHelper proxy s0 blankOtp stateFn
+  fromDfCircuit = fromDfCircuitHelper Proxy s0 blankOtp stateFn
    where
     -- ( burst len left in transfer , read id currently replying to )
     s0 = (0, errorX "DfConv for Axi4: No initial value for read id")
@@ -565,64 +563,64 @@ instance
 
 -- | Convert 'DfConv' into a /one-way/ 'Df' port, at the data input end
 dfToDfConvInp ::
+  forall df.
   ( DfConv df
   , HiddenClockResetEnable (Dom df)
   ) =>
-  Proxy df ->
   Circuit df (Df (Dom df) (FwdPayload df))
-dfToDfConvInp = mapCircuit id id P.fst (,P.pure Nothing) . fromDfCircuit
+dfToDfConvInp = mapCircuit id id P.fst (, P.pure Nothing) (fromDfCircuit :: Circuit df (Df (Dom df) (FwdPayload df), Reverse (Df (Dom df) (BwdPayload df))))
 
 -- | Convert 'DfConv' into a /one-way/ 'Df' port, at the data output end
 dfToDfConvOtp ::
+  forall df.
   ( DfConv df
   , HiddenClockResetEnable (Dom df)
   ) =>
-  Proxy df ->
   Circuit (Df (Dom df) (FwdPayload df)) df
-dfToDfConvOtp = mapCircuit (,P.pure (Ack False)) P.fst id id . toDfCircuit
+dfToDfConvOtp = mapCircuit (, P.pure (Ack False)) P.fst id id (toDfCircuit :: Circuit (Df (Dom df) (FwdPayload df), Reverse (Df (Dom df) (BwdPayload df))) df)
 
 -- | 'toDfCircuit', but the 'DfConv' is inside a 'Vec'
 vecToDfConv ::
+  forall df n.
   (DfConv df) =>
   (HiddenClockResetEnable (Dom df)) =>
   (KnownNat n) =>
-  Proxy df ->
   Circuit
     ( Vec n (Df (Dom df) (FwdPayload df))
     , Vec n (Reverse (Df (Dom df) (BwdPayload df)))
     )
     (Vec n df)
-vecToDfConv proxy =
+vecToDfConv =
   mapCircuit (uncurry C.zip) unzip id id
     $ Vec.vecCircuits
-    $ repeat
-    $ toDfCircuit proxy
+    $ C.repeat
+    (toDfCircuit :: Circuit (Df (Dom df) (FwdPayload df), Reverse (Df (Dom df) (BwdPayload df))) df)
 
 -- | 'fromDfCircuit', but the 'DfConv' is inside a 'Vec'
 vecFromDfConv ::
+  forall df n.
   (DfConv df) =>
   (HiddenClockResetEnable (Dom df)) =>
   (KnownNat n) =>
-  Proxy df ->
   Circuit
     (Vec n df)
     ( Vec n (Df (Dom df) (FwdPayload df))
     , Vec n (Reverse (Df (Dom df) (BwdPayload df)))
     )
-vecFromDfConv proxy =
+vecFromDfConv =
   mapCircuit id id unzip (uncurry C.zip)
     $ Vec.vecCircuits
-    $ repeat
-    $ fromDfCircuit proxy
+    $ C.repeat
+    (fromDfCircuit :: Circuit df (Df (Dom df) (FwdPayload df), Reverse (Df (Dom df) (BwdPayload df))))
 
 -- | 'toDfCircuit', but on a pair of 'DfConv's
 tupToDfConv ::
+  forall dfA dfB.
   ( DfConv dfA
   , DfConv dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
   ) =>
-  (Proxy dfA, Proxy dfB) ->
   Circuit
     ( ( Df (Dom dfA) (FwdPayload dfA)
       , Df (Dom dfB) (FwdPayload dfB)
@@ -632,20 +630,20 @@ tupToDfConv ::
       )
     )
     (dfA, dfB)
-tupToDfConv (argsA, argsB) =
+tupToDfConv =
   mapCircuit f f id id
-    $ tupCircuits (toDfCircuit argsA) (toDfCircuit argsB)
+    $ tupCircuits (toDfCircuit :: Circuit (Df (Dom dfA) (FwdPayload dfA), Reverse (Df (Dom dfA) (BwdPayload dfA))) dfA) (toDfCircuit :: Circuit (Df (Dom dfB) (FwdPayload dfB), Reverse (Df (Dom dfB) (BwdPayload dfB))) dfB)
  where
   f ((a, b), (c, d)) = ((a, c), (b, d))
 
 -- | 'fromDfCircuit', but on a pair of 'DfConv's
 tupFromDfConv ::
+  forall dfA dfB.
   ( DfConv dfA
   , DfConv dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
   ) =>
-  (Proxy dfA, Proxy dfB) ->
   Circuit
     (dfA, dfB)
     ( ( Df (Dom dfA) (FwdPayload dfA)
@@ -655,9 +653,9 @@ tupFromDfConv ::
       , Reverse (Df (Dom dfB) (BwdPayload dfB))
       )
     )
-tupFromDfConv (argsA, argsB) =
+tupFromDfConv =
   mapCircuit id id f f
-    $ tupCircuits (fromDfCircuit argsA) (fromDfCircuit argsB)
+    $ tupCircuits (fromDfCircuit :: Circuit dfA (Df (Dom dfA) (FwdPayload dfA), Reverse (Df (Dom dfA) (BwdPayload dfA)))) (fromDfCircuit :: Circuit dfB (Df (Dom dfB) (FwdPayload dfB), Reverse (Df (Dom dfB) (BwdPayload dfB))))
  where
   f ((a, b), (c, d)) = ((a, c), (b, d))
 
@@ -683,6 +681,7 @@ vecToTup = Circuit Proxy Proxy ((g *** f) . swap)
 protocols.
 -}
 convert ::
+  forall dfA dfB.
   ( DfConv dfA
   , DfConv dfB
   , FwdPayload dfA ~ FwdPayload dfB
@@ -690,49 +689,46 @@ convert ::
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   Circuit dfA dfB
-convert dfA dfB =
-  fromDfCircuit dfA
-    |> toDfCircuit dfB
+convert =
+  (fromDfCircuit :: Circuit dfA (Df (Dom dfA) (FwdPayload dfA), Reverse (Df (Dom dfA) (BwdPayload dfA))))
+    |> (toDfCircuit :: Circuit (Df (Dom dfB) (FwdPayload dfB), Reverse (Df (Dom dfB) (BwdPayload dfB))) dfB)
 
 -- | Like 'P.map'
 map ::
+  forall dfA dfB.
   ( DfConv dfA
   , DfConv dfB
   , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   (FwdPayload dfA -> FwdPayload dfB) ->
   Circuit dfA dfB
-map dfA dfB f =
-  fromDfCircuit dfA
+map f =
+  (fromDfCircuit :: Circuit dfA (Df (Dom dfA) (FwdPayload dfA), Reverse (Df (Dom dfA) (BwdPayload dfA))))
     |> tupCircuits (Df.map f) idC
-    |> toDfCircuit dfB
+    |> (toDfCircuit :: Circuit (Df (Dom dfB) (FwdPayload dfB), Reverse (Df (Dom dfB) (BwdPayload dfB))) dfB)
 
 -- | Like 'Df.mapS'
 mapS ::
+  forall dfA dfB.
   ( DfConv dfA
   , DfConv dfB
   , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   Signal (Dom dfA) (FwdPayload dfA -> FwdPayload dfB) ->
   Circuit dfA dfB
-mapS dfA dfB fS =
-  fromDfCircuit dfA
+mapS fS =
+  (fromDfCircuit :: Circuit dfA (Df (Dom dfA) (FwdPayload dfA), Reverse (Df (Dom dfA) (BwdPayload dfA))))
     |> tupCircuits (Df.mapS fS) idC
-    |> toDfCircuit dfB
+    |> (toDfCircuit :: Circuit (Df (Dom dfB) (FwdPayload dfB), Reverse (Df (Dom dfB) (BwdPayload dfB))) dfB)
 
 -- | Like 'P.fst'
 fst ::
+  forall dfA dfB a b.
   ( DfConv dfA
   , DfConv dfB
   , BwdPayload dfA ~ BwdPayload dfB
@@ -741,16 +737,15 @@ fst ::
   , FwdPayload dfA ~ (a, b)
   , FwdPayload dfB ~ a
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   Circuit dfA dfB
-fst dfA dfB =
-  fromDfCircuit dfA
+fst =
+  (fromDfCircuit :: Circuit dfA (Df (Dom dfA) (FwdPayload dfA), Reverse (Df (Dom dfA) (BwdPayload dfA))))
     |> tupCircuits Df.fst idC
-    |> toDfCircuit dfB
+    |> (toDfCircuit :: Circuit (Df (Dom dfB) (FwdPayload dfB), Reverse (Df (Dom dfB) (BwdPayload dfB))) dfB)
 
 -- | Like 'P.fst'
 snd ::
+  forall dfA dfB a b.
   ( DfConv dfA
   , DfConv dfB
   , BwdPayload dfA ~ BwdPayload dfB
@@ -759,16 +754,15 @@ snd ::
   , FwdPayload dfA ~ (a, b)
   , FwdPayload dfB ~ b
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   Circuit dfA dfB
-snd dfA dfB =
-  fromDfCircuit dfA
+snd =
+  (fromDfCircuit :: Circuit dfA (Df (Dom dfA) (FwdPayload dfA), Reverse (Df (Dom dfA) (BwdPayload dfA))))
     |> tupCircuits Df.snd idC
-    |> toDfCircuit dfB
+    |> (toDfCircuit :: Circuit (Df (Dom dfB) (FwdPayload dfB), Reverse (Df (Dom dfB) (BwdPayload dfB))) dfB)
 
 -- | Like 'Data.Bifunctor.bimap'
 bimap ::
+  forall dfA dfB p a b c d.
   ( DfConv dfA
   , DfConv dfB
   , BwdPayload dfA ~ BwdPayload dfB
@@ -778,18 +772,17 @@ bimap ::
   , FwdPayload dfA ~ p a c
   , FwdPayload dfB ~ p b d
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   (a -> b) ->
   (c -> d) ->
   Circuit dfA dfB
-bimap dfA dfB f g =
-  fromDfCircuit dfA
+bimap f g =
+  (fromDfCircuit :: Circuit dfA (Df (Dom dfA) (FwdPayload dfA), Reverse (Df (Dom dfA) (BwdPayload dfA))))
     |> tupCircuits (Df.bimap f g) idC
-    |> toDfCircuit dfB
+    |> (toDfCircuit :: Circuit (Df (Dom dfB) (FwdPayload dfB), Reverse (Df (Dom dfB) (BwdPayload dfB))) dfB)
 
 -- | Like 'Data.Bifunctor.first'
 first ::
+  forall dfA dfB p a b c.
   ( DfConv dfA
   , DfConv dfB
   , BwdPayload dfA ~ BwdPayload dfB
@@ -799,17 +792,16 @@ first ::
   , FwdPayload dfA ~ p a c
   , FwdPayload dfB ~ p b c
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   (a -> b) ->
   Circuit dfA dfB
-first dfA dfB f =
-  fromDfCircuit dfA
+first f =
+  (fromDfCircuit :: Circuit dfA (Df (Dom dfA) (FwdPayload dfA), Reverse (Df (Dom dfA) (BwdPayload dfA))))
     |> tupCircuits (Df.first f) idC
-    |> toDfCircuit dfB
+    |> (toDfCircuit :: Circuit (Df (Dom dfB) (FwdPayload dfB), Reverse (Df (Dom dfB) (BwdPayload dfB))) dfB)
 
 -- | Like 'Data.Bifunctor.second'
 second ::
+  forall dfA dfB p a b c.
   ( DfConv dfA
   , DfConv dfB
   , BwdPayload dfA ~ BwdPayload dfB
@@ -819,57 +811,55 @@ second ::
   , FwdPayload dfA ~ p a b
   , FwdPayload dfB ~ p a c
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   (b -> c) ->
   Circuit dfA dfB
-second dfA dfB f =
-  fromDfCircuit dfA
+second f =
+  (fromDfCircuit :: Circuit dfA (Df (Dom dfA) (FwdPayload dfA), Reverse (Df (Dom dfA) (BwdPayload dfA))))
     |> tupCircuits (Df.second f) idC
-    |> toDfCircuit dfB
+    |> (toDfCircuit :: Circuit (Df (Dom dfB) (FwdPayload dfB), Reverse (Df (Dom dfB) (BwdPayload dfB))) dfB)
 
 -- | Acknowledge but ignore data from LHS protocol. Send a static value /b/.
 const ::
+  forall dfA dfB.
   ( DfConv dfA
   , DfConv dfB
   , BwdPayload dfA ~ BwdPayload dfB
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   FwdPayload dfB ->
   Circuit dfA dfB
-const dfA dfB b =
-  fromDfCircuit dfA
+const b =
+  (fromDfCircuit :: Circuit dfA (Df (Dom dfA) (FwdPayload dfA), Reverse (Df (Dom dfA) (BwdPayload dfA))))
     |> tupCircuits (Df.const b) idC
-    |> toDfCircuit dfB
+    |> (toDfCircuit :: Circuit (Df (Dom dfB) (FwdPayload dfB), Reverse (Df (Dom dfB) (BwdPayload dfB))) dfB)
 
 -- | Drive a constant value composed of /a/.
 pure ::
+  forall df.
   ( DfConv df
   , HiddenClockResetEnable (Dom df)
   ) =>
-  Proxy df ->
   FwdPayload df ->
   Circuit () df
-pure df a =
+pure a =
   Df.pure a
-    |> dfToDfConvOtp df
+    |> dfToDfConvOtp
 
 -- | Ignore incoming data
 void ::
+  forall df.
   ( DfConv df
   , HiddenClockResetEnable (Dom df)
   ) =>
-  Proxy df ->
   Circuit df ()
-void df =
-  dfToDfConvInp df
+void =
+  dfToDfConvInp
     |> Df.void
 
 -- | Like 'Data.Maybe.catMaybes'
 catMaybes ::
+  forall dfA dfB.
   ( DfConv dfA
   , DfConv dfB
   , BwdPayload dfA ~ BwdPayload dfB
@@ -877,16 +867,15 @@ catMaybes ::
   , HiddenClockResetEnable (Dom dfA)
   , FwdPayload dfA ~ Maybe (FwdPayload dfB)
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   Circuit dfA dfB
-catMaybes dfA dfB =
-  fromDfCircuit dfA
+catMaybes =
+  (fromDfCircuit :: Circuit dfA (Df (Dom dfA) (FwdPayload dfA), Reverse (Df (Dom dfA) (BwdPayload dfA))))
     |> tupCircuits Df.catMaybes idC
-    |> toDfCircuit dfB
+    |> (toDfCircuit :: Circuit (Df (Dom dfB) (FwdPayload dfB), Reverse (Df (Dom dfB) (BwdPayload dfB))) dfB)
 
 -- | Like 'Data.Maybe.mapMaybe'
 mapMaybe ::
+  forall dfA dfB.
   ( DfConv dfA
   , DfConv dfB
   , BwdPayload dfA ~ BwdPayload dfB
@@ -894,17 +883,16 @@ mapMaybe ::
   , HiddenClockResetEnable (Dom dfA)
   , NFDataX (FwdPayload dfB)
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   (FwdPayload dfA -> Maybe (FwdPayload dfB)) ->
   Circuit dfA dfB
-mapMaybe dfA dfB f =
-  fromDfCircuit dfA
+mapMaybe f =
+  (fromDfCircuit :: Circuit dfA (Df (Dom dfA) (FwdPayload dfA), Reverse (Df (Dom dfA) (BwdPayload dfA))))
     |> tupCircuits (Df.mapMaybe f) idC
-    |> toDfCircuit dfB
+    |> (toDfCircuit :: Circuit (Df (Dom dfB) (FwdPayload dfB), Reverse (Df (Dom dfB) (BwdPayload dfB))) dfB)
 
 -- | Like 'P.filter'
 filter ::
+  forall dfA dfB.
   ( DfConv dfA
   , DfConv dfB
   , BwdPayload dfA ~ BwdPayload dfB
@@ -912,17 +900,16 @@ filter ::
   , HiddenClockResetEnable (Dom dfA)
   , FwdPayload dfA ~ FwdPayload dfB
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   (FwdPayload dfA -> Bool) ->
   Circuit dfA dfB
-filter dfA dfB f =
-  fromDfCircuit dfA
+filter f =
+  (fromDfCircuit :: Circuit dfA (Df (Dom dfA) (FwdPayload dfA), Reverse (Df (Dom dfA) (BwdPayload dfA))))
     |> tupCircuits (Df.filter f) idC
-    |> toDfCircuit dfB
+    |> (toDfCircuit :: Circuit (Df (Dom dfB) (FwdPayload dfB), Reverse (Df (Dom dfB) (BwdPayload dfB))) dfB)
 
 -- | Like 'Df.filterS'
 filterS ::
+  forall dfA dfB.
   ( DfConv dfA
   , DfConv dfB
   , BwdPayload dfA ~ BwdPayload dfB
@@ -930,17 +917,16 @@ filterS ::
   , HiddenClockResetEnable (Dom dfA)
   , FwdPayload dfA ~ FwdPayload dfB
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   Signal (Dom dfA) (FwdPayload dfA -> Bool) ->
   Circuit dfA dfB
-filterS dfA dfB fS =
-  fromDfCircuit dfA
+filterS fS =
+  (fromDfCircuit :: Circuit dfA (Df (Dom dfA) (FwdPayload dfA), Reverse (Df (Dom dfA) (BwdPayload dfA))))
     |> tupCircuits (Df.filterS fS) idC
-    |> toDfCircuit dfB
+    |> (toDfCircuit :: Circuit (Df (Dom dfB) (FwdPayload dfB), Reverse (Df (Dom dfB) (BwdPayload dfB))) dfB)
 
 -- | Like 'Data.Either.Combinators.mapLeft'
 mapLeft ::
+  forall dfA dfB a b c.
   ( DfConv dfA
   , DfConv dfB
   , BwdPayload dfA ~ BwdPayload dfB
@@ -949,17 +935,16 @@ mapLeft ::
   , FwdPayload dfA ~ Either a c
   , FwdPayload dfB ~ Either b c
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   (a -> b) ->
   Circuit dfA dfB
-mapLeft dfA dfB f =
-  fromDfCircuit dfA
+mapLeft f =
+  (fromDfCircuit :: Circuit dfA (Df (Dom dfA) (FwdPayload dfA), Reverse (Df (Dom dfA) (BwdPayload dfA))))
     |> tupCircuits (Df.mapLeft f) idC
-    |> toDfCircuit dfB
+    |> (toDfCircuit :: Circuit (Df (Dom dfB) (FwdPayload dfB), Reverse (Df (Dom dfB) (BwdPayload dfB))) dfB)
 
 -- | Like 'Data.Either.Combinators.mapRight'
 mapRight ::
+  forall dfA dfB a b c.
   ( DfConv dfA
   , DfConv dfB
   , BwdPayload dfA ~ BwdPayload dfB
@@ -968,17 +953,16 @@ mapRight ::
   , FwdPayload dfA ~ Either a b
   , FwdPayload dfB ~ Either a c
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   (b -> c) ->
   Circuit dfA dfB
-mapRight dfA dfB f =
-  fromDfCircuit dfA
+mapRight f =
+  (fromDfCircuit :: Circuit dfA (Df (Dom dfA) (FwdPayload dfA), Reverse (Df (Dom dfA) (BwdPayload dfA))))
     |> tupCircuits (Df.mapRight f) idC
-    |> toDfCircuit dfB
+    |> (toDfCircuit :: Circuit (Df (Dom dfB) (FwdPayload dfB), Reverse (Df (Dom dfB) (BwdPayload dfB))) dfB)
 
 -- | Like 'Data.Either.either'
 either ::
+  forall dfA dfB a b.
   ( DfConv dfA
   , DfConv dfB
   , BwdPayload dfA ~ BwdPayload dfB
@@ -986,18 +970,17 @@ either ::
   , HiddenClockResetEnable (Dom dfA)
   , FwdPayload dfA ~ Either a b
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   (a -> FwdPayload dfB) ->
   (b -> FwdPayload dfB) ->
   Circuit dfA dfB
-either dfA dfB f g =
-  fromDfCircuit dfA
+either f g =
+  (fromDfCircuit :: Circuit dfA (Df (Dom dfA) (FwdPayload dfA), Reverse (Df (Dom dfA) (BwdPayload dfA))))
     |> tupCircuits (Df.either f g) idC
-    |> toDfCircuit dfB
+    |> (toDfCircuit :: Circuit (Df (Dom dfB) (FwdPayload dfB), Reverse (Df (Dom dfB) (BwdPayload dfB))) dfB)
 
 -- | Like 'P.zipWith'. Any data not in /Payload/ is copied from stream A.
 zipWith ::
+  forall dfA dfB dfC.
   ( DfConv dfA
   , DfConv dfB
   , DfConv dfC
@@ -1007,21 +990,20 @@ zipWith ::
   , Dom dfA ~ Dom dfC
   , HiddenClockResetEnable (Dom dfA)
   ) =>
-  (Proxy dfA, Proxy dfB) ->
-  Proxy dfC ->
   (FwdPayload dfA -> FwdPayload dfB -> FwdPayload dfC) ->
   Circuit (dfA, dfB) dfC
-zipWith dfAB dfC f =
-  tupFromDfConv dfAB
+zipWith f =
+  tupFromDfConv
     |> coerceCircuit
       ( tupCircuits
           (Df.zipWith f)
           (reverseCircuit $ Df.roundrobin |> vecToTup)
       )
-    |> toDfCircuit dfC
+    |> (toDfCircuit :: Circuit (Df (Dom dfC) (FwdPayload dfC), Reverse (Df (Dom dfC) (BwdPayload dfC))) dfC)
 
 -- | Like 'P.zip'
 zip ::
+  forall dfA dfB dfC.
   ( DfConv dfA
   , DfConv dfB
   , DfConv dfC
@@ -1032,20 +1014,19 @@ zip ::
   , HiddenClockResetEnable (Dom dfA)
   , FwdPayload dfC ~ (FwdPayload dfA, FwdPayload dfB)
   ) =>
-  (Proxy dfA, Proxy dfB) ->
-  Proxy dfC ->
   Circuit (dfA, dfB) dfC
-zip dfAB dfC =
-  tupFromDfConv dfAB
+zip =
+  tupFromDfConv
     |> coerceCircuit
       ( tupCircuits
           Df.zip
           (reverseCircuit $ Df.roundrobin |> vecToTup)
       )
-    |> toDfCircuit dfC
+    |> (toDfCircuit :: Circuit (Df (Dom dfC) (FwdPayload dfC), Reverse (Df (Dom dfC) (BwdPayload dfC))) dfC)
 
 -- | Like 'P.partition'
 partition ::
+  forall dfA dfB dfC.
   ( DfConv dfA
   , DfConv dfB
   , DfConv dfC
@@ -1057,21 +1038,20 @@ partition ::
   , FwdPayload dfA ~ FwdPayload dfB
   , FwdPayload dfA ~ FwdPayload dfC
   ) =>
-  Proxy dfA ->
-  (Proxy dfB, Proxy dfC) ->
   (FwdPayload dfA -> Bool) ->
   Circuit dfA (dfB, dfC)
-partition dfA dfBC f =
-  fromDfCircuit dfA
+partition f =
+  (fromDfCircuit :: Circuit dfA (Df (Dom dfA) (FwdPayload dfA), Reverse (Df (Dom dfA) (BwdPayload dfA))))
     |> coerceCircuit
       ( tupCircuits
           (Df.partition f)
           (reverseCircuit $ tupToVec |> Df.roundrobinCollect Df.Parallel)
       )
-    |> tupToDfConv dfBC
+    |> tupToDfConv
 
 -- | Route a DfConv stream to another corresponding to the index
 route ::
+  forall dfA dfB n.
   ( DfConv dfA
   , DfConv dfB
   , BwdPayload dfA ~ BwdPayload dfB
@@ -1081,17 +1061,15 @@ route ::
   , KnownNat n
   , 1 <= n
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   Circuit dfA (Vec n dfB)
-route dfA dfB =
-  fromDfCircuit dfA
+route =
+  (fromDfCircuit :: Circuit dfA (Df (Dom dfA) (FwdPayload dfA), Reverse (Df (Dom dfA) (BwdPayload dfA))))
     |> coerceCircuit
       ( tupCircuits
           Df.route
           (reverseCircuit (Df.roundrobinCollect Df.Parallel))
       )
-    |> vecToDfConv dfB
+    |> vecToDfConv
 
 selectHelperA :: Circuit ((a, b), (c, d)) ((a, c), (b, d))
 selectHelperA = Circuit Proxy Proxy ((f *** f) . swap)
@@ -1123,18 +1101,16 @@ select ::
   , FwdPayload dfB ~ Index n
   , KnownNat n
   ) =>
-  (Proxy dfA, Proxy dfB) ->
-  Proxy dfC ->
   Circuit (Vec n dfA, dfB) dfC
-select (dfA, dfB) dfC =
-  tupCircuits (vecFromDfConv dfA) (fromDfCircuit dfB)
+select =
+  tupCircuits (vecFromDfConv) fromDfCircuit
     |> selectHelperA
     |> coerceCircuit
       ( tupCircuits
           Df.select
           (reverseCircuit $ Df.roundrobin |> selectHelperB)
       )
-    |> toDfCircuit dfC
+    |> toDfCircuit
 
 -- | Select /selectN/ samples from channel /n/.
 selectN ::
@@ -1151,18 +1127,16 @@ selectN ::
   , KnownNat n
   , KnownNat selectN
   ) =>
-  (Proxy dfA, Proxy dfB) ->
-  Proxy dfC ->
   Circuit (Vec n dfA, dfB) dfC
-selectN (dfA, dfB) dfC =
-  tupCircuits (vecFromDfConv dfA) (fromDfCircuit dfB)
+selectN =
+  tupCircuits (vecFromDfConv) fromDfCircuit
     |> selectHelperA
     |> coerceCircuit
       ( tupCircuits
           Df.selectN
           (reverseCircuit $ Df.roundrobin |> selectHelperB)
       )
-    |> toDfCircuit dfC
+    |> toDfCircuit
 
 {- | Selects samples from channel /n/ until the predicate holds. The cycle in
 which the predicate turns true is included.
@@ -1180,19 +1154,17 @@ selectUntil ::
   , FwdPayload dfB ~ Index n
   , KnownNat n
   ) =>
-  (Proxy dfA, Proxy dfB) ->
-  Proxy dfC ->
   (FwdPayload dfA -> Bool) ->
   Circuit (Vec n dfA, dfB) dfC
-selectUntil (dfA, dfB) dfC f =
-  tupCircuits (vecFromDfConv dfA) (fromDfCircuit dfB)
+selectUntil f =
+  tupCircuits (vecFromDfConv) fromDfCircuit
     |> selectHelperA
     |> coerceCircuit
       ( tupCircuits
           (Df.selectUntil f)
           (reverseCircuit $ Df.roundrobin |> selectHelperB)
       )
-    |> toDfCircuit dfC
+    |> toDfCircuit
 
 {- | Copy data of a single DfConv stream to multiple. LHS will only receive an
 acknowledgement when all RHS receivers have acknowledged data.
@@ -1208,17 +1180,15 @@ fanout ::
   , KnownNat numB
   , 1 <= numB
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   Circuit dfA (Vec numB dfB)
-fanout dfA dfB =
-  fromDfCircuit dfA
+fanout =
+  fromDfCircuit
     |> coerceCircuit
       ( tupCircuits
           Df.fanout
           (reverseCircuit (Df.roundrobinCollect Df.Parallel))
       )
-    |> vecToDfConv dfB
+    |> vecToDfConv
 
 -- | Merge data of multiple streams using a user supplied function
 fanin ::
@@ -1232,18 +1202,16 @@ fanin ::
   , KnownNat numA
   , numA ~ (decNumA + 1)
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   (FwdPayload dfA -> FwdPayload dfA -> FwdPayload dfA) ->
   Circuit (Vec numA dfA) dfB
-fanin dfA dfB f =
-  vecFromDfConv dfA
+fanin f =
+  vecFromDfConv
     |> coerceCircuit
       ( tupCircuits
           (Df.fanin f)
           (reverseCircuit Df.roundrobin)
       )
-    |> toDfCircuit dfB
+    |> toDfCircuit
 
 -- | Merge data of multiple streams using Monoid's '<>'.
 mfanin ::
@@ -1258,17 +1226,15 @@ mfanin ::
   , KnownNat numA
   , numA ~ (decNumA + 1)
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   Circuit (Vec numA dfA) dfB
-mfanin dfA dfB =
-  vecFromDfConv dfA
+mfanin =
+  vecFromDfConv
     |> coerceCircuit
       ( tupCircuits
           Df.mfanin
           (reverseCircuit Df.roundrobin)
       )
-    |> toDfCircuit dfB
+    |> toDfCircuit
 
 -- | Bundle a vector of DfConv streams into one.
 bundleVec ::
@@ -1281,17 +1247,15 @@ bundleVec ::
   , KnownNat n
   , n ~ (decN + 1)
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   Circuit (Vec n dfA) dfB
-bundleVec dfA dfB =
-  vecFromDfConv dfA
+bundleVec =
+  vecFromDfConv
     |> coerceCircuit
       ( tupCircuits
           Df.bundleVec
           (reverseCircuit Df.roundrobin)
       )
-    |> toDfCircuit dfB
+    |> toDfCircuit
 
 {- | Split up a DfConv stream of a vector into multiple independent DfConv
 streams.
@@ -1307,17 +1271,15 @@ unbundleVec ::
   , KnownNat n
   , 1 <= n
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   Circuit dfA (Vec n dfB)
-unbundleVec dfA dfB =
-  fromDfCircuit dfA
+unbundleVec =
+  fromDfCircuit
     |> coerceCircuit
       ( tupCircuits
           Df.unbundleVec
           (reverseCircuit (Df.roundrobinCollect Df.Parallel))
       )
-    |> vecToDfConv dfB
+    |> vecToDfConv
 
 {- | Distribute data across multiple components on the RHS. Useful if you want
 to parallelize a workload across multiple (slow) workers. For optimal
@@ -1333,17 +1295,15 @@ roundrobin ::
   , KnownNat n
   , n ~ (decN + 1)
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   Circuit dfA (Vec n dfB)
-roundrobin dfA dfB =
-  fromDfCircuit dfA
+roundrobin =
+  fromDfCircuit
     |> coerceCircuit
       ( tupCircuits
           Df.roundrobin
           (reverseCircuit (Df.roundrobinCollect Df.Parallel))
       )
-    |> vecToDfConv dfB
+    |> vecToDfConv
 
 {- | Opposite of 'roundrobin'. Useful to collect data from workers that only
 produce a result with an interval of /n/ cycles.
@@ -1358,18 +1318,16 @@ roundrobinCollect ::
   , KnownNat n
   , n ~ (decN + 1)
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   Df.CollectMode ->
   Circuit (Vec n dfA) dfB
-roundrobinCollect dfA dfB mode =
-  vecFromDfConv dfA
+roundrobinCollect mode =
+  vecFromDfConv
     |> coerceCircuit
       ( tupCircuits
           (Df.roundrobinCollect mode)
           (reverseCircuit Df.roundrobin)
       )
-    |> toDfCircuit dfB
+    |> toDfCircuit
 
 -- | Place register on /forward/ part of a circuit.
 registerFwd ::
@@ -1381,13 +1339,11 @@ registerFwd ::
   , FwdPayload dfA ~ FwdPayload dfB
   , NFDataX (FwdPayload dfA)
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   Circuit dfA dfB
-registerFwd dfA dfB =
-  fromDfCircuit dfA
+registerFwd =
+  fromDfCircuit
     |> tupCircuits Df.registerFwd idC
-    |> toDfCircuit dfB
+    |> toDfCircuit
 
 {- | Place register on /backward/ part of a circuit. This is implemented using
 a in-logic two-element shift register.
@@ -1401,13 +1357,11 @@ registerBwd ::
   , FwdPayload dfA ~ FwdPayload dfB
   , NFDataX (FwdPayload dfA)
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   Circuit dfA dfB
-registerBwd dfA dfB =
-  fromDfCircuit dfA
+registerBwd =
+  fromDfCircuit
     |> tupCircuits Df.registerBwd idC
-    |> toDfCircuit dfB
+    |> toDfCircuit
 
 -- | A fifo buffer with user-provided depth. Uses blockram to store data
 fifo ::
@@ -1421,14 +1375,12 @@ fifo ::
   , FwdPayload dfA ~ FwdPayload dfB
   , NFDataX (FwdPayload dfA)
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   SNat depth ->
   Circuit dfA dfB
-fifo dfA dfB fifoDepth =
-  fromDfCircuit dfA
+fifo fifoDepth =
+  fromDfCircuit
     |> tupCircuits (Df.fifo fifoDepth) idC
-    |> toDfCircuit dfB
+    |> toDfCircuit
 
 {- | Emit values given in list. Emits no data while reset is asserted. Not
 synthesizable.
@@ -1437,11 +1389,10 @@ drive ::
   ( DfConv dfA
   , HiddenClockResetEnable (Dom dfA)
   ) =>
-  Proxy dfA ->
   SimulationConfig ->
   [Maybe (FwdPayload dfA)] ->
   Circuit () dfA
-drive dfA conf s0 = Df.drive conf s0 |> dfToDfConvOtp dfA
+drive conf s0 = Df.drive conf s0 |> dfToDfConvOtp
 
 {- | Sample protocol to a list of values. Drops values while reset is asserted.
 Not synthesizable.
@@ -1452,11 +1403,10 @@ sample ::
   ( DfConv dfB
   , HiddenClockResetEnable (Dom dfB)
   ) =>
-  Proxy dfB ->
   SimulationConfig ->
   Circuit () dfB ->
   [Maybe (FwdPayload dfB)]
-sample dfB conf c = Df.sample conf (c |> dfToDfConvInp dfB)
+sample conf c = Df.sample conf (c |> dfToDfConvInp)
 
 {- | Stall every valid Df packet with a given number of cycles. If there are
 more valid packets than given numbers, passthrough all valid packets
@@ -1472,8 +1422,6 @@ stall ::
   , FwdPayload dfA ~ FwdPayload dfB
   , HasCallStack
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   SimulationConfig ->
   -- | Acknowledgement to send when LHS does not send data. Stall will act
   -- transparently when reset is asserted.
@@ -1481,10 +1429,10 @@ stall ::
   -- Number of cycles to stall for every valid Df packet
   [Int] ->
   Circuit dfA dfB
-stall dfA dfB conf stallAck stalls =
-  dfToDfConvInp dfA
+stall conf stallAck stalls =
+  dfToDfConvInp
     |> Df.stall conf stallAck stalls
-    |> dfToDfConvOtp dfB
+    |> dfToDfConvOtp
 
 {- | Simulate a single domain protocol. Not synthesizable.
 
@@ -1497,14 +1445,13 @@ rather than its left, and we take the @FwdPayload@ of @dfA@ rather than
 than returning a @Circuit@ like most other functions do.
 -}
 simulate ::
+  forall dfA dfB.
   ( DfConv dfA
   , DfConv dfB
   , Dom dfA ~ Dom dfB
   , KnownDomain (Dom dfA)
   , HasCallStack
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   -- | Simulation configuration. Use 'Data.Default.def' for sensible defaults.
   SimulationConfig ->
   -- | Circuit to simulate.
@@ -1517,12 +1464,12 @@ simulate ::
   [Maybe (FwdPayload dfA)] ->
   -- | Outputs
   [Maybe (FwdPayload dfB)]
-simulate dfA dfB conf circ = Df.simulate conf circ'
+simulate conf circ = Df.simulate conf circ'
  where
   circ' clk rst en =
-    withClockResetEnable clk rst en (dfToDfConvOtp dfA)
+    withClockResetEnable clk rst en (dfToDfConvOtp)
       |> circ clk rst en
-      |> withClockResetEnable clk rst en (dfToDfConvInp dfB)
+      |> withClockResetEnable clk rst en (dfToDfConvInp @dfB)
 
 {- | Given behavior along the backward channel, turn an arbitrary 'DfConv'
 circuit into an easily-testable 'Df' circuit representing the forward
@@ -1531,6 +1478,7 @@ channel. Behavior along the backward channel is specified by a @[Bool]@
 of data values to feed in).
 -}
 dfConvTestBench ::
+  forall dfA dfB.
   ( DfConv dfA
   , DfConv dfB
   , NFDataX (BwdPayload dfB)
@@ -1539,26 +1487,22 @@ dfConvTestBench ::
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   [Bool] ->
   [Maybe (BwdPayload dfB)] ->
   Circuit dfA dfB ->
   Circuit
     (Df (Dom dfA) (FwdPayload dfA))
     (Df (Dom dfB) (FwdPayload dfB))
-dfConvTestBench dfA dfB bwdAcks bwdPayload circ =
+dfConvTestBench bwdAcks bwdPayload circ =
   mapCircuit (,()) P.fst P.fst (,())
-    $ tupCircuits idC (ackCircuit dfA)
-    |> toDfCircuit dfA
+    $ tupCircuits idC (ackCircuit :: Circuit (Reverse ()) (Reverse (Df (Dom dfA) (BwdPayload dfA))))
+    |> (toDfCircuit @dfA)
     |> circ
-    |> fromDfCircuit dfB
+    |> (fromDfCircuit @dfB)
     |> tupCircuits idC driveCircuit
  where
-  ackCircuit ::
-    Proxy dfA ->
-    Circuit (Reverse ()) (Reverse (Df (Dom dfA) (BwdPayload dfA)))
-  ackCircuit _ =
+  ackCircuit :: Circuit (Reverse ()) (Reverse (Df (Dom dfA) (BwdPayload dfA)))
+  ackCircuit =
     reverseCircuit
       $ Circuit Proxy Proxy
       $ P.const
@@ -1574,6 +1518,7 @@ channel. Behavior along the forward channel is specified by a
 (a list of acknowledges to provide).
 -}
 dfConvTestBenchRev ::
+  forall dfA dfB.
   ( DfConv dfA
   , DfConv dfB
   , NFDataX (FwdPayload dfA)
@@ -1582,26 +1527,24 @@ dfConvTestBenchRev ::
   , Dom dfA ~ Dom dfB
   , HiddenClockResetEnable (Dom dfA)
   ) =>
-  Proxy dfA ->
-  Proxy dfB ->
   [Maybe (FwdPayload dfA)] ->
   [Bool] ->
   Circuit dfA dfB ->
   Circuit
     (Df (Dom dfB) (BwdPayload dfB))
     (Df (Dom dfA) (BwdPayload dfA))
-dfConvTestBenchRev dfA dfB fwdPayload fwdAcks circ =
+dfConvTestBenchRev fwdPayload fwdAcks circ =
   mapCircuit ((),) P.snd P.snd ((),)
     $ reverseCircuit
     $ tupCircuits driveCircuit idC
-    |> toDfCircuit dfA
+    |> (toDfCircuit @dfA)
     |> circ
-    |> fromDfCircuit dfB
-    |> tupCircuits (ackCircuit dfB) idC
+    |> (fromDfCircuit @dfB)
+    |> tupCircuits (ackCircuit :: Circuit (Df (Dom dfB) (FwdPayload dfB)) ()) idC
  where
   driveCircuit = driveC def fwdPayload
-  ackCircuit :: Proxy dfB -> Circuit (Df (Dom dfB) (FwdPayload dfB)) ()
-  ackCircuit _ =
+  ackCircuit :: Circuit (Df (Dom dfB) (FwdPayload dfB)) ()
+  ackCircuit =
     Circuit Proxy Proxy
       $ P.const
         ( boolsToBwd (Proxy @(Df _ _)) fwdAcks
