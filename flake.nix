@@ -121,7 +121,7 @@
         # Please do note that if you work with Nix, you need to remove the `cabal.project` file at
         # the root of the directory! Cabal prioritizes local source overrides over Nix, which causes
         # the circuit-notation package to incorrectly fetched from Hackage rather than Nix.
-        devShells = all-shells // { default = all-shells."${default-version}-minimal"; };
+        devShells = all-shells // { default = all-shells."${default-version}-full"; };
 
         # The default directly refers to the default package of the default ghc version of this flake
         # All other entries aren't packages, they're a set of packages for each supported ghc version
