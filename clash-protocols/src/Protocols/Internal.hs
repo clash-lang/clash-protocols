@@ -367,8 +367,8 @@ instance (C.NFDataX a, C.ShowX a, Show a, C.KnownDomain dom) => Drivable (CSigna
     let fwd1 = C.fromList_lazy (replicate resetCycles f <> fwd0 <> repeat f)
      in Circuit (\_ -> ((), fwd1))
 
-  sampleC SimulationConfig{resetCycles, ignoreReset} (Circuit f) =
-    let sampled = CE.sample_lazy (snd (f ((), ())))
+  sampleC SimulationConfig{resetCycles, ignoreReset, timeoutAfter} (Circuit f) =
+    let sampled = CE.sampleN_lazy timeoutAfter (snd (f ((), ())))
      in if ignoreReset then drop resetCycles sampled else sampled
 
 {- | Simulate a circuit. Includes samples while reset is asserted.

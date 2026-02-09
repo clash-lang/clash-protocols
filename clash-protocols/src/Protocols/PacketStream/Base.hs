@@ -370,7 +370,7 @@ channel if reset is asserted.
 -}
 forceResetSanity ::
   forall dom dataWidth meta.
-  (HiddenClockResetEnable dom) =>
+  (KnownDomain dom, HiddenReset dom) =>
   Circuit (PacketStream dom dataWidth meta) (PacketStream dom dataWidth meta)
 forceResetSanity = forceResetSanityGeneric
 

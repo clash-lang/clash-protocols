@@ -19,6 +19,12 @@ module Protocols.Hedgehog (
   propWithModel,
   propWithModelSingleDomain,
 
+  -- * Monadic test functions
+  idWithModelT,
+  idWithModelSingleDomainT,
+  propWithModelT,
+  propWithModelSingleDomainT,
+
   -- * Internals
   genStallAck,
   genStallMode,
@@ -29,7 +35,7 @@ module Protocols.Hedgehog (
 -- base
 import Control.Concurrent (threadDelay)
 import Control.Monad (when)
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Proxy (Proxy (Proxy))
 import GHC.Stack (HasCallStack)
 import Prelude
@@ -51,7 +57,10 @@ import Hedgehog.Gen qualified as Gen
 import Hedgehog.Range qualified as Range
 
 -- lifted-async
-import Control.Concurrent.Async.Lifted (race)
+import Control.Concurrent.Async.Lifted
+
+-- monad-control
+import Control.Monad.Trans.Control (MonadBaseControl)
 
 -- | Whether to stall or not. Used in 'idWithModel'.
 data StallMode = NoStall | Stall
@@ -68,7 +77,8 @@ resetGen n =
 {- | Attach a timeout to a property. Fails if the property does not finish in
 the given time. The timeout is given in milliseconds.
 -}
-withTimeoutMs :: Int -> H.PropertyT IO a -> H.PropertyT IO a
+withTimeoutMs ::
+  (MonadIO m, MonadBaseControl IO m) => Int -> H.PropertyT m a -> H.PropertyT m a
 withTimeoutMs timeout v = do
   result <-
     race
@@ -105,8 +115,30 @@ propWithModel ::
   -- as a first argument, and the sampled data as a second argument.
   (ExpectType b -> ExpectType b -> H.PropertyT IO ()) ->
   H.Property
-propWithModel eOpts genData model prot prop =
-  H.property $ maybe id withTimeoutMs (eoTimeoutMs eOpts) $ do
+propWithModel eOps gen model dut prop = H.property $ propWithModelT eOps gen model dut prop
+
+{- |
+Monadic version of 'propWithModel'.
+Allows property-based protocol testing in any monad supporting 'MonadIO' and 'MonadBaseControl IO'.
+This is useful for integrating with monadic test frameworks or when additional effects are needed during testing.
+-}
+propWithModelT ::
+  forall a b m.
+  (Test a, Test b, HasCallStack, Monad m, MonadIO m, MonadBaseControl IO m) =>
+  -- | Options, see 'ExpectOptions'
+  ExpectOptions ->
+  -- | Test data generator
+  H.Gen (ExpectType a) ->
+  -- | Model
+  (ExpectType a -> ExpectType b) ->
+  -- | Implementation
+  Circuit a b ->
+  -- | Property to test for. Function is given the data produced by the model
+  -- as a first argument, and the sampled data as a second argument.
+  (ExpectType b -> ExpectType b -> H.PropertyT m ()) ->
+  H.PropertyT m ()
+propWithModelT eOpts genData model prot prop =
+  maybe id withTimeoutMs (eoTimeoutMs eOpts) $ do
     dat <- H.forAll genData
     when (eoTrace eOpts) $ liftIO $ putStr "propWithModel: dat: " >> print dat
 
@@ -191,8 +223,26 @@ idWithModel ::
   -- | Implementation
   Circuit a b ->
   H.Property
-idWithModel eOpts genData model prot =
-  propWithModel eOpts genData model prot (===)
+idWithModel eOpts genData model prot = H.property $ idWithModelT eOpts genData model prot
+
+{- |
+Monadic version of 'idWithModel'.
+Runs the protocol-vs-model test using the default equality property (===) in any monad supporting 'MonadIO' and 'MonadBaseControl IO'.
+Use this when you want to run the test in a monadic context or need additional effects.
+-}
+idWithModelT ::
+  forall a b m.
+  (Test a, Test b, HasCallStack, Monad m, MonadIO m, MonadBaseControl IO m) =>
+  -- | Options, see 'ExpectOptions'
+  ExpectOptions ->
+  -- | Test data generator
+  H.Gen (ExpectType a) ->
+  -- | Model
+  (ExpectType a -> ExpectType b) ->
+  -- | Implementation
+  Circuit a b ->
+  H.PropertyT m ()
+idWithModelT eOpts genData model prot = propWithModelT eOpts genData model prot (===)
 
 -- | Same as 'propWithModel', but with single clock, reset, and enable.
 propWithModelSingleDomain ::
@@ -210,8 +260,39 @@ propWithModelSingleDomain ::
   -- as a first argument, and the sampled data as a second argument.
   (ExpectType b -> ExpectType b -> H.PropertyT IO ()) ->
   H.Property
-propWithModelSingleDomain eOpts genData model0 circuit0 prop =
-  propWithModel eOpts genData model1 circuit1 prop
+propWithModelSingleDomain eOpts genData model dut prop =
+  H.property $
+    propWithModelSingleDomainT eOpts genData model dut prop
+
+{- |
+Monadic version of 'propWithModelSingleDomain'.
+Allows property-based protocol testing for single-domain circuits in any monad supporting 'MonadIO' and 'MonadBaseControl IO'.
+This is useful for monadic test integration or when effects are required during testing.
+-}
+propWithModelSingleDomainT ::
+  forall dom a b m.
+  ( Test a
+  , Test b
+  , C.KnownDomain dom
+  , HasCallStack
+  , Monad m
+  , MonadIO m
+  , MonadBaseControl IO m
+  ) =>
+  -- | Options, see 'ExpectOptions'
+  ExpectOptions ->
+  -- | Test data generator
+  H.Gen (ExpectType a) ->
+  -- | Model
+  (C.Clock dom -> C.Reset dom -> C.Enable dom -> ExpectType a -> ExpectType b) ->
+  -- | Implementation
+  (C.Clock dom -> C.Reset dom -> C.Enable dom -> Circuit a b) ->
+  -- | Property to test for. Function is given the data produced by the model
+  -- as a first argument, and the sampled data as a second argument.
+  (ExpectType b -> ExpectType b -> H.PropertyT m ()) ->
+  H.PropertyT m ()
+propWithModelSingleDomainT eOpts genData model0 circuit0 =
+  propWithModelT eOpts genData model1 circuit1
  where
   clk = C.clockGen
   rst = resetGen (eoResetCycles eOpts)
@@ -234,7 +315,35 @@ idWithModelSingleDomain ::
   (C.Clock dom -> C.Reset dom -> C.Enable dom -> Circuit a b) ->
   H.Property
 idWithModelSingleDomain eOpts genData model0 circuit0 =
-  propWithModelSingleDomain eOpts genData model0 circuit0 (===)
+  H.property $
+    idWithModelSingleDomainT eOpts genData model0 circuit0
+
+{- |
+Monadic version of 'idWithModelSingleDomain'.
+Runs the single-domain protocol-vs-model test using the default equality property (===) in any monad supporting 'MonadIO' and 'MonadBaseControl IO'.
+Use this for monadic test frameworks or when additional effects are needed.
+-}
+idWithModelSingleDomainT ::
+  forall dom a b m.
+  ( Test a
+  , Test b
+  , C.KnownDomain dom
+  , HasCallStack
+  , Monad m
+  , MonadIO m
+  , MonadBaseControl IO m
+  ) =>
+  -- | Options, see 'ExpectOptions'
+  ExpectOptions ->
+  -- | Test data generator
+  H.Gen (ExpectType a) ->
+  -- | Model
+  (C.Clock dom -> C.Reset dom -> C.Enable dom -> ExpectType a -> ExpectType b) ->
+  -- | Implementation
+  (C.Clock dom -> C.Reset dom -> C.Enable dom -> Circuit a b) ->
+  H.PropertyT m ()
+idWithModelSingleDomainT eOpts genData model0 circuit0 =
+  propWithModelSingleDomainT eOpts genData model0 circuit0 (===)
 
 -- | Generator for 'StallMode'. Shrinks towards 'NoStall'.
 genStallMode :: H.Gen StallMode

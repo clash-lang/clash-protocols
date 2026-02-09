@@ -174,7 +174,9 @@ channel if reset is asserted.
 -}
 forceResetSanity ::
   forall dom a.
-  (C.HiddenClockResetEnable dom) =>
+  ( C.KnownDomain dom
+  , C.HiddenReset dom
+  ) =>
   Circuit (Df dom a) (Df dom a)
 forceResetSanity = forceResetSanityGeneric
 
@@ -1027,11 +1029,10 @@ sample ::
   Circuit () (Df dom b) ->
   [Maybe b]
 sample SimulationConfig{..} c =
-  P.take timeoutAfter $
-    CE.sample_lazy $
-      ignoreWhileInReset $
-        P.snd $
-          toSignals c ((), Ack <$> rst_n)
+  CE.sampleN_lazy timeoutAfter $
+    ignoreWhileInReset $
+      P.snd $
+        toSignals c ((), Ack <$> rst_n)
  where
   ignoreWhileInReset s =
     uncurry (bool Nothing)
