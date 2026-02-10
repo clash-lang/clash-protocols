@@ -17,8 +17,13 @@ leModulusDivisor :: forall a b. (1 <= b) => Dict (Mod a b + 1 <= b)
 leModulusDivisor = unsafeCoerce (Dict :: Dict (0 <= 0))
 
 -- | if (1 <= a) and (1 <= b) then (1 <= DivRU a b)
-strictlyPositiveDivRu :: forall a b. (1 <= a, 1 <= b) => Dict (1 <= DivRU a b)
-strictlyPositiveDivRu = unsafeCoerce (Dict :: Dict (0 <= 0))
+strictlyPositiveDivRu ::
+  forall a b.
+  (1 <= a, 1 <= b) =>
+  -- | XXX: The 'Constraint' equality is there to work around
+  -- issue github.com/clash-lang/ghc-typelits-extra/issues/68.
+  Dict ((1 <= DivRU a b) ~ (() :: Constraint))
+strictlyPositiveDivRu = unsafeCoerce (Dict :: Dict (() ~ ()))
 
 -- | if (1 <= a) then (b <= ceil(b/a) * a)
 leTimesDivRu :: forall a b. (1 <= a) => Dict (b <= a * DivRU b a)
