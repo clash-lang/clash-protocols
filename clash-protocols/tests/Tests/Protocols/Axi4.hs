@@ -12,6 +12,7 @@ import Clash.Prelude qualified as C
 import Data.Proxy (Proxy (..))
 
 -- hedgehog
+import Clash.Hedgehog.Sized.Vector (genVec)
 import Hedgehog
 import Hedgehog.Gen qualified as Gen
 import Hedgehog.Range qualified as Range
