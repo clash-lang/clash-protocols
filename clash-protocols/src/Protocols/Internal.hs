@@ -310,6 +310,20 @@ instance (Drivable a, Drivable b) => Drivable (a, b) where
 
 drivableTupleInstances 3 maxTupleSize
 
+instance (Simulate a) => Simulate (Reverse a) where
+  type SimulateFwdType (Reverse a) = SimulateBwdType a
+  type SimulateBwdType (Reverse a) = SimulateFwdType a
+  type SimulateChannels (Reverse a) = SimulateChannels a
+
+  simToSigFwd Proxy = simToSigBwd (Proxy @a)
+  simToSigBwd Proxy = simToSigFwd (Proxy @a)
+  sigToSimFwd Proxy = sigToSimBwd (Proxy @a)
+  sigToSimBwd Proxy = sigToSimFwd (Proxy @a)
+
+  stallC conf stalls =
+    let Circuit stalled = stallC @a conf stalls
+     in Circuit $ \(fwd, bwd) -> swap (stalled (bwd, fwd))
+
 instance (CE.KnownNat n, Simulate a) => Simulate (C.Vec n a) where
   type SimulateFwdType (C.Vec n a) = C.Vec n (SimulateFwdType a)
   type SimulateBwdType (C.Vec n a) = C.Vec n (SimulateBwdType a)
