@@ -262,10 +262,10 @@ instance (Simulate a, Simulate b) => Simulate (a, b) where
   type SimulateBwdType (a, b) = (SimulateBwdType a, SimulateBwdType b)
   type SimulateChannels (a, b) = SimulateChannels a + SimulateChannels b
 
-  simToSigFwd Proxy (fwdsA, fwdsB) = (simToSigFwd (Proxy @a) fwdsA, simToSigFwd (Proxy @b) fwdsB)
-  simToSigBwd Proxy (bwdsA, bwdsB) = (simToSigBwd (Proxy @a) bwdsA, simToSigBwd (Proxy @b) bwdsB)
-  sigToSimFwd Proxy (fwdSigA, fwdSigB) = (sigToSimFwd (Proxy @a) fwdSigA, sigToSimFwd (Proxy @b) fwdSigB)
-  sigToSimBwd Proxy (bwdSigA, bwdSigB) = (sigToSimBwd (Proxy @a) bwdSigA, sigToSimBwd (Proxy @b) bwdSigB)
+  simToSigFwd Proxy ~(fwdsA, fwdsB) = (simToSigFwd (Proxy @a) fwdsA, simToSigFwd (Proxy @b) fwdsB)
+  simToSigBwd Proxy ~(bwdsA, bwdsB) = (simToSigBwd (Proxy @a) bwdsA, simToSigBwd (Proxy @b) bwdsB)
+  sigToSimFwd Proxy ~(fwdSigA, fwdSigB) = (sigToSimFwd (Proxy @a) fwdSigA, sigToSimFwd (Proxy @b) fwdSigB)
+  sigToSimBwd Proxy ~(bwdSigA, bwdSigB) = (sigToSimBwd (Proxy @a) bwdSigA, sigToSimBwd (Proxy @b) bwdSigB)
 
   stallC conf stalls =
     let
@@ -273,7 +273,7 @@ instance (Simulate a, Simulate b) => Simulate (a, b) where
       Circuit stalledL = stallC @a conf stallsL
       Circuit stalledR = stallC @b conf stallsR
      in
-      Circuit $ \((fwdL0, fwdR0), (bwdL0, bwdR0)) ->
+      Circuit $ \(~((fwdL0, fwdR0), (bwdL0, bwdR0))) ->
         let
           (fwdL1, bwdL1) = stalledL (fwdL0, bwdL0)
           (fwdR1, bwdR1) = stalledR (fwdR0, bwdR0)

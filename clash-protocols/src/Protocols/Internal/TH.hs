@@ -49,10 +49,10 @@ simulateTupleInstance n =
       type SimulateBwdType $instTy = $bwdType
       type SimulateChannels $instTy = $channelSum
 
-      simToSigFwd _ $fwdPat0 = $(tupE $ zipWith (\ty expr -> [e|simToSigFwd (Proxy @($ty)) $expr|]) circTys fwdExpr)
-      simToSigBwd _ $bwdPat0 = $(tupE $ zipWith (\ty expr -> [e|simToSigBwd (Proxy @($ty)) $expr|]) circTys bwdExpr)
-      sigToSimFwd _ $fwdPat0 = $(tupE $ zipWith (\ty expr -> [e|sigToSimFwd (Proxy @($ty)) $expr|]) circTys fwdExpr)
-      sigToSimBwd _ $bwdPat0 = $(tupE $ zipWith (\ty expr -> [e|sigToSimBwd (Proxy @($ty)) $expr|]) circTys bwdExpr)
+      simToSigFwd _ $(tildeP fwdPat0) = $(tupE $ zipWith (\ty expr -> [e|simToSigFwd (Proxy @($ty)) $expr|]) circTys fwdExpr)
+      simToSigBwd _ $(tildeP bwdPat0) = $(tupE $ zipWith (\ty expr -> [e|simToSigBwd (Proxy @($ty)) $expr|]) circTys bwdExpr)
+      sigToSimFwd _ $(tildeP fwdPat0) = $(tupE $ zipWith (\ty expr -> [e|sigToSimFwd (Proxy @($ty)) $expr|]) circTys fwdExpr)
+      sigToSimBwd _ $(tildeP bwdPat0) = $(tupE $ zipWith (\ty expr -> [e|sigToSimBwd (Proxy @($ty)) $expr|]) circTys bwdExpr)
 
       stallC $(varP $ mkName "conf") $(varP $ mkName "rem0") = $stallCExpr
     |]
@@ -99,7 +99,7 @@ simulateTupleInstance n =
     stallCircuits <-
       concat <$> zipWithM mkStallCircuit [1 .. n] circTys
     LetE (stallVecs <> stallCircuits)
-      <$> [e|Circuit $ \($fwdPat0, $bwdPat0) -> $circuitResExpr|]
+      <$> [e|Circuit $ \(~($fwdPat0, $bwdPat0)) -> $circuitResExpr|]
 
   circuitResExpr = do
     stallCResultDecs <- concatMapM mkStallCResultDec [1 .. n]
