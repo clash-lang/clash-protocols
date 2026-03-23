@@ -11,6 +11,8 @@ module Protocols.Vec (
   zip5,
   unzip,
   unzip3,
+  unzip4,
+  unzip5,
   concat,
   unconcat,
 ) where
@@ -26,6 +28,8 @@ import Clash.Prelude hiding (
   unconcat,
   unzip,
   unzip3,
+  unzip4,
+  unzip5,
   zip,
   zip3,
   zip4,
@@ -98,7 +102,7 @@ Only works if the four vectors have the same length.
 zip4 ::
   (C.KnownNat n) =>
   Circuit (C.Vec n a, C.Vec n b, C.Vec n c, C.Vec n d) (C.Vec n (a, b, c, d))
-zip4 = applyC (\(a, b, c, d) -> C.zip4 a b c d) unzip4
+zip4 = applyC (\(a, b, c, d) -> C.zip4 a b c d) C.unzip4
 
 {- | Transforms five vectors of circuits into a vector of tuples of circuits.
 Only works if the five vectors have the same length.
@@ -106,7 +110,7 @@ Only works if the five vectors have the same length.
 zip5 ::
   (C.KnownNat n) =>
   Circuit (C.Vec n a, C.Vec n b, C.Vec n c, C.Vec n d, C.Vec n e) (C.Vec n (a, b, c, d, e))
-zip5 = applyC (\(a, b, c, d, e) -> C.zip5 a b c d e) unzip5
+zip5 = applyC (\(a, b, c, d, e) -> C.zip5 a b c d e) C.unzip5
 
 -- | Unzip a vector of tuples of circuits into a tuple of vectors of circuits.
 unzip ::
@@ -119,6 +123,24 @@ unzip3 ::
   (C.KnownNat n) =>
   Circuit (C.Vec n (a, b, c)) (C.Vec n a, C.Vec n b, C.Vec n c)
 unzip3 = applyC C.unzip3 (uncurry3 C.zip3)
+
+-- | Unzip a vector of 4-tuples of circuits into a 4-tuple of vectors of circuits.
+unzip4 ::
+  (C.KnownNat n) =>
+  Circuit (C.Vec n (a, b, c, d)) (C.Vec n a, C.Vec n b, C.Vec n c, C.Vec n d)
+unzip4 = applyC C.unzip4 (uncurry4 C.zip4)
+ where
+  uncurry4 :: (a -> b -> c -> d -> e) -> ((a, b, c, d) -> e)
+  uncurry4 f ~(a, b, c, d) = f a b c d
+
+-- | Unzip a vector of 5-tuples of circuits into a 5-tuple of vectors of circuits.
+unzip5 ::
+  (C.KnownNat n) =>
+  Circuit (C.Vec n (a, b, c, d, e)) (C.Vec n a, C.Vec n b, C.Vec n c, C.Vec n d, C.Vec n e)
+unzip5 = applyC C.unzip5 (uncurry5 C.zip5)
+ where
+  uncurry5 :: (a -> b -> c -> d -> e -> f) -> ((a, b, c, d, e) -> f)
+  uncurry5 f ~(a, b, c, d, e) = f a b c d e
 
 -- | transform a vector of vectors of circuits into a vector of circuits.
 concat ::
