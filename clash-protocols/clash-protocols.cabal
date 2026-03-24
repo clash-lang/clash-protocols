@@ -97,7 +97,7 @@ library
     , circuit-notation
     , clash-prelude-hedgehog
     , constraints
-    , data-default ^>= 0.7.1.1
+    , data-default >= 0.7.1.1 && < 0.9
     , deepseq
     , extra
     , hashable
