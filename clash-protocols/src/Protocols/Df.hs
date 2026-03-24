@@ -182,7 +182,7 @@ forceResetSanity = forceResetSanityGeneric
 
 -- | Coerce the payload of a Df stream.
 coerce :: (Coerce.Coercible a b) => Circuit (Df dom a) (Df dom b)
-coerce = fromSignals $ \(fwdA, bwdB) -> (Coerce.coerce bwdB, Coerce.coerce fwdA)
+coerce = fromSignals $ \(fwdA, bwdB) -> (bwdB, Coerce.coerce fwdA)
 
 {- | Takes one or more values from the left and "compresses" it into a single
 value that is occasionally sent to the right. Useful for taking small high-speed
@@ -337,7 +337,7 @@ pure a = Circuit (P.const ((), P.pure (Just a)))
 consume :: (C.HiddenReset dom) => Circuit (Df dom a) ()
 consume = Circuit (P.const (P.pure (Ack True), ()))
 
--- | Never acknowledge values.
+-- | Acknowledge but ignore values when out of reset, otherwise give backpressure.
 void :: (C.HiddenReset dom) => Circuit (Df dom a) ()
 void =
   Circuit
@@ -679,10 +679,10 @@ faninS ::
   Circuit (C.Vec n (Df dom a)) (Df dom a)
 faninS fS = bundleVec |> mapS (C.fold @(n C.- 1) <$> fS)
 
--- | Merge data of multiple 'Df' streams using Monoid's '<>'.
+-- | Merge data of multiple 'Df' streams using Semigroup's '<>'.
 mfanin ::
   forall n dom a.
-  (C.KnownNat n, Monoid a, 1 <= n) =>
+  (C.KnownNat n, Semigroup a, 1 <= n) =>
   Circuit (C.Vec n (Df dom a)) (Df dom a)
 mfanin = fanin (<>)
 
