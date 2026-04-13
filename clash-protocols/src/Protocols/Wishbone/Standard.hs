@@ -117,8 +117,8 @@ memoryWb ::
   , KnownNat dataBytes
   , HiddenClockResetEnable dom
   ) =>
-  ( Signal dom (BitVector addressBits) ->
-    Signal dom (Maybe (BitVector addressBits, BitVector (dataBytes * 8))) ->
+  ( Signal dom (Unsigned addressBits) ->
+    Signal dom (Maybe (Unsigned addressBits, BitVector (dataBytes * 8))) ->
     Signal dom (BitVector (dataBytes * 8))
   ) ->
   Circuit (Wishbone dom 'Standard addressBits dataBytes) ()

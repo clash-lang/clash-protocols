@@ -60,7 +60,7 @@ addrReadIdWb = Circuit go
     | busCycle && strobe =
         (emptyWishboneS2M @dataBytes)
           { acknowledge = True
-          , readData = resize addr
+          , readData = resize (pack addr)
           }
     | otherwise = emptyWishboneS2M
 
@@ -72,7 +72,7 @@ addrReadIdWbModel ::
   () ->
   Either String ()
 addrReadIdWbModel (Read addr _) s@WishboneS2M{..} ()
-  | acknowledge && hasX readData == Right (resize addr) = Right ()
+  | acknowledge && hasX readData == Right (resize (pack addr)) = Right ()
   | otherwise =
       Left $ "Read should have been acknowledged with address as DAT " <> show s
 addrReadIdWbModel Write{} s@WishboneS2M{..} ()
@@ -101,8 +101,8 @@ memoryWbModel ::
   ) =>
   WishboneMasterRequest addressBits dataBytes ->
   WishboneS2M dataBytes ->
-  [(BitVector addressBits, BitVector (dataBytes * 8))] ->
-  Either String [(BitVector addressBits, BitVector (dataBytes * 8))]
+  [(Unsigned addressBits, BitVector (dataBytes * 8))] ->
+  Either String [(Unsigned addressBits, BitVector (dataBytes * 8))]
 memoryWbModel (Read addr sel) s st
   | sel /= maxBound && err s = Right st
   | sel /= maxBound && not (err s) =
@@ -280,7 +280,7 @@ prop_specViolation_lenient = property $ do
           (emptyWishboneS2M @1)
             { acknowledge = True
             , err = True
-            , readData = addr
+            , readData = pack addr
             }
       | otherwise = emptyWishboneS2M
 

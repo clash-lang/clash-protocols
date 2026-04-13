@@ -77,8 +77,8 @@ import Prelude as P hiding (cycle)
 
 -- | Datatype representing a single transaction request sent from a Wishbone Master to a Wishbone Slave
 data WishboneMasterRequest addressBits dataBytes
-  = Read (BitVector addressBits) (BitVector dataBytes)
-  | Write (BitVector addressBits) (BitVector dataBytes) (BitVector (dataBytes * 8))
+  = Read (Unsigned addressBits) (BitVector dataBytes)
+  | Write (Unsigned addressBits) (BitVector dataBytes) (BitVector (dataBytes * 8))
   deriving stock (C.Generic)
   deriving anyclass (NFData, C.BitPack)
 
@@ -105,9 +105,9 @@ is ignored, for a 'Protocols.Wishbone.Standard.Hedgehog.Read' request only the s
 >>>
 :{
 let
-  readReqA = Read (0 :: BitVector 32) (0b1111 :: BitVector 4)
-  readReqB = Read (0 :: BitVector 32) (0b0001 :: BitVector 4)
-  writeReq = Write (0 :: BitVector 32) (0b1111 :: BitVector 4) (0x12345678 :: BitVector 32)
+  readReqA = Read (0 :: Unsigned 32) (0b1111 :: BitVector 4)
+  readReqB = Read (0 :: Unsigned 32) (0b0001 :: BitVector 4)
+  writeReq = Write (0 :: Unsigned 32) (0b1111 :: BitVector 4) (0x12345678 :: BitVector 32)
   s2mA = (emptyWishboneS2M @4)
     { readData = 0x00FF
     , acknowledge = True
@@ -622,8 +622,8 @@ genWishboneTransfer addrRange = do
   sel <- genDefinedBitVector
   dat <- genDefinedBitVector
   Gen.choice
-    [ pure $ Read (pack addr) sel
-    , pure $ Write (pack addr) sel dat
+    [ pure $ Read addr sel
+    , pure $ Write addr sel dat
     ]
 
 {- | Interpret a 'WishboneM2S' as a 'WishboneMasterRequest'.

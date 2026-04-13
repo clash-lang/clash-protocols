@@ -20,7 +20,7 @@ import Clash.Prelude qualified as C
 
 -- | Data communicated from a Wishbone Master to a Wishbone Slave
 data WishboneM2S addressBits dataBytes = WishboneM2S
-  { addr :: "ADR" ::: C.BitVector addressBits
+  { addr :: "ADR" ::: C.Unsigned addressBits
   -- ^ The address output array [ADR_O()] is used to pass a binary address. The higher array
   --   boundary is specific to the address width of the core, and the lower array boundary is
   --   determined by the data port size and granularity. For example the array size on a 32-bit
