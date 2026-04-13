@@ -27,6 +27,7 @@ import Protocols.Idle
 import Protocols.Internal
 
 instance (KnownNat n) => Hashable (Unsigned n)
+instance (KnownNat n) => Hashable (BitVector n)
 instance (KnownNat n, Hashable a) => Hashable (Vec n a) where
   hashWithSalt s v = hashWithSalt s (toList v)
 
@@ -65,7 +66,7 @@ type KnownAxi4StreamConfig conf =
 should be sent as a @Nothing@.
 -}
 data Axi4StreamM2S (conf :: Axi4StreamConfig) (userType :: Type) = Axi4StreamM2S
-  { _tdata :: Vec (DataWidth conf) (Unsigned 8)
+  { _tdata :: Vec (DataWidth conf) (BitVector 8)
   , _tkeep :: Vec (DataWidth conf) Bool
   , _tstrb :: Vec (DataWidth conf) Bool
   , _tlast :: Bool
