@@ -158,7 +158,7 @@ data
   | M2S_WriteAddress
       { _awid :: C.BitVector (AWIdWidth conf)
       -- ^ Write address id*
-      , _awaddr :: C.BitVector (AWAddrWidth conf)
+      , _awaddr :: C.Unsigned (AWAddrWidth conf)
       -- ^ Write address
       , _awregion :: RegionType (AWKeepRegion conf)
       -- ^ Write region*
@@ -291,7 +291,7 @@ one-to-one with the fields of 'M2S_WriteAddress' except for '_awlen',
 data Axi4WriteAddressInfo (conf :: Axi4WriteAddressConfig) (userType :: Type) = Axi4WriteAddressInfo
   { _awiid :: C.BitVector (AWIdWidth conf)
   -- ^ Id
-  , _awiaddr :: C.BitVector (AWAddrWidth conf)
+  , _awiaddr :: C.Unsigned (AWAddrWidth conf)
   -- ^ Address
   , _awiregion :: RegionType (AWKeepRegion conf)
   -- ^ Region

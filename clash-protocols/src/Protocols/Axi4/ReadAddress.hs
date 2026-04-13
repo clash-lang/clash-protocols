@@ -160,7 +160,7 @@ data
   | M2S_ReadAddress
       { _arid :: C.BitVector (ARIdWidth conf)
       -- ^ Read address id*
-      , _araddr :: C.BitVector (ARAddrWidth conf)
+      , _araddr :: C.Unsigned (ARAddrWidth conf)
       -- ^ Read address
       , _arregion :: RegionType (ARKeepRegion conf)
       -- ^ Read region*
@@ -276,7 +276,7 @@ one-to-one with the fields of 'M2S_ReadAddress' except for '_arlen',
 data Axi4ReadAddressInfo (conf :: Axi4ReadAddressConfig) (userType :: Type) = Axi4ReadAddressInfo
   { _ariid :: C.BitVector (ARIdWidth conf)
   -- ^ Id
-  , _ariaddr :: C.BitVector (ARAddrWidth conf)
+  , _ariaddr :: C.Unsigned (ARAddrWidth conf)
   -- ^ Address
   , _ariregion :: RegionType (ARKeepRegion conf)
   -- ^ Region
