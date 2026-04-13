@@ -303,21 +303,21 @@ type KnownSharedConfig config =
   , KeepTypeClass (KeepBurstCount config)
   , KeepTypeClass (KeepReadDataValid config)
   , KeepTypeClass (KeepEndOfPacket config)
-  , NFDataX (KeepType (KeepReadData config) (Unsigned (DataWidth config)))
-  , NFData (KeepType (KeepReadData config) (Unsigned (DataWidth config)))
-  , ShowX (KeepType (KeepReadData config) (Unsigned (DataWidth config)))
-  , Show (KeepType (KeepReadData config) (Unsigned (DataWidth config)))
-  , Eq (KeepType (KeepReadData config) (Unsigned (DataWidth config)))
-  , NFDataX (KeepType (KeepWriteData config) (Unsigned (DataWidth config)))
-  , NFData (KeepType (KeepWriteData config) (Unsigned (DataWidth config)))
-  , ShowX (KeepType (KeepWriteData config) (Unsigned (DataWidth config)))
-  , Show (KeepType (KeepWriteData config) (Unsigned (DataWidth config)))
-  , Eq (KeepType (KeepWriteData config) (Unsigned (DataWidth config)))
-  , NFDataX (KeepType (KeepByteEnable config) (Unsigned (ByteEnableWidth config)))
-  , NFData (KeepType (KeepByteEnable config) (Unsigned (ByteEnableWidth config)))
-  , ShowX (KeepType (KeepByteEnable config) (Unsigned (ByteEnableWidth config)))
-  , Show (KeepType (KeepByteEnable config) (Unsigned (ByteEnableWidth config)))
-  , Eq (KeepType (KeepByteEnable config) (Unsigned (ByteEnableWidth config)))
+  , NFDataX (KeepType (KeepReadData config) (BitVector (DataWidth config)))
+  , NFData (KeepType (KeepReadData config) (BitVector (DataWidth config)))
+  , ShowX (KeepType (KeepReadData config) (BitVector (DataWidth config)))
+  , Show (KeepType (KeepReadData config) (BitVector (DataWidth config)))
+  , Eq (KeepType (KeepReadData config) (BitVector (DataWidth config)))
+  , NFDataX (KeepType (KeepWriteData config) (BitVector (DataWidth config)))
+  , NFData (KeepType (KeepWriteData config) (BitVector (DataWidth config)))
+  , ShowX (KeepType (KeepWriteData config) (BitVector (DataWidth config)))
+  , Show (KeepType (KeepWriteData config) (BitVector (DataWidth config)))
+  , Eq (KeepType (KeepWriteData config) (BitVector (DataWidth config)))
+  , NFDataX (KeepType (KeepByteEnable config) (BitVector (ByteEnableWidth config)))
+  , NFData (KeepType (KeepByteEnable config) (BitVector (ByteEnableWidth config)))
+  , ShowX (KeepType (KeepByteEnable config) (BitVector (ByteEnableWidth config)))
+  , Show (KeepType (KeepByteEnable config) (BitVector (ByteEnableWidth config)))
+  , Eq (KeepType (KeepByteEnable config) (BitVector (ByteEnableWidth config)))
   , NFDataX (KeepType (KeepBurstCount config) (Unsigned (BurstCountWidth config)))
   , NFData (KeepType (KeepBurstCount config) (Unsigned (BurstCountWidth config)))
   , ShowX (KeepType (KeepBurstCount config) (Unsigned (BurstCountWidth config)))
@@ -346,15 +346,15 @@ type KnownSubordinateConfig config =
   , Show (KeepType (KeepAddr config) (Unsigned (AddrWidth (SShared config))))
   , Eq (KeepType (KeepAddr config) (Unsigned (AddrWidth (SShared config))))
   , NFDataX
-      (KeepType (KeepWriteByteEnable config) (Unsigned (ByteEnableWidth (SShared config))))
+      (KeepType (KeepWriteByteEnable config) (BitVector (ByteEnableWidth (SShared config))))
   , NFData
-      (KeepType (KeepWriteByteEnable config) (Unsigned (ByteEnableWidth (SShared config))))
+      (KeepType (KeepWriteByteEnable config) (BitVector (ByteEnableWidth (SShared config))))
   , ShowX
-      (KeepType (KeepWriteByteEnable config) (Unsigned (ByteEnableWidth (SShared config))))
+      (KeepType (KeepWriteByteEnable config) (BitVector (ByteEnableWidth (SShared config))))
   , Show
-      (KeepType (KeepWriteByteEnable config) (Unsigned (ByteEnableWidth (SShared config))))
+      (KeepType (KeepWriteByteEnable config) (BitVector (ByteEnableWidth (SShared config))))
   , Eq
-      (KeepType (KeepWriteByteEnable config) (Unsigned (ByteEnableWidth (SShared config))))
+      (KeepType (KeepWriteByteEnable config) (BitVector (ByteEnableWidth (SShared config))))
   )
 
 {- | Constraint representing a well-behaved manager config.
@@ -385,14 +385,14 @@ data AvalonManagerOut config = AvalonManagerOut
   { mo_writeData ::
       KeepType
         (KeepWriteData (MShared config))
-        (Unsigned (DataWidth (MShared config)))
+        (BitVector (DataWidth (MShared config)))
   , mo_addr :: Unsigned (AddrWidth (MShared config))
   , mo_read :: KeepType (KeepRead (MShared config)) Bool
   , mo_write :: KeepType (KeepWrite (MShared config)) Bool
   , mo_byteEnable ::
       KeepType
         (KeepByteEnable (MShared config))
-        (Unsigned (ByteEnableWidth (MShared config)))
+        (BitVector (ByteEnableWidth (MShared config)))
   , mo_burstCount ::
       KeepType
         (KeepBurstCount (MShared config))
@@ -425,7 +425,7 @@ data AvalonManagerIn config = AvalonManagerIn
   { mi_readData ::
       KeepType
         (KeepReadData (MShared config))
-        (Unsigned (DataWidth (MShared config)))
+        (BitVector (DataWidth (MShared config)))
   , mi_waitRequest :: Bool
   , mi_readDataValid :: KeepType (KeepReadDataValid (MShared config)) Bool
   , mi_endOfPacket :: KeepType (KeepEndOfPacket (MShared config)) Bool
@@ -457,7 +457,7 @@ data AvalonSubordinateOut config = AvalonSubordinateOut
   { so_readData ::
       KeepType
         (KeepReadData (SShared config))
-        (Unsigned (DataWidth (SShared config)))
+        (BitVector (DataWidth (SShared config)))
   , so_readDataValid :: KeepType (KeepReadDataValid (SShared config)) Bool
   , so_endOfPacket :: KeepType (KeepEndOfPacket (SShared config)) Bool
   , so_waitRequest :: KeepType (KeepWaitRequest config) Bool
@@ -490,14 +490,14 @@ data AvalonSubordinateIn config = AvalonSubordinateIn
   { si_writeData ::
       KeepType
         (KeepWriteData (SShared config))
-        (Unsigned (DataWidth (SShared config)))
+        (BitVector (DataWidth (SShared config)))
   , si_addr :: KeepType (KeepAddr config) (Unsigned (AddrWidth (SShared config)))
   , si_read :: KeepType (KeepRead (SShared config)) Bool
   , si_write :: KeepType (KeepWrite (SShared config)) Bool
   , si_byteEnable ::
       KeepType
         (KeepByteEnable (SShared config))
-        (Unsigned (ByteEnableWidth (SShared config)))
+        (BitVector (ByteEnableWidth (SShared config)))
   , si_burstCount ::
       KeepType
         (KeepBurstCount (SShared config))
@@ -505,7 +505,7 @@ data AvalonSubordinateIn config = AvalonSubordinateIn
   , si_writeByteEnable ::
       KeepType
         (KeepWriteByteEnable config)
-        (Unsigned (ByteEnableWidth (SShared config)))
+        (BitVector (ByteEnableWidth (SShared config)))
   , si_chipSelect :: KeepType (KeepChipSelect config) Bool
   , si_beginTransfer :: KeepType (KeepBeginTransfer config) Bool
   , si_beginBurstTransfer :: KeepType (KeepBeginBurstTransfer config) Bool
@@ -535,12 +535,12 @@ data AvalonWriteImpt keepAddr config = AvalonWriteImpt
   { wi_writeData ::
       KeepType
         (KeepWriteData config)
-        (Unsigned (DataWidth config))
+        (BitVector (DataWidth config))
   , wi_addr :: KeepType keepAddr (Unsigned (AddrWidth config))
   , wi_byteEnable ::
       KeepType
         (KeepByteEnable config)
-        (Unsigned (ByteEnableWidth config))
+        (BitVector (ByteEnableWidth config))
   , wi_burstCount ::
       KeepType
         (KeepBurstCount config)
@@ -587,7 +587,7 @@ data AvalonReadReqImpt keepAddr config = AvalonReadReqImpt
   , rri_byteEnable ::
       KeepType
         (KeepByteEnable config)
-        (Unsigned (ByteEnableWidth config))
+        (BitVector (ByteEnableWidth config))
   , rri_burstCount ::
       KeepType
         (KeepBurstCount config)
@@ -633,7 +633,7 @@ data AvalonReadImpt config = AvalonReadImpt
   { ri_readData ::
       KeepType
         (KeepReadData config)
-        (Unsigned (DataWidth config))
+        (BitVector (DataWidth config))
   , ri_endOfPacket :: KeepType (KeepEndOfPacket config) Bool
   }
   deriving (Generic, Bundle)
