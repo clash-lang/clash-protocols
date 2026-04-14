@@ -21,6 +21,7 @@ module Protocols.Axi4.WriteData (
 -- base
 import Data.Coerce (coerce)
 import Data.Kind (Type)
+import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 import Prelude hiding (
   const,
@@ -37,6 +38,9 @@ import Prelude hiding (
 
 -- clash-prelude
 import Clash.Prelude qualified as C
+
+-- deepseq
+import Control.DeepSeq (NFData)
 
 -- me
 import Protocols.Axi4.Common
@@ -102,8 +106,8 @@ data
 
 -- | See Table A2-3 "Write data channel signals"
 newtype S2M_WriteData = S2M_WriteData {_wready :: Bool}
-  deriving stock (Show, Generic)
-  deriving anyclass (C.NFDataX, C.BitPack)
+  deriving stock (Show, Eq, Generic)
+  deriving anyclass (C.NFDataX, C.BitPack, C.ShowX, NFData, Typeable)
 
 {- | Shorthand for a "well-behaved" write data config,
 so that we don't need to write out a bunch of type constraints later.
@@ -117,6 +121,7 @@ type KnownAxi4WriteDataConfig conf =
   , C.ShowX (StrobeDataType (WKeepStrobe conf))
   , C.NFDataX (StrobeDataType (WKeepStrobe conf))
   , C.BitPack (StrobeDataType (WKeepStrobe conf))
+  , NFData (StrobeDataType (WKeepStrobe conf))
   )
 
 deriving instance
@@ -148,6 +153,12 @@ deriving instance
   , C.NFDataX userType
   ) =>
   C.NFDataX (M2S_WriteData conf userType)
+
+deriving instance
+  ( KnownAxi4WriteDataConfig conf
+  , NFData userType
+  ) =>
+  NFData (M2S_WriteData conf userType)
 
 instance IdleCircuit (Axi4WriteData dom conf userType) where
   idleFwd _ = C.pure M2S_NoWriteData

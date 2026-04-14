@@ -13,6 +13,7 @@ import Prelude hiding (head, not, (&&))
 
 import Clash.Signal.Internal (Signal (..))
 import Control.DeepSeq (NFData)
+import Data.Typeable (Typeable)
 import Protocols
 import Protocols.Idle
 
@@ -66,7 +67,7 @@ data WishboneM2S addressBits dataBytes = WishboneM2S
   --   information is only relevant for incrementing bursts, but future burst types may use these
   --   signals.
   }
-  deriving (NFData, C.Generic, C.NFDataX, Eq, C.BitPack)
+  deriving (NFData, C.Generic, C.NFDataX, Eq, C.BitPack, Typeable)
 
 instance
   (C.KnownNat addressBits, C.KnownNat dataBytes) =>
@@ -141,7 +142,7 @@ data WishboneS2M dataBytes = WishboneS2M
   --   accept or send data, and that the cycle should be retried. When and how the cycle is retried
   --   is defined by the IP core supplier. Also see the [ERR_O] and [RTY_O] signal descriptions.
   }
-  deriving (NFData, C.Generic, C.NFDataX, Eq, C.BitPack)
+  deriving (NFData, C.Generic, C.NFDataX, Eq, C.BitPack, Typeable)
 
 instance (C.KnownNat dataBytes) => C.ShowX (WishboneS2M dataBytes) where
   showX = show
@@ -171,7 +172,7 @@ instance (C.KnownNat dataBytes) => Show (WishboneS2M dataBytes) where
 -}
 newtype CycleTypeIdentifier = CycleTypeIdentifier (C.BitVector 3)
   deriving stock (Eq, Show, C.Generic)
-  deriving anyclass (NFData, C.NFDataX, C.ShowX, C.BitPack)
+  deriving anyclass (NFData, C.NFDataX, C.ShowX, C.BitPack, Typeable)
 
 pattern
   Classic
@@ -202,7 +203,7 @@ data BurstTypeExtension
     Beat8Burst
   | -- | Wrap-16, address LSBs are modulo 16
     Beat16Burst
-  deriving (NFData, C.Generic, C.NFDataX, Show, C.ShowX, Eq, C.BitPack)
+  deriving (NFData, C.Generic, C.NFDataX, Show, C.ShowX, Eq, C.BitPack, Typeable)
 
 -- | Wishbone protocol mode that a component operates in
 data WishboneMode
@@ -210,7 +211,7 @@ data WishboneMode
     Standard
   | -- | Pipelines mode, generally allowing for more asynchronous requests
     Pipelined
-  deriving (C.Generic, Show, Eq)
+  deriving (C.Generic, Show, Eq, C.ShowX, NFData, C.NFDataX, C.BitPack, Typeable)
 
 -- | The Wishbone protocol (http://cdn.opencores.org/downloads/wbspec_b4.pdf)
 data

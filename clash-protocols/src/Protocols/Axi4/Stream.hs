@@ -13,6 +13,7 @@ import Control.DeepSeq (NFData)
 import Data.Hashable (Hashable, hashWithSalt)
 import Data.Maybe qualified as Maybe
 import Data.Proxy
+import Data.Typeable (Typeable)
 
 -- clash-prelude
 import Clash.Prelude hiding (concat, length, take)
@@ -74,13 +75,19 @@ data Axi4StreamM2S (conf :: Axi4StreamConfig) (userType :: Type) = Axi4StreamM2S
   , _tdest :: Unsigned (DestWidth conf)
   , _tuser :: userType
   }
-  deriving (Generic, C.ShowX, Show, NFData, Bundle)
+  deriving (Generic, C.ShowX, Show, NFData, Bundle, Typeable)
 
 deriving instance
   ( KnownAxi4StreamConfig conf
   , C.NFDataX userType
   ) =>
   C.NFDataX (Axi4StreamM2S conf userType)
+
+deriving instance
+  ( KnownAxi4StreamConfig conf
+  , C.BitPack userType
+  ) =>
+  C.BitPack (Axi4StreamM2S conf userType)
 
 deriving instance
   ( KnownAxi4StreamConfig conf
@@ -101,7 +108,7 @@ the '_tready' signal.
 -}
 newtype Axi4StreamS2M = Axi4StreamS2M {_tready :: Bool}
   deriving stock (Show, Eq, Generic)
-  deriving anyclass (C.NFDataX, C.ShowX, NFData, Bundle)
+  deriving anyclass (C.NFDataX, C.ShowX, NFData, Bundle, BitPack, Typeable)
 
 -- | Type for AXI4 Stream protocol.
 data Axi4Stream (dom :: Domain) (conf :: Axi4StreamConfig) (userType :: Type)

@@ -1,4 +1,5 @@
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# OPTIONS_GHC -fconstraint-solver-iterations=10 #-}
 {-# OPTIONS_HADDOCK hide #-}
 
 {- |
@@ -65,6 +66,7 @@ import Clash.Prelude hiding (empty, sample)
 
 import Data.Bifunctor qualified as B
 import Data.Coerce (coerce)
+import Data.Data (Typeable)
 import Data.Maybe qualified as Maybe
 import Data.Proxy
 
@@ -105,7 +107,7 @@ data PacketStreamM2S (dataWidth :: Nat) (meta :: Type) = PacketStreamM2S
   -- ^ Iff true, the packet corresponding to this transfer is invalid. The subordinate
   --   must either drop the packet or forward the `_abort`.
   }
-  deriving (Generic, ShowX, Show, NFData, Bundle, Functor)
+  deriving (Generic, ShowX, Show, NFData, Bundle, Functor, BitPack, Typeable)
 
 deriving instance
   (KnownNat dataWidth, NFDataX meta) =>
@@ -176,8 +178,8 @@ newtype PacketStreamS2M = PacketStreamS2M
   }
   -- deriving (Bundle, Eq, Generic, NFData, NFDataX, Show, ShowX)
   deriving stock (Generic, Show)
-  deriving anyclass (Bundle, ShowX)
-  deriving newtype (NFDataX, Eq)
+  deriving anyclass (Bundle, ShowX, BitPack)
+  deriving newtype (NFDataX, Eq, NFData, Typeable)
 
 -- | Used by circuit-notation to create a sink that always acknowledges
 instance Default PacketStreamS2M where
