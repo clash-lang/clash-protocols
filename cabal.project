@@ -1,6 +1,7 @@
 packages:
   ./clash-protocols-base
   ./clash-protocols
+  ./clash-protocols-experimental
 
 tests: True
 
@@ -27,6 +28,16 @@ package clash-protocols-base
   haddock-options: --optghc=-DHADDOCK_ONLY
 
 package clash-protocols
+  -- Reduces compile times by ~20%
+  ghc-options: +RTS -qn4 -A128M -RTS -j4
+
+  -- Workaround for Haddock/CPP #if issues https://github.com/haskell/haddock/issues/1382
+  haddock-options: --optghc="-optP -P"
+
+  -- Don't pollute docs with large tuple instances
+  haddock-options: --optghc=-DHADDOCK_ONLY
+
+package clash-protocols-experimental
   -- Reduces compile times by ~20%
   ghc-options: +RTS -qn4 -A128M -RTS -j4
 

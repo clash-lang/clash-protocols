@@ -9,5 +9,9 @@ package clash-protocols
   documentation: False
   ghc-options: -Werror
 
+package clash-protocols-experimental
+  documentation: False
+  ghc-options: -Werror
+
 constraints:
   clash-prelude == __CLASH_VERSION__

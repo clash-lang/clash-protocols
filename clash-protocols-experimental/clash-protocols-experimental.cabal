@@ -1,0 +1,130 @@
+cabal-version:       2.4
+name:                clash-protocols-experimental
+synopsis:            a battery-included library for (dataflow) protocols
+Homepage:            https://gitlab.com/martijnbastiaan/clash-protocols
+version:             0.1
+category:            Hardware
+license:             BSD-2-Clause
+license-file:        LICENSE
+author:              Martijn Bastiaan, QBayLogic B.V.
+maintainer:          Martijn Bastiaan <martijn@hmbastiaan.nl>
+
+flag large-tuples
+  description:
+    Generate instances for classes such as `Units` and `TaggedBundle` for tuples
+    up to and including 62 elements - the GHC imposed maximum. Note that this
+    greatly increases compile times for `clash-protocols-experimental`.
+  default: False
+  manual: True
+
+common common-options
+  default-extensions:
+    CPP
+    DataKinds
+    DefaultSignatures
+    DeriveAnyClass
+    DerivingStrategies
+    LambdaCase
+    NoStarIsType
+    OverloadedRecordDot
+    TupleSections
+    TypeFamilies
+    ViewPatterns
+
+    -- TemplateHaskell is used to support convenience functions such as
+    -- 'listToVecTH' and 'bLit'.
+    TemplateHaskell
+    QuasiQuotes
+
+    -- Prelude isn't imported by default as Clash offers Clash.Prelude
+    NoImplicitPrelude
+  ghc-options:
+    -Wall -Wcompat
+
+    -- Plugins to support type-level constraint solving on naturals
+    -fplugin GHC.TypeLits.Extra.Solver
+    -fplugin GHC.TypeLits.Normalise
+    -fplugin GHC.TypeLits.KnownNat.Solver
+
+    -- Clash needs access to the source code in compiled modules
+    -fexpose-all-unfoldings
+
+    -- Worker wrappers introduce unstable names for functions that might have
+    -- blackboxes attached for them. You can disable this, but be sure to add
+    -- a no-specialize pragma to every function with a blackbox.
+    -fno-worker-wrapper
+
+  default-language: GHC2021
+  build-depends:
+    base >= 4.16.1.0,
+    Cabal,
+
+    clash-prelude >= 1.8.1 && < 1.10,
+    ghc-typelits-natnormalise,
+    ghc-typelits-extra,
+    ghc-typelits-knownnat,
+
+custom-setup
+  setup-depends:
+    base          >= 4.16 && <5,
+    Cabal         >= 2.4,
+    cabal-doctest >= 1.0.1 && <1.1,
+
+library
+  import: common-options
+  hs-source-dirs: src
+
+  if flag(large-tuples)
+    CPP-Options: -DLARGE_TUPLES
+
+  build-depends:
+    clash-protocols,
+    template-haskell,
+
+  exposed-modules:
+    Protocols.Df.Extra
+
+  reexported-modules:
+    Protocols.Plugin
+
+  autogen-modules:
+    Paths_clash_protocols_experimental
+
+  other-modules:
+    Paths_clash_protocols_experimental
+
+  default-language: GHC2021
+
+test-suite unittests
+  import: common-options
+  hs-source-dirs: tests
+  type: exitcode-stdio-1.0
+  ghc-options: -threaded -with-rtsopts=-N
+  main-is: unittests.hs
+  other-modules:
+    Tests.Protocols
+    Tests.Protocols.Df.Extra
+
+  build-depends:
+    clash-prelude-hedgehog,
+    clash-protocols-base,
+    clash-protocols-experimental,
+    clash-protocols,
+    hedgehog,
+    tasty >= 1.2 && < 1.6,
+    tasty-hedgehog >= 1.2,
+    tasty-hunit,
+    tasty-th,
+
+test-suite doctests
+  import:           common-options
+  type:             exitcode-stdio-1.0
+  default-language: GHC2021
+  main-is:          doctests.hs
+  hs-source-dirs:   tests
+
+  build-depends:
+    base,
+    clash-protocols-experimental,
+    process,
+    doctest,
