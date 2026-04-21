@@ -3,6 +3,7 @@ resolver: lts-24.37 # ghc-9.10.3
 packages:
   - clash-protocols-base
   - clash-protocols
+  - clash-protocols-experimental
 
 extra-deps:
 - circuit-notation-0.2.0.0@sha256:a9385711f2fc8eb602b556b4ef3b9b2f3f26ad42eacc6f854555b3c8d6188cc6,1583
