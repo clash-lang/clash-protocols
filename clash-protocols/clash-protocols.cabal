@@ -132,12 +132,15 @@ library
     Protocols.Experimental.Axi4.WriteResponse
     Protocols.Experimental.Df
     Protocols.Experimental.DfConv
+    Protocols.Experimental.FunctorC
     Protocols.Experimental.Hedgehog
+    Protocols.Experimental.Hedgehog.Internal
     Protocols.Experimental.PacketStream
     Protocols.Experimental.Simulate
     Protocols.Experimental.Wishbone
     Protocols.Experimental.Wishbone.Standard
     Protocols.Experimental.Wishbone.Standard.Hedgehog
+    Protocols.Experimental.Hedgehog
     Protocols.Idle
     Protocols.Internal
     Protocols.Internal.TH
