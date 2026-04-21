@@ -82,6 +82,7 @@ library
     template-haskell,
 
   exposed-modules:
+    Protocols.BiDf
     Protocols.Df.Extra
 
   reexported-modules:
@@ -103,6 +104,7 @@ test-suite unittests
   main-is: unittests.hs
   other-modules:
     Tests.Protocols
+    Tests.Protocols.BiDf
     Tests.Protocols.Df.Extra
 
   build-depends:
