@@ -84,6 +84,7 @@ library
   exposed-modules:
     Protocols.BiDf
     Protocols.Df.Extra
+    Protocols.ReqResp
 
   reexported-modules:
     Protocols.Plugin
@@ -106,6 +107,7 @@ test-suite unittests
     Tests.Protocols
     Tests.Protocols.BiDf
     Tests.Protocols.Df.Extra
+    Tests.Protocols.ReqResp
 
   build-depends:
     clash-prelude-hedgehog,
