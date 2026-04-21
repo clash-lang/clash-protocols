@@ -85,6 +85,7 @@ library
     Protocols.BiDf
     Protocols.Df.Extra
     Protocols.ReqResp
+    Protocols.Wishbone.Extra
 
   reexported-modules:
     Protocols.Plugin
@@ -108,12 +109,14 @@ test-suite unittests
     Tests.Protocols.BiDf
     Tests.Protocols.Df.Extra
     Tests.Protocols.ReqResp
+    Tests.Protocols.Wishbone.Extra
 
   build-depends:
     clash-prelude-hedgehog,
     clash-protocols-base,
     clash-protocols-experimental,
     clash-protocols,
+    containers,
     hedgehog,
     tasty >= 1.2 && < 1.6,
     tasty-hedgehog >= 1.2,
