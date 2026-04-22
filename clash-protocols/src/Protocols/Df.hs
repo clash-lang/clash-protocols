@@ -941,9 +941,10 @@ toMaybe :: Circuit (Df dom a) (CSignal dom (Maybe a))
 toMaybe = Circuit $ \(maybes, _) -> (C.pure (Ack True), maybes)
 
 {- | Convert a 'Maybe' stream to a 'Df' stream. Not every 'Just' is guaranteed to
-be forwarded to the RHS. The number of dropped 'Just's is exported as an
-unsigned number. Note that this circuit needs a clock to latch the incoming
-'Maybe' values in case of backpressure from the RHS.
+be forwarded to the RHS because of potential backpressure. The number of dropped 'Just's
+is exported as an unsigned number. Note that this circuit uses the clock supplied through
+the 'Clash.Signal.HiddenClockResetEnable' constraint to latch the incoming 'Maybe' values in case of
+backpressure from the RHS. This makes it adhere to the rules of the `Df` protocol.
 -}
 unsafeFromMaybe ::
   forall n a dom.
