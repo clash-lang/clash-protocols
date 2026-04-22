@@ -358,7 +358,9 @@ packetizeFromDfT ::
   (KnownNat headerBytes) =>
   (KnownNat dataWidth) =>
   (1 <= dataWidth) =>
-  (1 <= headerBytes `DivRU` dataWidth) =>
+  -- \| XXX: The 'Constraint' equality is there to work around
+  -- issue github.com/clash-lang/ghc-typelits-extra/issues/68.
+  ((1 <= headerBytes `DivRU` dataWidth) ~ (() :: Constraint)) =>
   ((dataWidth + 1) <= headerBytes) =>
   -- | Mapping from `Df` input to output `_meta`
   (a -> metaOut) ->
