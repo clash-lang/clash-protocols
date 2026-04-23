@@ -77,10 +77,10 @@ simulateTupleInstance n =
   mkStallVec i ty =
     [d|
       $[p|
-        ( $(varP (mkName $ "stalls" <> show i))
-          , $(varP (mkName $ if i == n then "_" else "rem" <> show i))
-          )
-        |] =
+         ( $(varP (mkName $ "stalls" <> show i))
+           , $(varP (mkName $ if i == n then "_" else "rem" <> show i))
+           )
+         |] =
           C.splitAtI @(SimulateChannels $ty)
             $(varE $ mkName $ "rem" <> show (i - 1))
       |]
@@ -108,10 +108,10 @@ simulateTupleInstance n =
   mkStallCResultDec i =
     [d|
       $[p|
-        ( $(varP $ mkName $ "fwdStalled" <> show i)
-          , $(varP $ mkName $ "bwdStalled" <> show i)
-          )
-        |] =
+         ( $(varP $ mkName $ "fwdStalled" <> show i)
+           , $(varP $ mkName $ "bwdStalled" <> show i)
+           )
+         |] =
           $(varE $ mkName $ "stalled" <> show i)
             ( $(varE $ mkName $ "fwd" <> show i)
             , $(varE $ mkName $ "bwd" <> show i)
@@ -139,7 +139,7 @@ drivableTupleInstance n =
           $(tupP fwdPats) = snd $ f ((), $(tupE $ map mkSampleCExpr circTys))
          in
           $( tupE $
-              zipWith (\ty fwd -> [|sampleC @($ty) conf (Circuit $ const ((), $fwd))|]) circTys fwdExprs
+               zipWith (\ty fwd -> [|sampleC @($ty) conf (Circuit $ const ((), $fwd))|]) circTys fwdExprs
            )
     |]
  where

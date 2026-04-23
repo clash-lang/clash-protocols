@@ -224,8 +224,9 @@ expander ::
   forall dom i o s.
   (C.HiddenClockResetEnable dom, C.NFDataX s) =>
   s ->
-  -- | Return `True` when you're finished with the current input value
-  -- and are ready for the next one.
+  {- | Return `True` when you're finished with the current input value
+  and are ready for the next one.
+  -}
   (s -> i -> (s, o, Bool)) ->
   Circuit (Df dom i) (Df dom o)
 expander s0 f = compander s0 $
@@ -244,9 +245,10 @@ compander ::
   forall dom i o s.
   (C.HiddenClockResetEnable dom, C.NFDataX s) =>
   s ->
-  -- | Return `True` when you're finished with the current input value
-  -- and are ready for the next one.
-  -- Return `Just` to send the produced value off to the right.
+  {- | Return `True` when you're finished with the current input value
+  and are ready for the next one.
+  Return `Just` to send the produced value off to the right.
+  -}
   (s -> i -> (s, Maybe o, Bool)) ->
   Circuit (Df dom i) (Df dom o)
 compander s0 f = forceResetSanity |> Circuit (C.unbundle . go . C.bundle)
@@ -751,16 +753,19 @@ roundrobin =
 
 -- | Collect modes for dataflow arbiters.
 data CollectMode
-  = -- | Collect in a /round-robin/ fashion. If a source does not produce
-    -- data, wait until it does. Use with care, as there is a risk of
-    -- starvation if a selected source is idle for a long time.
+  = {- | Collect in a /round-robin/ fashion. If a source does not produce
+    data, wait until it does. Use with care, as there is a risk of
+    starvation if a selected source is idle for a long time.
+    -}
     NoSkip
-  | -- | Collect in a /round-robin/ fashion. If a source does not produce
-    -- data, skip it and check the next source on the next cycle.
+  | {- | Collect in a /round-robin/ fashion. If a source does not produce
+    data, skip it and check the next source on the next cycle.
+    -}
     Skip
-  | -- | Check all sources in parallel. Biased towards the /first/ source.
-    -- If the number of sources is high, this is more expensive than other
-    -- modes.
+  | {- | Check all sources in parallel. Biased towards the /first/ source.
+    If the number of sources is high, this is more expensive than other
+    modes.
+    -}
     Parallel
 
 {- | Opposite of 'roundrobin'. Useful to collect data from workers that only
@@ -1053,8 +1058,9 @@ stall ::
   , HasCallStack
   ) =>
   SimulationConfig ->
-  -- | Acknowledgement to send when LHS does not send data. Stall will act
-  -- transparently when reset is asserted.
+  {- | Acknowledgement to send when LHS does not send data. Stall will act
+  transparently when reset is asserted.
+  -}
   StallAck ->
   -- Number of cycles to stall for every valid Df packet
   [Int] ->

@@ -92,18 +92,20 @@ data PacketStreamM2S (dataWidth :: Nat) (meta :: Type) = PacketStreamM2S
   { _data :: Vec dataWidth (BitVector 8)
   -- ^ The bytes to be transmitted.
   , _last :: Maybe (Index (dataWidth + 1))
-  -- ^ If this is @Just@ then it signals that this transfer is the end of a
-  --   packet and contains the number of valid bytes in '_data', starting from
-  --   index @0@.
-  --
-  --   If it is @Nothing@ then this transfer is not yet the end of a packet and all
-  --   bytes are valid. This implies that no null bytes are allowed in the middle of
-  --   a packet, only after a packet.
+  {- ^ If this is @Just@ then it signals that this transfer is the end of a
+  packet and contains the number of valid bytes in '_data', starting from
+  index @0@.
+
+  If it is @Nothing@ then this transfer is not yet the end of a packet and all
+  bytes are valid. This implies that no null bytes are allowed in the middle of
+  a packet, only after a packet.
+  -}
   , _meta :: meta
   -- ^ Metadata of a packet. Must be constant during a packet.
   , _abort :: Bool
-  -- ^ Iff true, the packet corresponding to this transfer is invalid. The subordinate
-  --   must either drop the packet or forward the `_abort`.
+  {- ^ Iff true, the packet corresponding to this transfer is invalid. The subordinate
+  must either drop the packet or forward the `_abort`.
+  -}
   }
   deriving (Generic, ShowX, Show, NFData, Bundle, Functor)
 
@@ -586,8 +588,9 @@ Like 'filterMeta' but can reason over signals,
 this circuit combinator is akin to `Clash.HaskellPrelude.<*>`.
 -}
 filterMetaS ::
-  -- | Predicate which specifies whether to keep a fragment based on its metadata,
-  --   wrapped in a @Signal@
+  {- | Predicate which specifies whether to keep a fragment based on its metadata,
+  wrapped in a @Signal@
+  -}
   Signal dom (meta -> Bool) ->
   Circuit (PacketStream dom dataWidth meta) (PacketStream dom dataWidth meta)
 filterMetaS pS = Circuit $ \(fwdIn, bwdIn) -> unbundle (go <$> bundle (fwdIn, bwdIn, pS))

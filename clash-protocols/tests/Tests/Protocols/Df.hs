@@ -105,10 +105,11 @@ idWithModelDf ::
   (HasCallStack, TestType a, TestType b) =>
   -- | Options, see 'ExpectOptions'
   ExpectOptions ->
-  -- | Test data generator, length of generated data is number of _valid_
-  -- cycles. If an input consists of multiple input channels where the number
-  -- of valid cycles differs, this should return the _maximum_ number of valid
-  -- cycles of all channels.
+  {- | Test data generator, length of generated data is number of _valid_
+  cycles. If an input consists of multiple input channels where the number
+  of valid cycles differs, this should return the _maximum_ number of valid
+  cycles of all channels.
+  -}
   Gen [a] ->
   -- | Model
   ([a] -> [b]) ->

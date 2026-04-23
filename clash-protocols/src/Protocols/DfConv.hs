@@ -111,31 +111,35 @@ the t'Circuit' should pass along the interesting parts but not the
 uninteresting parts.
 -}
 class (Protocol df) => DfConv df where
-  -- | Domain that messages are being sent over. In general, it should be true that
-  -- @Fwd df ~ Signal dom [something]@ and that @Bwd df ~ Signal dom [something]@.
+  {- | Domain that messages are being sent over. In general, it should be true that
+  @Fwd df ~ Signal dom [something]@ and that @Bwd df ~ Signal dom [something]@.
+  -}
   type Dom df :: Domain
 
-  -- | Information being sent in the 'Bwd' direction, along
-  -- @Reverse (Df (Dom df) (BwdPayload df))@. This is the information being
-  -- carried over the protocol, /not/ the messages being carried over the
-  -- protocol, so it doesn't include auxiliary information like address or
-  -- burst length. If no data is sent in this direction, set this to @()@.
+  {- | Information being sent in the 'Bwd' direction, along
+  @Reverse (Df (Dom df) (BwdPayload df))@. This is the information being
+  carried over the protocol, /not/ the messages being carried over the
+  protocol, so it doesn't include auxiliary information like address or
+  burst length. If no data is sent in this direction, set this to @()@.
+  -}
   type BwdPayload df
 
-  -- | Information being sent in the 'Fwd' direction, along
-  -- @Df (Dom df) (FwdPayload df)@. This is the information being
-  -- carried over the protocol, /not/ the messages being carried over the
-  -- protocol, so it doesn't include auxiliary information like address or
-  -- burst length. If no data is sent in this direction, set this to @()@.
+  {- | Information being sent in the 'Fwd' direction, along
+  @Df (Dom df) (FwdPayload df)@. This is the information being
+  carried over the protocol, /not/ the messages being carried over the
+  protocol, so it doesn't include auxiliary information like address or
+  burst length. If no data is sent in this direction, set this to @()@.
+  -}
   type FwdPayload df
 
-  -- | Circuit which converts Df into this protocol's messages. This should
-  -- deal with all the complexities of your protocol such as addresses, bursts,
-  -- pipelining, etc. so that a circuit connected to the 'Df' end doesn't have
-  -- to worry about all that. There are two Df channels, one for fwd data and
-  -- one for bwd data, so data can be sent both ways at once. This circuit is
-  -- expected to follow all of the conventions of 'Df'; for example, data on the
-  -- fwd channel should stay the same between clock cycles unless acknowledged.
+  {- | Circuit which converts Df into this protocol's messages. This should
+  deal with all the complexities of your protocol such as addresses, bursts,
+  pipelining, etc. so that a circuit connected to the 'Df' end doesn't have
+  to worry about all that. There are two Df channels, one for fwd data and
+  one for bwd data, so data can be sent both ways at once. This circuit is
+  expected to follow all of the conventions of 'Df'; for example, data on the
+  fwd channel should stay the same between clock cycles unless acknowledged.
+  -}
   toDfCircuit ::
     (HiddenClockResetEnable (Dom df)) =>
     Proxy df ->
@@ -143,8 +147,9 @@ class (Protocol df) => DfConv df where
       (Df (Dom df) (FwdPayload df), Reverse (Df (Dom df) (BwdPayload df)))
       df
 
-  -- | 'toDfCircuit', but in reverse: the @df@ port is on the left side instead
-  -- of the right side.
+  {- | 'toDfCircuit', but in reverse: the @df@ port is on the left side instead
+  of the right side.
+  -}
   fromDfCircuit ::
     (HiddenClockResetEnable (Dom df)) =>
     Proxy df ->
@@ -1177,8 +1182,9 @@ stall ::
   Proxy dfA ->
   Proxy dfB ->
   SimulationConfig ->
-  -- | Acknowledgement to send when LHS does not send data. Stall will act
-  -- transparently when reset is asserted.
+  {- | Acknowledgement to send when LHS does not send data. Stall will act
+  transparently when reset is asserted.
+  -}
   StallAck ->
   -- Number of cycles to stall for every valid Df packet
   [Int] ->

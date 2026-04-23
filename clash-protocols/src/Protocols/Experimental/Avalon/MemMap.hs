@@ -1244,7 +1244,7 @@ instance
           genOutputs dfDat readDatStored0 readReqAcked0 readDatIn soBool
       put
         ( if ( Maybe.isNothing readDatStored1 -- to avoid looking at dfAck when not needed
-                || dfAck
+                 || dfAck
              )
             then Nothing
             else readDatStored1
@@ -1342,7 +1342,7 @@ instance
           genOutputs dfDat readDatStored0 readReqAcked0 readDatIn miBool
       put
         ( if ( Maybe.isNothing readDatStored1 -- to avoid looking at dfAck when not needed
-                || dfAck
+                 || dfAck
              )
             then Nothing
             else readDatStored1

@@ -62,12 +62,14 @@ type DepacketizerCt (headerBytes :: Nat) (dataWidth :: Nat) =
 data DepacketizerState (headerBytes :: Nat) (dataWidth :: Nat)
   = Parse
       { _aborted :: Bool
-      -- ^ Whether the packet is aborted. We need this, because _abort might
-      --   have been set in the bytes to be parsed.
+      {- ^ Whether the packet is aborted. We need this, because _abort might
+      have been set in the bytes to be parsed.
+      -}
       , _buf :: Vec (BufSize headerBytes dataWidth) (BitVector 8)
-      -- ^ The first @headerBytes@ of this buffer are for the parsed header.
-      --   The bytes after that are data bytes that could not be sent immediately
-      --   due to misalignment of @dataWidth@ and @headerBytes@.
+      {- ^ The first @headerBytes@ of this buffer are for the parsed header.
+      The bytes after that are data bytes that could not be sent immediately
+      due to misalignment of @dataWidth@ and @headerBytes@.
+      -}
       , _counter :: Index (headerBytes `DivRU` dataWidth)
       -- ^ @maxBound + 1@ is the number of fragments we need to parse.
       }
@@ -76,8 +78,9 @@ data DepacketizerState (headerBytes :: Nat) (dataWidth :: Nat)
       , _buf :: Vec (BufSize headerBytes dataWidth) (BitVector 8)
       , _counter :: Index (headerBytes `DivRU` dataWidth)
       , _lastFwd :: Bool
-      -- ^ True iff we have seen @_last@ set but the number of data bytes was too
-      --   big to send immediately along with our buffered bytes.
+      {- ^ True iff we have seen @_last@ set but the number of data bytes was too
+      big to send immediately along with our buffered bytes.
+      -}
       }
   deriving (Show, ShowX, Generic)
 
@@ -241,8 +244,9 @@ type DepacketizeToDfCt (headerBytes :: Nat) (dataWidth :: Nat) =
 data DfDepacketizerState (headerBytes :: Nat) (dataWidth :: Nat)
   = DfParse
       { _dfAborted :: Bool
-      -- ^ Whether the current packet is aborted. We need this, because _abort
-      --   might have been set in the bytes to be parsed.
+      {- ^ Whether the current packet is aborted. We need this, because _abort
+      might have been set in the bytes to be parsed.
+      -}
       , _dfParseBuf :: Vec (BufSize headerBytes dataWidth) (BitVector 8)
       -- ^ Buffer for the header that we need to parse.
       , _dfCounter :: Index (headerBytes `DivRU` dataWidth)

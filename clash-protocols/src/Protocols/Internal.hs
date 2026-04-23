@@ -405,8 +405,9 @@ simulateC ::
   (Drivable a, Drivable b) =>
   -- | Circuit to simulate
   Circuit a b ->
-  -- | Simulation configuration. Note that some options only apply to 'sampleC'
-  -- and some only to 'driveC'.
+  {- | Simulation configuration. Note that some options only apply to 'sampleC'
+  and some only to 'driveC'.
+  -}
   SimulationConfig ->
   -- | Circuit input
   SimulateFwdType a ->
@@ -508,12 +509,14 @@ class
   -- | Get the value of @keep@ at the term level.
   getKeep :: KeepType keep optionalType -> Bool
 
-  -- | Convert an optional value to a normal value,
-  -- or Nothing if the field is turned off.
+  {- | Convert an optional value to a normal value,
+  or Nothing if the field is turned off.
+  -}
   fromKeepType :: KeepType keep optionalType -> Maybe optionalType
 
-  -- | Convert a normal value to an optional value.
-  -- Either preserves the value or returns @Proxy@.
+  {- | Convert a normal value to an optional value.
+  Either preserves the value or returns @Proxy@.
+  -}
   toKeepType :: optionalType -> KeepType keep optionalType
 
   -- | Map a function over an optional value

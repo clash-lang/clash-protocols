@@ -111,8 +111,9 @@ propWithModel ::
   (ExpectType a -> ExpectType b) ->
   -- | Implementation
   Circuit a b ->
-  -- | Property to test for. Function is given the data produced by the model
-  -- as a first argument, and the sampled data as a second argument.
+  {- | Property to test for. Function is given the data produced by the model
+  as a first argument, and the sampled data as a second argument.
+  -}
   (ExpectType b -> ExpectType b -> H.PropertyT IO ()) ->
   H.Property
 propWithModel eOps gen model dut prop = H.property $ propWithModelT eOps gen model dut prop
@@ -133,8 +134,9 @@ propWithModelT ::
   (ExpectType a -> ExpectType b) ->
   -- | Implementation
   Circuit a b ->
-  -- | Property to test for. Function is given the data produced by the model
-  -- as a first argument, and the sampled data as a second argument.
+  {- | Property to test for. Function is given the data produced by the model
+  as a first argument, and the sampled data as a second argument.
+  -}
   (ExpectType b -> ExpectType b -> H.PropertyT m ()) ->
   H.PropertyT m ()
 propWithModelT eOpts genData model prot prop =
@@ -256,8 +258,9 @@ propWithModelSingleDomain ::
   (C.Clock dom -> C.Reset dom -> C.Enable dom -> ExpectType a -> ExpectType b) ->
   -- | Implementation
   (C.Clock dom -> C.Reset dom -> C.Enable dom -> Circuit a b) ->
-  -- | Property to test for. Function is given the data produced by the model
-  -- as a first argument, and the sampled data as a second argument.
+  {- | Property to test for. Function is given the data produced by the model
+  as a first argument, and the sampled data as a second argument.
+  -}
   (ExpectType b -> ExpectType b -> H.PropertyT IO ()) ->
   H.Property
 propWithModelSingleDomain eOpts genData model dut prop =
@@ -287,8 +290,9 @@ propWithModelSingleDomainT ::
   (C.Clock dom -> C.Reset dom -> C.Enable dom -> ExpectType a -> ExpectType b) ->
   -- | Implementation
   (C.Clock dom -> C.Reset dom -> C.Enable dom -> Circuit a b) ->
-  -- | Property to test for. Function is given the data produced by the model
-  -- as a first argument, and the sampled data as a second argument.
+  {- | Property to test for. Function is given the data produced by the model
+  as a first argument, and the sampled data as a second argument.
+  -}
   (ExpectType b -> ExpectType b -> H.PropertyT m ()) ->
   H.PropertyT m ()
 propWithModelSingleDomainT eOpts genData model0 circuit0 =

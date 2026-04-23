@@ -540,9 +540,10 @@ wishbonePropWithModel ::
   , Monad m
   ) =>
   ExpectOptions ->
-  -- | Check whether a S2M signal for a given request is matching a pure model using @st@
-  --   as its state.
-  --   Return an error message 'Left' or the updated state 'Right'
+  {- | Check whether a S2M signal for a given request is matching a pure model using @st@
+  as its state.
+  Return an error message 'Left' or the updated state 'Right'
+  -}
   ( WishboneMasterRequest addressBits dataBytes ->
     WishboneS2M dataBytes ->
     st ->

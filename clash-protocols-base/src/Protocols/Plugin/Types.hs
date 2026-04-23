@@ -15,14 +15,16 @@ import Data.Kind (Type)
 
 -- | A protocol describes the in- and outputs of one side of a t'Circuit'.
 class Protocol a where
-  -- | Sender to receiver type family. See t'Circuit' for an explanation on the
-  -- existence of 'Fwd'.
+  {- | Sender to receiver type family. See t'Circuit' for an explanation on the
+  existence of 'Fwd'.
+  -}
   type Fwd (a :: Type)
 
   type Fwd a = a
 
-  -- | Receiver to sender type family. See t'Circuit' for an explanation on the
-  -- existence of 'Bwd'.
+  {- | Receiver to sender type family. See t'Circuit' for an explanation on the
+  existence of 'Bwd'.
+  -}
   type Bwd (a :: Type)
 
   type Bwd a = ()

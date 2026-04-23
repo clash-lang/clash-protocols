@@ -20,6 +20,7 @@ between "Tagged" and "Bundle".
 class TaggedBundle t a where
   -- | Unbundled representation that preserves the phantom tag @t@.
   type TaggedUnbundled t a = res | res -> t a
+
   taggedBundle :: TaggedUnbundled t a -> Tagged t a
   taggedUnbundle :: Tagged t a -> TaggedUnbundled t a
 
