@@ -7,7 +7,7 @@
 Defines WriteAddress channel of full AXI4 protocol with port names corresponding
 to the AXI4 specification.
 -}
-module Protocols.Axi4.WriteAddress (
+module Protocols.Experimental.Axi4.WriteAddress (
   M2S_WriteAddress (..),
   S2M_WriteAddress (..),
   Axi4WriteAddress,
@@ -43,7 +43,7 @@ import GHC.Generics (Generic)
 import Clash.Prelude qualified as C
 
 -- me
-import Protocols.Axi4.Common
+import Protocols.Experimental.Axi4.Common
 import Protocols.Idle
 import Protocols.Internal
 

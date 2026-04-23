@@ -6,7 +6,7 @@
 {- |
 Types and instance declarations for the AXI4-stream protocol.
 -}
-module Protocols.Axi4.Stream where
+module Protocols.Experimental.Axi4.Stream where
 
 -- base
 import Control.DeepSeq (NFData)

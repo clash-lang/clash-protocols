@@ -5,7 +5,7 @@
 Defines ReadData channel of full AXI4 protocol with port names corresponding
 to the AXI4 specification.
 -}
-module Protocols.Axi4.ReadData (
+module Protocols.Experimental.Axi4.ReadData (
   M2S_ReadData (..),
   S2M_ReadData (..),
   Axi4ReadData,
@@ -41,7 +41,7 @@ import Prelude hiding (
 import Clash.Prelude qualified as C
 
 -- me
-import Protocols.Axi4.Common
+import Protocols.Experimental.Axi4.Common
 import Protocols.Idle
 import Protocols.Internal
 

@@ -7,7 +7,7 @@
 Defines ReadAddress channel of full AXI4 protocol with port names corresponding
 to the AXI4 specification.
 -}
-module Protocols.Axi4.ReadAddress (
+module Protocols.Experimental.Axi4.ReadAddress (
   M2S_ReadAddress (..),
   S2M_ReadAddress (..),
   Axi4ReadAddress,
@@ -45,7 +45,7 @@ import GHC.Generics (Generic)
 import Clash.Prelude qualified as C
 
 -- me
-import Protocols.Axi4.Common
+import Protocols.Experimental.Axi4.Common
 import Protocols.Idle
 import Protocols.Internal
 

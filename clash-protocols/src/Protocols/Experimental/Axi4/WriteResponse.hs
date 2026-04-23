@@ -5,7 +5,7 @@
 Defines WriteResponse channel of full AXI4 protocol with port names corresponding
 to the AXI4 specification.
 -}
-module Protocols.Axi4.WriteResponse (
+module Protocols.Experimental.Axi4.WriteResponse (
   M2S_WriteResponse (..),
   S2M_WriteResponse (..),
   Axi4WriteResponse,
@@ -26,7 +26,7 @@ import GHC.Generics (Generic)
 import Clash.Prelude qualified as C
 
 -- me
-import Protocols.Axi4.Common
+import Protocols.Experimental.Axi4.Common
 import Protocols.Idle
 import Protocols.Internal
 

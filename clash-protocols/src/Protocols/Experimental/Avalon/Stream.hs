@@ -7,7 +7,7 @@
 {- |
 Types and instance declarations for the Avalon-stream protocol.
 -}
-module Protocols.Avalon.Stream where
+module Protocols.Experimental.Avalon.Stream where
 
 -- base
 import Control.DeepSeq (NFData)

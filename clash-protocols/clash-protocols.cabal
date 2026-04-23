@@ -121,17 +121,18 @@ library
     -- TODO: test / upstream ^
     Data.List.Extra
     Protocols
-    Protocols.Avalon.MemMap
-    Protocols.Avalon.Stream
-    Protocols.Axi4.Common
-    Protocols.Axi4.ReadAddress
-    Protocols.Axi4.ReadData
-    Protocols.Axi4.Stream
-    Protocols.Axi4.WriteAddress
-    Protocols.Axi4.WriteData
-    Protocols.Axi4.WriteResponse
     Protocols.Df
     Protocols.DfConv
+    Protocols.Experimental.DfConv
+    Protocols.Experimental.Avalon.MemMap
+    Protocols.Experimental.Avalon.Stream
+    Protocols.Experimental.Axi4.Common
+    Protocols.Experimental.Axi4.ReadAddress
+    Protocols.Experimental.Axi4.ReadData
+    Protocols.Experimental.Axi4.Stream
+    Protocols.Experimental.Axi4.WriteAddress
+    Protocols.Experimental.Axi4.WriteData
+    Protocols.Experimental.Axi4.WriteResponse
     Protocols.Hedgehog
     Protocols.Hedgehog.Internal
     Protocols.Idle

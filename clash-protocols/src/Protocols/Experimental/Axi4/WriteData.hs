@@ -6,7 +6,7 @@
 Defines WriteData channel of full AXI4 protocol with port names corresponding
 to the AXI4 specification.
 -}
-module Protocols.Axi4.WriteData (
+module Protocols.Experimental.Axi4.WriteData (
   M2S_WriteData (..),
   S2M_WriteData (..),
   Axi4WriteData,
@@ -39,7 +39,7 @@ import Prelude hiding (
 import Clash.Prelude qualified as C
 
 -- me
-import Protocols.Axi4.Common
+import Protocols.Experimental.Axi4.Common
 import Protocols.Idle
 import Protocols.Internal
 

@@ -24,14 +24,14 @@ import Test.Tasty.TH (testGroupGenerator)
 
 -- clash-protocols (me!)
 import Protocols
-import Protocols.Axi4.Common
-import Protocols.Axi4.ReadAddress
-import Protocols.Axi4.ReadData
-import Protocols.Axi4.Stream
-import Protocols.Axi4.WriteAddress
-import Protocols.Axi4.WriteData
-import Protocols.Axi4.WriteResponse
-import Protocols.DfConv qualified as DfConv
+import Protocols.Experimental.Axi4.Common
+import Protocols.Experimental.Axi4.ReadAddress
+import Protocols.Experimental.Axi4.ReadData
+import Protocols.Experimental.Axi4.Stream
+import Protocols.Experimental.Axi4.WriteAddress
+import Protocols.Experimental.Axi4.WriteData
+import Protocols.Experimental.Axi4.WriteResponse
+import Protocols.Experimental.DfConv qualified as DfConv
 import Protocols.Hedgehog
 import Protocols.Internal
 

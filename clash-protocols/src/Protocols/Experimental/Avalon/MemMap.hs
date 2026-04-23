@@ -11,7 +11,7 @@ ports. The @resetrequest@ field is also not supported since this does not get
 transferred around, but rather gets send "outwards" to whoever is controlling
 the reset signal of the circuit.
 -}
-module Protocols.Avalon.MemMap (
+module Protocols.Experimental.Avalon.MemMap (
   -- * Configuration types
   AvalonMmSharedConfig (..),
   AvalonMmSubordinateConfig (..),

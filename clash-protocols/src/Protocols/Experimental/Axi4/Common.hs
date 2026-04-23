@@ -3,7 +3,7 @@
 {- |
 Types and utilities shared between AXI4, AXI4-Lite, and AXI3.
 -}
-module Protocols.Axi4.Common where
+module Protocols.Experimental.Axi4.Common where
 
 -- base
 
