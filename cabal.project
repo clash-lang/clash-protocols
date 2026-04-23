@@ -14,7 +14,7 @@ package clash-prelude
 source-repository-package
   type: git
   location: https://github.com/cchalmers/circuit-notation.git
-  tag: 564769c52aa05b90f81bbc898b7af7087d96613d
+  tag: 13ee9c9182e9594f0dbee4a3106f6333e871f9fa
 
 package clash-protocols-base
   -- Reduces compile times by ~20%
