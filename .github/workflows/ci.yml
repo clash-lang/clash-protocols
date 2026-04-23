@@ -62,6 +62,7 @@ jobs:
         ghc:
           - "9.8.4"
           - "9.10.3"
+          - "9.12.4"
         include:
           - check_haddock: "False"
           - ghc: "9.6.7"
