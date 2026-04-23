@@ -371,8 +371,7 @@ tupToVec :: Circuit (a, a) (Vec 2 a)
 tupToVec = Circuit ((f *** g) . swap)
  where
   f :: Vec 2 p -> (p, p)
-  f (x :> y :> Nil) = (x, y)
-  f _ = undefined -- to suppress warning
+  f v = (C.head v, C.last v)
   g (x, y) = x :> y :> Nil
 
 -- | Circuit converting a @Vec 2@ into a pair of items
@@ -380,8 +379,7 @@ vecToTup :: Circuit (Vec 2 a) (a, a)
 vecToTup = Circuit ((g *** f) . swap)
  where
   f :: Vec 2 p -> (p, p)
-  f (x :> y :> Nil) = (x, y)
-  f _ = undefined -- to suppress warning
+  f v = (C.head v, C.last v)
   g (x, y) = x :> y :> Nil
 
 {- | Preserves 'Df' data unmodified. Potentially useful for converting between
@@ -809,8 +807,7 @@ selectHelperB = Circuit ((f *** g) . swap)
   f :: (Vec n q, q) -> Vec (n + 1) q
   f (t, h) = h :> t
   g :: Vec (n + 1) q -> (Vec n q, q)
-  g (h :> t) = (t, h)
-  g _ = undefined -- to avoid warning
+  g v = (C.tail v, C.head v)
 
 {- | Select data from the channel indicated by the DfConv stream carrying
 @Index n@.
