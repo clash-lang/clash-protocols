@@ -8,11 +8,11 @@
         "flake-utils": "flake-utils"
       },
       "locked": {
-        "lastModified": 1776755327,
-        "narHash": "sha256-exg9/ERCLQkI2+gMtOWcaS8lr1u1AoEhcg1VIhMC9NY=",
+        "lastModified": 1776956091,
+        "narHash": "sha256-aDt8K/ZTC/fe/KdHjS82IxY3N4Qc6Z/r0JI/ViowOFk=",
         "owner": "cchalmers",
         "repo": "circuit-notation",
-        "rev": "13ee9c9182e9594f0dbee4a3106f6333e871f9fa",
+        "rev": "4ca9b51256306b10d37355deef5b4a6bd68db796",
         "type": "github"
       },
       "original": {

@@ -65,7 +65,7 @@ library
   if flag(large-tuples)
     cpp-options: -DLARGE_TUPLES
   build-depends:
-    circuit-notation >=0.1 && <0.3,
+    circuit-notation >=0.2 && <0.3,
     deepseq >=1.4.1 && <1.6,
     extra >=1.6.17 && <1.9,
     ghc >=9.6 && <9.13,

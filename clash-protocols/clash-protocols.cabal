@@ -96,7 +96,7 @@ library
     cpp-options: -DLARGE_TUPLES
   build-depends:
     -- To be removed; we need 'Test.Tasty.Hedgehog.Extra' to fix upstream issues
-    circuit-notation >=0.1 && <0.2,
+    circuit-notation >=0.2 && <0.3,
     clash-prelude-hedgehog,
     clash-protocols-base,
     constraints >=0.9 && <1,
