@@ -170,8 +170,8 @@ At this point, GHC will tell us:
 CatMaybes.hs:8:21: error:
     Variable not in scope:
       go
-        :: (C.Signal dom (Maybe (Maybe a)), C.Signal dom (Df.Ack a))
-           -> (C.Signal dom (Df.Ack (Maybe a)), C.Signal dom (Maybe a))
+        :: (C.Signal dom (Maybe (Maybe a)), C.Signal dom Ack)
+           -> (C.Signal dom Ack, C.Signal dom (Maybe a))
   |
 8 | catMaybes = Circuit go
   |                     ^^
@@ -199,8 +199,8 @@ Now GHC will tell us:
 CatMaybes.hs:8:35: error:
     Variable not in scope:
       go
-        :: C.Signal dom (Maybe (Maybe a), Df.Ack a)
-           -> C.Signal dom (Df.Ack (Maybe a), Maybe a)
+        :: C.Signal dom (Maybe (Maybe a), Ack)
+           -> C.Signal dom (Ack, Maybe a)
   |
 8 | catMaybes = Circuit (C.unbundle . go . C.bundle)
   |                                   ^^
@@ -218,8 +218,8 @@ after which GHC will tell us:
 CatMaybes.hs:8:40: error:
     Variable not in scope:
       go
-        :: (Maybe (Maybe a), Df.Ack a)
-           -> (Df.Ack (Maybe a), Maybe a)
+        :: (Maybe (Maybe a), Ack)
+           -> (Ack, Maybe a)
   |
 8 | catMaybes = Circuit (C.unbundle . fmap go . C.bundle)
   |                                        ^^
@@ -229,19 +229,19 @@ CatMaybes.hs:8:40: error:
 This is something we can write, surely! If the LHS does not send data, there's not much we can do. We send `Nothing` to the RHS and send a /nack/:
 
 ```haskell
-  go (Nothing, _) = (Df.Ack False, Nothing)
+  go (Nothing, _) = (Ack False, Nothing)
 ```
 
 If we _do_ receive data from the LHS but it turns out to be _Nothing_, we'd like to acknowledge that we received the data and send `Nothing` to the RHS:
 
 ```haskell
-go (Just Nothing, _) = (Df.Ack True, Nothing)
+go (Just Nothing, _) = (Ack True, Nothing)
 ```
 
 Finally, if the LHS sends data and it turns out to be a _Just_, we'd like to acknowledge that we received it and pass it onto the RHS. But we should be careful, we should only acknowledge it if our RHS received our data! In effect, we can just passthrough the ack:
 
 ```haskell
-go (Just (Just d), Df.Ack ack) = (Df.Ack ack, Just d)
+go (Just (Just d), Ack ack) = (Ack ack, Just d)
 ```
 
 ### Testing
@@ -349,8 +349,8 @@ Writing a `Df` component can be tricky business. Even for relatively simple circ
 Let's introduce one:
 
 ```diff
-- go (Just Nothing, _) = (Df.Ack True, Nothing)
-+ go (Just Nothing, _) = (Df.Ack False, Nothing)
+- go (Just Nothing, _) = (Ack True, Nothing)
++ go (Just Nothing, _) = (Ack False, Nothing)
 ```
 
 Rerunning the tests will give us a big error, which starts out as:
@@ -447,8 +447,8 @@ The test tells us that no output was sampled, even though it expected to sample 
 Let's revert the "mistake" we made and make another:
 
 ```diff
--  go (Just (Just d), Df.Ack ack) = (Df.Ack ack, Just d)
-+  go (Just (Just d), Df.Ack ack) = (Df.Ack True, Just d)
+-  go (Just (Just d), Ack ack) = (Ack ack, Just d)
++  go (Just (Just d), Ack ack) = (Ack True, Just d)
 ```
 
 Again, we get a pretty big error report. Let's skip right to the interesting bits:
@@ -481,9 +481,9 @@ At this point it might be tempting to use `Df.forceResetSanity` to force proper 
 
 ```diff
 - catMaybes :: Circuit (Df dom (Maybe a)) (Df dom a)
-- catMaybes = Circuit (C.unbundle . fmap go . C.bundle
+- catMaybes = Circuit (C.unbundle . fmap go . C.bundle)
 + catMaybes :: C.HiddenClockResetEnable dom => Circuit (Df dom (Maybe a)) (Df dom a)
-+ catMaybes = Df.forceResetSanity |> Circuit (C.unbundle . fmap go . C.bundle
++ catMaybes = Df.forceResetSanity |> Circuit (C.unbundle . fmap go . C.bundle)
 ```
 
 Because our function is now stateful, we also need to change the test to:
