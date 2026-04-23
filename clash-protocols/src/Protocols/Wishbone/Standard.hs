@@ -1,7 +1,7 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# OPTIONS_GHC -fconstraint-solver-iterations=10 #-}
 
--- | Circuits and utils for working with Standard mode wishbone circuits.
+-- | Circuits and utilities for working with Standard-mode Wishbone circuits.
 module Protocols.Wishbone.Standard where
 
 import Clash.Prelude
@@ -40,7 +40,7 @@ sharedBus ::
   , KnownNat addressBits
   , KnownNat dataBytes
   ) =>
-  -- | Funcion to select which M-S pair should be connected next.
+  -- | Function used to select which M-S pair should be connected next.
   ( Signal
       dom
       ( Index n
@@ -69,7 +69,7 @@ sharedBus selectFn = Circuit go
     m2ss1 = liftA3 replace sIdx0 m2s $ pure (repeat emptyWishboneM2S)
     s2ms1 = liftA3 replace mIdx0 s2m $ pure (repeat emptyWishboneS2M)
 
--- | Crossbar-Switch circuit, allowing to dynamically route N masters to N slaves
+-- | Crossbar switch allowing N masters to be routed dynamically to M slaves.
 crossbarSwitch ::
   forall n m dom addressBits dataBytes.
   ( KnownNat n
@@ -91,7 +91,7 @@ crossbarSwitch = Circuit go
     m2ss1 = scatter @_ @_ @_ @_ @0 (repeat emptyWishboneM2S) <$> route <*> m2ss0
     s2ms1 = gather <$> s2ms0 <*> route
 
--- | State for making guaranteeing correct timing of responses in 'memoryWb'
+-- | State used to guarantee correct response timing in 'memoryWb'.
 data MemoryDelayState = Wait | AckRead
   deriving (Generic, NFDataX)
 

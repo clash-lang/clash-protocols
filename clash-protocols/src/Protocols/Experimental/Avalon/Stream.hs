@@ -5,7 +5,7 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 {- |
-Types and instance declarations for the Avalon-stream protocol.
+Types and instance declarations for the Avalon Stream protocol.
 -}
 module Protocols.Experimental.Avalon.Stream where
 
@@ -32,7 +32,7 @@ import Protocols.Internal
 
 instance Hashable (C.Unsigned n)
 
-{- | Configuration for AXI4 Stream protocol. Determines the width of some
+{- | Configuration for the Avalon Stream protocol. Determines the width of some
 fields in t'AvalonStreamM2S', and toggles some others. Also sets the ready
 latency (see specs for more info on this).
 -}
@@ -83,7 +83,7 @@ type KnownAvalonStreamConfig conf =
   )
 
 {- | Data sent from manager to subordinate.
-The tvalid field is left out: messages with
+The @tvalid@ field is left out: messages with
 @tvalid = False@ should be sent as a @Nothing@.
 -}
 data AvalonStreamM2S (conf :: AvalonStreamConfig) (dataType :: Type) = AvalonStreamM2S

@@ -50,7 +50,7 @@ in t'S2M_WriteResponse'.
 type family BIdWidth (conf :: Axi4WriteResponseConfig) where
   BIdWidth ('Axi4WriteResponseConfig _ a) = a
 
--- | AXI4 Read Data channel protocol
+-- | AXI4 write response channel protocol
 data
   Axi4WriteResponse
     (dom :: C.Domain)

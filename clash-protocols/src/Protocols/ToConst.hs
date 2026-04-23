@@ -12,11 +12,11 @@ module Protocols.ToConst (
 
 import Protocols.Plugin (Circuit (..), ToConst, ToConstBwd)
 
--- | Convert a value to a t'Circuit' that produces a constant value.
+-- | Convert a value to a t'Circuit' that produces a constant value on the forward channel.
 to :: a -> Circuit () (ToConst a)
 to a = Circuit (\_ -> ((), a))
 
--- | Extract the constant value
+-- | Extract the constant value from the forward direction.
 from :: Circuit () (ToConst a) -> a
 from (Circuit f) = snd (f ((), ()))
 

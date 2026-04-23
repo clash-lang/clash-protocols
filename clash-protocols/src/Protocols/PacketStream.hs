@@ -3,12 +3,14 @@ Copyright  :  (C) 2024, QBayLogic B.V.
 License    :  BSD2 (see the file LICENSE)
 Maintainer :  QBayLogic B.V. <devops@qbaylogic.com>
 
-Provides the PacketStream protocol, a simple streaming protocol for transferring packets of data between components.
+Provides the PacketStream protocol, a simple streaming protocol for
+transferring packets of data between components.
 
-Apart from the protocol definition, some components, all of which are generic in @dataWidth@, are also provided:
+Apart from the protocol definition, some components, all of which are generic in
+@dataWidth@, are also provided:
 
 1. Several small utilities such as filtering a stream based on its metadata.
-2. Fifos
+2. FIFOs
 3. Components which upsize or downsize @dataWidth@
 4. Components which read from the stream (depacketizers)
 5. Components which write to the stream (packetizers)
@@ -17,7 +19,7 @@ Apart from the protocol definition, some components, all of which are generic in
 module Protocols.PacketStream (
   module Protocols.PacketStream.Base,
 
-  -- * Fifos
+  -- * FIFOs
   module Protocols.PacketStream.PacketFifo,
   module Protocols.PacketStream.AsyncFifo,
 
