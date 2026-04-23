@@ -56,7 +56,7 @@ common common-options
   build-depends:
     Cabal >=3.12 && <3.17,
     base >=4.18 && <5,
-    clash-prelude >= 1.8.1 && < 1.12,
+    clash-prelude >=1.10 && <1.12,
 
 library
   import: common-options
