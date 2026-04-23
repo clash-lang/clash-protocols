@@ -1,13 +1,14 @@
-cabal-version:       2.4
-name:                clash-protocols
-synopsis:            a battery-included library for (dataflow) protocols
-Homepage:            https://gitlab.com/martijnbastiaan/clash-protocols
-version:             0.1
-category:            Hardware
-license:             BSD-2-Clause
-license-file:        LICENSE
-author:              Martijn Bastiaan, QBayLogic B.V.
-maintainer:          Martijn Bastiaan <martijn@hmbastiaan.nl>
+cabal-version: 2.4
+name: clash-protocols
+synopsis: a battery-included library for (dataflow) protocols
+homepage: https://github.com/clash-lang/clash-protocols
+bug-reports: https://github.com/clash-lang/clash-protocols/issues
+version: 0.1
+category: Hardware
+license: BSD-2-Clause
+license-file: LICENSE
+author: Martijn Bastiaan, QBayLogic B.V.
+maintainer: Martijn Bastiaan <martijn@hmbastiaan.nl>
 description:
   Suggested reading order:
   .
@@ -17,19 +18,26 @@ description:
   * 'Protocols.Hedgehog'
 
 data-files:
-    src/Protocols/Hedgehog.hs
-    src/Protocols/Hedgehog/*.hs
+  src/Protocols/Hedgehog.hs
+  src/Protocols/Hedgehog/*.hs
+
+source-repository head
+  type: git
+  location: https://github.com/clash-lang/clash-protocols.git
 
 flag large-tuples
   description:
     Generate instances for classes such as `Units` and `TaggedBundle` for tuples
     up to and including 62 elements - the GHC imposed maximum. Note that this
     greatly increases compile times for `clash-protocols`.
+
   default: False
   manual: True
 
 common common-options
   default-extensions:
+    -- TemplateHaskell is used to support convenience functions such as
+    -- 'listToVecTH' and 'bLit'.
     CPP
     DataKinds
     DefaultSignatures
@@ -39,83 +47,79 @@ common common-options
     NoStarIsType
     OverloadedRecordDot
     PackageImports
+    QuasiQuotes
     StandaloneDeriving
+    TemplateHaskell
     TupleSections
     TypeApplications
     TypeFamilies
     TypeOperators
     ViewPatterns
 
-    -- TemplateHaskell is used to support convenience functions such as
-    -- 'listToVecTH' and 'bLit'.
-    TemplateHaskell
-    QuasiQuotes
-
-    -- Prelude isn't imported by default as Clash offers Clash.Prelude
-    -- NoImplicitPrelude
+  -- Prelude isn't imported by default as Clash offers Clash.Prelude
+  -- NoImplicitPrelude
   ghc-options:
-    -Wall -Wcompat
-
     -- Plugins to support type-level constraint solving on naturals
-    -fplugin GHC.TypeLits.Extra.Solver
-    -fplugin GHC.TypeLits.Normalise
-    -fplugin GHC.TypeLits.KnownNat.Solver
-
-    -- Clash needs access to the source code in compiled modules
+    -- `-fexpose-all-unfoldings` is required because clash needs access to the
+    -- source code in compiled modules
+    -Wall
+    -Wcompat
+    -fplugin
+    GHC.TypeLits.Extra.Solver
+    -fplugin
+    GHC.TypeLits.Normalise
+    -fplugin
+    GHC.TypeLits.KnownNat.Solver
     -fexpose-all-unfoldings
-
-    -- Worker wrappers introduce unstable names for functions that might have
-    -- blackboxes attached for them. You can disable this, but be sure to add
-    -- a no-specialize pragma to every function with a blackbox.
     -fno-worker-wrapper
 
   default-language: GHC2021
   build-depends:
-    base >= 4.16.1.0,
-    Cabal,
-
-    clash-prelude >= 1.8.1 && < 1.10,
-    ghc-typelits-natnormalise,
+    Cabal >=3.12 && <3.17,
+    base >=4.18 && <5,
+    clash-prelude >= 1.8.1 && < 1.12,
     ghc-typelits-extra,
-    ghc-typelits-knownnat
+    ghc-typelits-knownnat,
+    ghc-typelits-natnormalise,
 
 custom-setup
   setup-depends:
-    base          >= 4.16 && <5,
-    Cabal         >= 2.4,
-    cabal-doctest >= 1.0.1 && <1.1
+    Cabal >=3.12 && <3.17,
+    base >=4.18 && <5,
+    cabal-doctest >=1.0.1 && <1.1,
 
 library
   import: common-options
   hs-source-dirs: src
 
   if flag(large-tuples)
-    CPP-Options: -DLARGE_TUPLES
-
+    cpp-options: -DLARGE_TUPLES
   build-depends:
-    , clash-protocols-base
-    , circuit-notation
-    , clash-prelude-hedgehog
-    , constraints
-    , data-default >= 0.7.1.1 && < 0.9
-    , deepseq
-    , extra
-    , hashable
-    , hedgehog >= 1.0.2
-    , lifted-async
-    , mtl
-    , monad-control
-    , pretty-show
-    , strict-tuple
-    , tagged
-    , template-haskell
-
-      -- To be removed; we need 'Test.Tasty.Hedgehog.Extra' to fix upstream issues
-    , tasty >= 1.2 && < 1.6
-    , tasty-hedgehog >= 1.2
-    , string-interpolate
+    -- To be removed; we need 'Test.Tasty.Hedgehog.Extra' to fix upstream issues
+    circuit-notation >=0.1 && <0.2,
+    clash-prelude-hedgehog,
+    clash-protocols-base,
+    constraints >=0.9 && <1,
+    data-default >=0.7 && <0.9,
+    deepseq >=1.4.1 && <1.6,
+    extra >=1.6.17 && <1.9,
+    hashable >=1.4.1 && <1.6,
+    hedgehog >=1.0.3 && <1.6,
+    lifted-async <0.12,
+    monad-control <1.1,
+    mtl >=2.3.1 && <2.4,
+    pretty-show >=1.9 && <2,
+    strict-tuple <0.2,
+    string-interpolate >=0.3 && <0.4,
+    tagged >=0.8 && <0.9,
+    tasty >=1.2 && <1.6,
+    tasty-hedgehog >=1.2 && <1.5,
+    template-haskell >=2.20 && <2.24,
 
   exposed-modules:
+    -- 'testProperty' is broken upstream, it reports wrong test names
+    -- TODO: test / upstream ^
+    Data.List.Extra
     Protocols
     Protocols.Avalon.MemMap
     Protocols.Avalon.Stream
@@ -148,22 +152,16 @@ library
     Protocols.Wishbone
     Protocols.Wishbone.Standard
     Protocols.Wishbone.Standard.Hedgehog
-
-    Data.List.Extra
-
-    -- 'testProperty' is broken upstream, it reports wrong test names
-    -- TODO: test / upstream ^
     Test.Tasty.Hedgehog.Extra
 
   reexported-modules:
     Protocols.Plugin
 
-  autogen-modules:    Paths_clash_protocols
-
+  autogen-modules: Paths_clash_protocols
   other-modules:
+    Clash.Sized.Vector.Extra
     Data.Constraint.Nat.Extra
     Data.Maybe.Extra
-    Clash.Sized.Vector.Extra
     Paths_clash_protocols
     Protocols.Hedgehog.Types
     Protocols.Internal.Types
@@ -174,56 +172,57 @@ test-suite unittests
   import: common-options
   hs-source-dirs: tests
   type: exitcode-stdio-1.0
-  ghc-options: -threaded -with-rtsopts=-N
+  ghc-options:
+    -threaded
+    -with-rtsopts=-N
+
   main-is: unittests.hs
   other-modules:
     Tests.Haxioms
     Tests.Protocols
-    Tests.Protocols.Df
-    Tests.Protocols.DfConv
     Tests.Protocols.Avalon
     Tests.Protocols.Axi4
-    Tests.Protocols.Plugin
-    Tests.Protocols.Vec
-    Tests.Protocols.Wishbone
+    Tests.Protocols.Df
+    Tests.Protocols.DfConv
     Tests.Protocols.PacketStream
     Tests.Protocols.PacketStream.AsyncFifo
     Tests.Protocols.PacketStream.Base
     Tests.Protocols.PacketStream.Converters
     Tests.Protocols.PacketStream.Depacketizers
-    Tests.Protocols.PacketStream.Packetizers
     Tests.Protocols.PacketStream.PacketFifo
+    Tests.Protocols.PacketStream.Packetizers
     Tests.Protocols.PacketStream.Padding
     Tests.Protocols.PacketStream.Routing
-
+    Tests.Protocols.Plugin
+    Tests.Protocols.Vec
+    Tests.Protocols.Wishbone
     Util
 
   build-depends:
-    string-interpolate,
-    clash-protocols-base,
-    clash-protocols,
     clash-prelude-hedgehog,
-    unordered-containers,
+    clash-protocols,
+    clash-protocols-base,
     deepseq,
     extra,
     hashable,
     hedgehog,
     strict-tuple,
-    tasty >= 1.2 && < 1.6,
-    tasty-hedgehog >= 1.2,
+    string-interpolate,
+    tasty >=1.2 && <1.6,
+    tasty-hedgehog >=1.2,
+    tasty-hunit,
     tasty-th,
-    tasty-hunit
+    unordered-containers,
 
 test-suite doctests
-  import:           common-options
-  type:             exitcode-stdio-1.0
+  import: common-options
+  type: exitcode-stdio-1.0
   default-language: GHC2021
-  main-is:          doctests.hs
-  hs-source-dirs:   tests
-
+  main-is: doctests.hs
+  hs-source-dirs: tests
   build-depends:
     base,
-    clash-protocols-base,
     clash-protocols,
+    clash-protocols-base,
+    doctest,
     process,
-    doctest

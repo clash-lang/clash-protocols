@@ -1,24 +1,34 @@
-cabal-version:       2.4
-name:                clash-protocols-base
-synopsis:            a battery-included library for (dataflow) protocols
-Homepage:            https://gitlab.com/martijnbastiaan/clash-protocols
-version:             0.1
-category:            Hardware
-license:             BSD-2-Clause
-license-file:        LICENSE
-author:              Martijn Bastiaan, QBayLogic B.V.
-maintainer:          Martijn Bastiaan <martijn@hmbastiaan.nl>
+cabal-version: 2.4
+name: clash-protocols-base
+synopsis: a battery-included library for (dataflow) protocols
+homepage: https://github.com/clash-lang/clash-protocols
+bug-reports: https://github.com/clash-lang/clash-protocols/issues
+version: 0.1
+category: Hardware
+license: BSD-2-Clause
+license-file: LICENSE
+author: Martijn Bastiaan, QBayLogic B.V.
+maintainer: Martijn Bastiaan <martijn@hmbastiaan.nl>
+description:
+  Core plugin and protocol support types for the clash-protocols package family.
+
+source-repository head
+  type: git
+  location: https://github.com/clash-lang/clash-protocols.git
 
 flag large-tuples
   description:
     Generate instances for classes such as `Units` and `TaggedBundle` for tuples
     up to and including 62 elements - the GHC imposed maximum. Note that this
     greatly increases compile times for `clash-protocols-base`.
+
   default: False
   manual: True
 
 common common-options
   default-extensions:
+    -- TemplateHaskell is used to support convenience functions such as
+    -- 'listToVecTH' and 'bLit'.
     CPP
     DataKinds
     DefaultSignatures
@@ -27,58 +37,49 @@ common common-options
     LambdaCase
     NoStarIsType
     OverloadedRecordDot
+    QuasiQuotes
+    TemplateHaskell
     TupleSections
     TypeFamilies
     ViewPatterns
 
-    -- TemplateHaskell is used to support convenience functions such as
-    -- 'listToVecTH' and 'bLit'.
-    TemplateHaskell
-    QuasiQuotes
-
-    -- Prelude isn't imported by default as Clash offers Clash.Prelude
-    -- NoImplicitPrelude
+  -- Prelude isn't imported by default as Clash offers Clash.Prelude
+  -- NoImplicitPrelude
   ghc-options:
-    -Wall -Wcompat
-
-    -- Clash needs access to the source code in compiled modules
+    -- `-fexpose-all-unfoldings` is required because clash needs access to the
+    -- source code in compiled modules
+    -Wall
+    -Wcompat
     -fexpose-all-unfoldings
-
-    -- Worker wrappers introduce unstable names for functions that might have
-    -- blackboxes attached for them. You can disable this, but be sure to add
-    -- a no-specialize pragma to every function with a blackbox.
-    -fno-worker-wrapper
 
   default-language: GHC2021
   build-depends:
-    base >= 4.16.1.0,
-    Cabal,
-
-    clash-prelude >= 1.8.1 && < 1.10,
+    Cabal >=3.12 && <3.17,
+    base >=4.18 && <5,
+    clash-prelude >= 1.8.1 && < 1.12,
 
 library
   import: common-options
   hs-source-dirs: src
 
   if flag(large-tuples)
-    CPP-Options: -DLARGE_TUPLES
-
+    cpp-options: -DLARGE_TUPLES
   build-depends:
-    , circuit-notation
-    , deepseq
-    , extra
-    , ghc >= 8.7 && < 9.11
-    , hashable
-    , tagged
-    , template-haskell
+    circuit-notation >=0.1 && <0.3,
+    deepseq >=1.4.1 && <1.6,
+    extra >=1.6.17 && <1.9,
+    ghc >=9.6 && <9.13,
+    hashable >=1.4.1 && <1.6,
+    tagged >=0.8 && <0.9,
+    template-haskell >=2.20 && <2.24,
 
   exposed-modules:
     Protocols.Plugin
     Protocols.Plugin.Cpp
     Protocols.Plugin.Internal
+    Protocols.Plugin.TH
     Protocols.Plugin.TaggedBundle
     Protocols.Plugin.TaggedBundle.TH
-    Protocols.Plugin.TH
     Protocols.Plugin.Units
     Protocols.Plugin.Units.TH
 
