@@ -19,9 +19,13 @@ class Protocol a where
   -- existence of 'Fwd'.
   type Fwd (a :: Type)
 
+  type Fwd a = a
+
   -- | Receiver to sender type family. See 'Circuit' for an explanation on the
   -- existence of 'Bwd'.
   type Bwd (a :: Type)
+
+  type Bwd a = ()
 
 {- | A /Circuit/, in its most general form, corresponds to a component with two
 pairs of an input and output. As a diagram:
