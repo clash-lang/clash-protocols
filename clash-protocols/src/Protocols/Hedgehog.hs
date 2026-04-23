@@ -103,7 +103,7 @@ argument.
 propWithModel ::
   forall a b.
   (Test a, Test b, HasCallStack) =>
-  -- | Options, see 'ExpectOptions'
+  -- | Options, see t'ExpectOptions'
   ExpectOptions ->
   -- | Test data generator
   H.Gen (ExpectType a) ->
@@ -125,7 +125,7 @@ This is useful for integrating with monadic test frameworks or when additional e
 propWithModelT ::
   forall a b m.
   (Test a, Test b, HasCallStack, Monad m, MonadIO m, MonadBaseControl IO m) =>
-  -- | Options, see 'ExpectOptions'
+  -- | Options, see t'ExpectOptions'
   ExpectOptions ->
   -- | Test data generator
   H.Gen (ExpectType a) ->
@@ -214,7 +214,7 @@ For testing custom properties, see 'propWithModel'.
 idWithModel ::
   forall a b.
   (Test a, Test b, HasCallStack) =>
-  -- | Options, see 'ExpectOptions'
+  -- | Options, see t'ExpectOptions'
   ExpectOptions ->
   -- | Test data generator
   H.Gen (ExpectType a) ->
@@ -233,7 +233,7 @@ Use this when you want to run the test in a monadic context or need additional e
 idWithModelT ::
   forall a b m.
   (Test a, Test b, HasCallStack, Monad m, MonadIO m, MonadBaseControl IO m) =>
-  -- | Options, see 'ExpectOptions'
+  -- | Options, see t'ExpectOptions'
   ExpectOptions ->
   -- | Test data generator
   H.Gen (ExpectType a) ->
@@ -248,7 +248,7 @@ idWithModelT eOpts genData model prot = propWithModelT eOpts genData model prot 
 propWithModelSingleDomain ::
   forall dom a b.
   (Test a, Test b, C.KnownDomain dom, HasCallStack) =>
-  -- | Options, see 'ExpectOptions'
+  -- | Options, see t'ExpectOptions'
   ExpectOptions ->
   -- | Test data generator
   H.Gen (ExpectType a) ->
@@ -279,7 +279,7 @@ propWithModelSingleDomainT ::
   , MonadIO m
   , MonadBaseControl IO m
   ) =>
-  -- | Options, see 'ExpectOptions'
+  -- | Options, see t'ExpectOptions'
   ExpectOptions ->
   -- | Test data generator
   H.Gen (ExpectType a) ->
@@ -305,7 +305,7 @@ propWithModelSingleDomainT eOpts genData model0 circuit0 =
 idWithModelSingleDomain ::
   forall dom a b.
   (Test a, Test b, C.KnownDomain dom, HasCallStack) =>
-  -- | Options, see 'ExpectOptions'
+  -- | Options, see t'ExpectOptions'
   ExpectOptions ->
   -- | Test data generator
   H.Gen (ExpectType a) ->
@@ -333,7 +333,7 @@ idWithModelSingleDomainT ::
   , MonadIO m
   , MonadBaseControl IO m
   ) =>
-  -- | Options, see 'ExpectOptions'
+  -- | Options, see t'ExpectOptions'
   ExpectOptions ->
   -- | Test data generator
   H.Gen (ExpectType a) ->

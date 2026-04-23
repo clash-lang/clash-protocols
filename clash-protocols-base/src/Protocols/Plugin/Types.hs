@@ -13,15 +13,15 @@ module Protocols.Plugin.Types where
 import Clash.Signal
 import Data.Kind (Type)
 
--- | A protocol describes the in- and outputs of one side of a 'Circuit'.
+-- | A protocol describes the in- and outputs of one side of a t'Circuit'.
 class Protocol a where
-  -- | Sender to receiver type family. See 'Circuit' for an explanation on the
+  -- | Sender to receiver type family. See t'Circuit' for an explanation on the
   -- existence of 'Fwd'.
   type Fwd (a :: Type)
 
   type Fwd a = a
 
-  -- | Receiver to sender type family. See 'Circuit' for an explanation on the
+  -- | Receiver to sender type family. See t'Circuit' for an explanation on the
   -- existence of 'Bwd'.
   type Bwd (a :: Type)
 
@@ -65,7 +65,7 @@ in fact exactly its definition:
 
 Note that the type parameters /a/ and /b/ don't directly correspond to the
 types of the inputs and outputs of this function. Instead, the type families
-@Fwd@ and @Bwd@ decide this. The type parameters can be thought of as
+'Fwd' and 'Bwd' decide this. The type parameters can be thought of as
 deciders for what /protocol/ the left hand side and right hand side must
 speak.
 

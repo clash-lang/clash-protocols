@@ -461,7 +461,7 @@ simulateCSE c = simulateCS (c clk rst ena)
 
 {- | Applies conversion functions defined in the 'Simulate' instance of @a@ and @b@ to
 the given simulation types, and applies the results to the internal function of the
-given 'Circuit'. The resulting internal types are converted to the simulation types.
+given t'Circuit'. The resulting internal types are converted to the simulation types.
 -}
 simulateCircuit ::
   forall a b.
@@ -597,8 +597,8 @@ mapCircuit ::
   Circuit a' b'
 mapCircuit ia oa ob ib (Circuit f) = Circuit ((oa *** ob) . f . (ia *** ib))
 
-{- | "Bundle" together a pair of 'Circuit's into a 'Circuit' with two inputs and outputs.
-The 'Circuit's run in parallel.
+{- | "Bundle" together a pair of t'Circuit's into a t'Circuit' with two inputs and outputs.
+The t'Circuit's run in parallel.
 -}
 tupCircuits :: Circuit a b -> Circuit c d -> Circuit (a, c) (b, d)
 tupCircuits (Circuit f) (Circuit g) = Circuit (reorder . (f *** g) . reorder)

@@ -29,7 +29,7 @@ import Clash.Prelude qualified as C
 import Hedgehog qualified as H
 import Hedgehog.Internal.Property qualified as H
 
-{- | Conservative settings for `ExpectOptions`:
+{- | Conservative settings for t'ExpectOptions':
 - Reset for 30 cycles
 - Insert at most 10 stall moments
 - Every stall moment is at most 10 cycles long

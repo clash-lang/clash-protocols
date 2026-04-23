@@ -98,7 +98,7 @@ deriving instance
   (KnownNat addressBits, KnownNat dataBytes) =>
   (Eq (WishboneMasterRequest addressBits dataBytes))
 
-{- | Checks equality for relevant parts of a 'WishboneS2M' response based on the
+{- | Checks equality for relevant parts of a t'WishboneS2M' response based on the
 corresponding 'WishboneMasterRequest'. For a 'Protocols.Wishbone.Standard.Hedgehog.Write' request, the 'readData' field
 is ignored, for a 'Protocols.Wishbone.Standard.Hedgehog.Read' request only the selected bytes are checked.
 
@@ -626,7 +626,7 @@ genWishboneTransfer addrRange = do
     , pure $ Write (pack addr) sel dat
     ]
 
-{- | Interpret a 'WishboneM2S' as a 'WishboneMasterRequest'.
+{- | Interpret a t'WishboneM2S' as a 'WishboneMasterRequest'.
 Only works for valid requests and performs no checks.
 -}
 m2sToRequest ::

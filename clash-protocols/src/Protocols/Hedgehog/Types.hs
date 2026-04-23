@@ -70,7 +70,7 @@ class
   expectN ::
     (HasCallStack, H.MonadTest m) =>
     Proxy a ->
-    -- | Options, see 'ExpectOptions'
+    -- | Options, see t'ExpectOptions'
     ExpectOptions ->
     -- | Raw sampled data
     SimulateFwdType a ->

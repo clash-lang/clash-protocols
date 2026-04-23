@@ -1,12 +1,12 @@
 {- |
-See 'Circuit' for documentation. This module is designed to import unqualified,
+See t'Circuit' for documentation. This module is designed to import unqualified,
 i.e. using:
 
 @
   import Protocols
 @
 
-Definitions of 'Circuit', 'Fwd', 'Bwd', 'Protocols.Df.Df', inspired by
+Definitions of t'Circuit', 'Fwd', 'Bwd', and 'Protocols.Df.Df', inspired by
 definitions in @circuit-notation@ at <https://github.com/cchalmers/circuit-notation>.
 -}
 module Protocols (

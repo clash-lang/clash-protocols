@@ -252,5 +252,5 @@ data InstructionOrData
   | Instruction
   deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq, C.BitPack)
 
--- | Enables or disables 'Privileged', 'Secure', and 'InstructionOrData'
+-- | Enables or disables t'Privileged', t'Secure', and 'InstructionOrData'
 type Permissions = (Privileged, Secure, InstructionOrData)

@@ -31,7 +31,7 @@ instance (KnownNat n, Hashable a) => Hashable (Vec n a) where
   hashWithSalt s v = hashWithSalt s (toList v)
 
 {- | Configuration for AXI4 Stream protocol. Determines the width of some
-fields in 'Axi4StreamM2S'.
+fields in t'Axi4StreamM2S'.
 -}
 data Axi4StreamConfig = Axi4StreamConfig
   { _dataWidth :: Nat

@@ -12,7 +12,7 @@ module Protocols.ToConst (
 
 import Protocols.Plugin (Circuit (..), ToConst, ToConstBwd)
 
--- | Convert a value to a 'Circuit' that produces a constant value.
+-- | Convert a value to a t'Circuit' that produces a constant value.
 to :: a -> Circuit () (ToConst a)
 to a = Circuit (\_ -> ((), a))
 
@@ -20,7 +20,7 @@ to a = Circuit (\_ -> ((), a))
 from :: Circuit () (ToConst a) -> a
 from (Circuit f) = snd (f ((), ()))
 
-{- | Convert a value to a 'Circuit' that produces a constant value in the
+{- | Convert a value to a t'Circuit' that produces a constant value in the
 backward direction.
 -}
 toBwd :: a -> Circuit (ToConstBwd a) ()

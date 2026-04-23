@@ -102,12 +102,12 @@ import Protocols.Vec qualified as Vec
 
 {- | Class for protocols that are "similar" to 'Df', i.e. they can be converted
 to and from a pair of 'Df' ports (one going 'Fwd', one going 'Bwd'), using
-a 'Circuit' (see 'toDfCircuit' and 'fromDfCircuit'). This is for protocols
+a t'Circuit' (see 'toDfCircuit' and 'fromDfCircuit'). This is for protocols
 that carry some "interesting" data, as well as some "uninteresting" data
-(e.g. address, burst length). The 'Circuit' should abstract away the
+(e.g. address, burst length). The t'Circuit' should abstract away the
 complexities of each protocol, so that they can be dealt with uniformly
 using 'Df'. For pipelined protocols, which can carry both in the same cycle,
-the 'Circuit' should pass along the interesting parts but not the
+the t'Circuit' should pass along the interesting parts but not the
 uninteresting parts.
 -}
 class (Protocol df) => DfConv df where
@@ -157,7 +157,8 @@ class (Protocol df) => DfConv df where
   type FwdPayload df = ()
 
 {- | Helper function to make it easier to implement 'toDfCircuit' in 'DfConv'.
-'Ack's are automatically converted to/from 'Bool's. A default @otpMsg@ value is
+t'Protocols.Internal.Ack's are automatically converted to and from 'Bool's.
+A default @otpMsg@ value is
 given for if reset is currently on. The 'State' machine is run every clock cycle.
 Parameters: initial state, default @otpMsg@, and 'State' machine function
 -}
@@ -206,7 +207,8 @@ toDfCircuitHelper _ s0 blankOtp stateFn =
       (s', ((Ack otpAck, inputted), otp))
 
 {- | Helper function to make it easier to implement 'fromDfCircuit' in 'DfConv'.
-'Ack's are automatically converted to/from 'Bool's. A default @otpMsg@ value is
+t'Protocols.Internal.Ack's are automatically converted to and from 'Bool's.
+A default @otpMsg@ value is
 given for if reset is currently on. The 'State' machine is run every clock cycle.
 Parameters: initial state, default @otpMsg@, and 'State' machine function
 -}
@@ -1194,10 +1196,10 @@ stall dfA dfB conf stallAck stalls =
 For a generalized version of 'simulate', check out 'Protocols.simulateC'.
 
 You may notice that things seem to be "switched around" in this function
-compared to others (the @Circuit@ has @Reverse@ applied to its right side,
+compared to others (the t'Circuit' has @Reverse@ applied to its right side,
 rather than its left, and we take the @FwdPayload@ of @dfA@ rather than
-@dfB@). This is because we are taking a @Circuit@ as a parameter, rather
-than returning a @Circuit@ like most other functions do.
+@dfB@). This is because we are taking a t'Circuit' as a parameter, rather
+than returning a t'Circuit' like most other functions do.
 -}
 simulate ::
   ( DfConv dfA

@@ -49,16 +49,16 @@ data Axi4WriteDataConfig = Axi4WriteDataConfig
   , _wNBytes :: C.Nat
   }
 
-{- | Grab '_wKeepStrobe' from 'Axi4WriteDataConfig' at the type level.
+{- | Grab '_wKeepStrobe' from t'Axi4WriteDataConfig' at the type level.
 This boolean value determines whether to keep strobe values in the '_wdata' field
-in 'M2S_WriteData'.
+in t'M2S_WriteData'.
 -}
 type family WKeepStrobe (conf :: Axi4WriteDataConfig) where
   WKeepStrobe ('Axi4WriteDataConfig a _) = a
 
-{- | Grab '_wNBytes' from 'Axi4WriteDataConfig' at the type level.
+{- | Grab '_wNBytes' from t'Axi4WriteDataConfig' at the type level.
 This nat value determines the size of the '_wdata' field
-in 'M2S_WriteData'.
+in t'M2S_WriteData'.
 -}
 type family WNBytes (conf :: Axi4WriteDataConfig) where
   WNBytes ('Axi4WriteDataConfig _ a) = a

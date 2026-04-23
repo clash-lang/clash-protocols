@@ -51,16 +51,16 @@ data Axi4ReadDataConfig = Axi4ReadDataConfig
   , _rIdWidth :: C.Nat
   }
 
-{- | Grab '_rKeepResponse' from 'Axi4ReadDataConfig' at the type level.
+{- | Grab '_rKeepResponse' from t'Axi4ReadDataConfig' at the type level.
 This boolean value determines whether to keep the '_rresp' field
-in 'S2M_ReadData'.
+in t'S2M_ReadData'.
 -}
 type family RKeepResponse (conf :: Axi4ReadDataConfig) where
   RKeepResponse ('Axi4ReadDataConfig a _) = a
 
-{- | Grab '_rIdWidth' from 'Axi4ReadDataConfig' at the type level.
+{- | Grab '_rIdWidth' from t'Axi4ReadDataConfig' at the type level.
 This nat value determines the size of the '_rid' field
-in 'S2M_ReadData'.
+in t'S2M_ReadData'.
 -}
 type family RIdWidth (conf :: Axi4ReadDataConfig) where
   RIdWidth ('Axi4ReadDataConfig _ a) = a

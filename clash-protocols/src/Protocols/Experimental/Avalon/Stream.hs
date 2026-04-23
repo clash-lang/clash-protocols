@@ -33,7 +33,7 @@ import Protocols.Internal
 instance Hashable (C.Unsigned n)
 
 {- | Configuration for AXI4 Stream protocol. Determines the width of some
-fields in 'AvalonStreamM2S', and toggles some others. Also sets the ready
+fields in t'AvalonStreamM2S', and toggles some others. Also sets the ready
 latency (see specs for more info on this).
 -}
 data AvalonStreamConfig = AvalonStreamConfig
@@ -133,7 +133,7 @@ deriving instance
   Hashable (AvalonStreamM2S conf dataType)
 
 {- | Data sent from subordinate to manager. A simple acknowledge message.
-Manager can only send 'AvalonStreamM2S' when '_ready' was true
+Manager can only send t'AvalonStreamM2S' when '_ready' was true
 @readyLatency@ clock cycles ago.
 -}
 newtype AvalonStreamS2M (readyLatency :: Nat) = AvalonStreamS2M {_ready :: Bool}

@@ -125,7 +125,7 @@ data AvalonMmSharedConfig = AvalonMmSharedConfig
 {- | Config specific to Avalon MM subordinate interfaces.
 @Bool@ values represent whether to keep a boolean field or not.
 @Nat@ values represent the width of a variable-sized numeric field.
-An @AvalonMmSharedConfig@ is also included for the rest of the fields.
+An t'AvalonMmSharedConfig' is also included for the rest of the fields.
 -}
 data AvalonMmSubordinateConfig = AvalonMmSubordinateConfig
   { keepAddr :: Bool
@@ -143,7 +143,7 @@ data AvalonMmSubordinateConfig = AvalonMmSubordinateConfig
 {- | Config specific to Avalon MM manager interfaces.
 @Bool@ values represent whether to keep a boolean field or not.
 @Nat@ values represent the width of a variable-sized numeric field.
-An @AvalonMmSharedConfig@ is also included for the rest of the fields.
+An t'AvalonMmSharedConfig' is also included for the rest of the fields.
 -}
 data AvalonMmManagerConfig = AvalonMmManagerConfig
   { keepFlush :: Bool
@@ -154,111 +154,111 @@ data AvalonMmManagerConfig = AvalonMmManagerConfig
 
 -- Grab record fields at the type level:
 
--- | Grab 'dataWidth' from 'AvalonMmSharedConfig' at the type level
+-- | Grab 'dataWidth' from t'AvalonMmSharedConfig' at the type level
 type family DataWidth (c :: AvalonMmSharedConfig) where
   DataWidth ('AvalonMmSharedConfig a _ _ _ _ _ _ _ _ _ _ _) = a
 
--- | Grab 'keepReadData' from 'AvalonMmSharedConfig' at the type level
+-- | Grab 'keepReadData' from t'AvalonMmSharedConfig' at the type level
 type family KeepReadData (c :: AvalonMmSharedConfig) where
   KeepReadData ('AvalonMmSharedConfig _ a _ _ _ _ _ _ _ _ _ _) = a
 
--- | Grab 'keepWriteData' from 'AvalonMmSharedConfig' at the type level
+-- | Grab 'keepWriteData' from t'AvalonMmSharedConfig' at the type level
 type family KeepWriteData (c :: AvalonMmSharedConfig) where
   KeepWriteData ('AvalonMmSharedConfig _ _ a _ _ _ _ _ _ _ _ _) = a
 
--- | Grab 'addrWidth' from 'AvalonMmSharedConfig' at the type level
+-- | Grab 'addrWidth' from t'AvalonMmSharedConfig' at the type level
 type family AddrWidth (c :: AvalonMmSharedConfig) where
   AddrWidth ('AvalonMmSharedConfig _ _ _ a _ _ _ _ _ _ _ _) = a
 
--- | Grab 'keepRead' from 'AvalonMmSharedConfig' at the type level
+-- | Grab 'keepRead' from t'AvalonMmSharedConfig' at the type level
 type family KeepRead (c :: AvalonMmSharedConfig) where
   KeepRead ('AvalonMmSharedConfig _ _ _ _ a _ _ _ _ _ _ _) = a
 
--- | Grab 'keepWrite' from 'AvalonMmSharedConfig' at the type level
+-- | Grab 'keepWrite' from t'AvalonMmSharedConfig' at the type level
 type family KeepWrite (c :: AvalonMmSharedConfig) where
   KeepWrite ('AvalonMmSharedConfig _ _ _ _ _ a _ _ _ _ _ _) = a
 
--- | Grab 'byteEnableWidth' from 'AvalonMmSharedConfig' at the type level
+-- | Grab 'byteEnableWidth' from t'AvalonMmSharedConfig' at the type level
 type family ByteEnableWidth (c :: AvalonMmSharedConfig) where
   ByteEnableWidth ('AvalonMmSharedConfig _ _ _ _ _ _ a _ _ _ _ _) = a
 
--- | Grab 'keepByteEnable' from 'AvalonMmSharedConfig' at the type level
+-- | Grab 'keepByteEnable' from t'AvalonMmSharedConfig' at the type level
 type family KeepByteEnable (c :: AvalonMmSharedConfig) where
   KeepByteEnable ('AvalonMmSharedConfig _ _ _ _ _ _ _ a _ _ _ _) = a
 
--- | Grab 'burstCountWidth' from 'AvalonMmSharedConfig' at the type level
+-- | Grab 'burstCountWidth' from t'AvalonMmSharedConfig' at the type level
 type family BurstCountWidth (c :: AvalonMmSharedConfig) where
   BurstCountWidth ('AvalonMmSharedConfig _ _ _ _ _ _ _ _ a _ _ _) = a
 
--- | Grab 'keepBurstCount' from 'AvalonMmSharedConfig' at the type level
+-- | Grab 'keepBurstCount' from t'AvalonMmSharedConfig' at the type level
 type family KeepBurstCount (c :: AvalonMmSharedConfig) where
   KeepBurstCount ('AvalonMmSharedConfig _ _ _ _ _ _ _ _ _ a _ _) = a
 
--- | Grab 'keepReadDataValid' from 'AvalonMmSharedConfig' at the type level
+-- | Grab 'keepReadDataValid' from t'AvalonMmSharedConfig' at the type level
 type family KeepReadDataValid (c :: AvalonMmSharedConfig) where
   KeepReadDataValid ('AvalonMmSharedConfig _ _ _ _ _ _ _ _ _ _ a _) = a
 
--- | Grab 'keepEndOfPacket' from 'AvalonMmSharedConfig' at the type level
+-- | Grab 'keepEndOfPacket' from t'AvalonMmSharedConfig' at the type level
 type family KeepEndOfPacket (c :: AvalonMmSharedConfig) where
   KeepEndOfPacket ('AvalonMmSharedConfig _ _ _ _ _ _ _ _ _ _ _ a) = a
 
--- | Grab 'keepAddr' from 'AvalonMmSubordinateConfig' at the type level
+-- | Grab 'keepAddr' from t'AvalonMmSubordinateConfig' at the type level
 type family KeepAddr (c :: AvalonMmSubordinateConfig) where
   KeepAddr ('AvalonMmSubordinateConfig a _ _ _ _ _ _ _ _ _) = a
 
--- | Grab 'keepWriteByteEnable' from 'AvalonMmSubordinateConfig' at the type level
+-- | Grab 'keepWriteByteEnable' from t'AvalonMmSubordinateConfig' at the type level
 type family KeepWriteByteEnable (c :: AvalonMmSubordinateConfig) where
   KeepWriteByteEnable ('AvalonMmSubordinateConfig _ a _ _ _ _ _ _ _ _) = a
 
--- | Grab 'keepChipSelect' from 'AvalonMmSubordinateConfig' at the type level
+-- | Grab 'keepChipSelect' from t'AvalonMmSubordinateConfig' at the type level
 type family KeepChipSelect (c :: AvalonMmSubordinateConfig) where
   KeepChipSelect ('AvalonMmSubordinateConfig _ _ a _ _ _ _ _ _ _) = a
 
--- | Grab 'keepBeginTransfer' from 'AvalonMmSubordinateConfig' at the type level
+-- | Grab 'keepBeginTransfer' from t'AvalonMmSubordinateConfig' at the type level
 type family KeepBeginTransfer (c :: AvalonMmSubordinateConfig) where
   KeepBeginTransfer ('AvalonMmSubordinateConfig _ _ _ a _ _ _ _ _ _) = a
 
--- | Grab 'keepWaitRequest' from 'AvalonMmSubordinateConfig' at the type level
+-- | Grab 'keepWaitRequest' from t'AvalonMmSubordinateConfig' at the type level
 type family KeepWaitRequest (c :: AvalonMmSubordinateConfig) where
   KeepWaitRequest ('AvalonMmSubordinateConfig _ _ _ _ a _ _ _ _ _) = a
 
--- | Grab 'keepBeginBurstTransfer' from 'AvalonMmSubordinateConfig' at the type level
+-- | Grab 'keepBeginBurstTransfer' from t'AvalonMmSubordinateConfig' at the type level
 type family KeepBeginBurstTransfer (c :: AvalonMmSubordinateConfig) where
   KeepBeginBurstTransfer ('AvalonMmSubordinateConfig _ _ _ _ _ a _ _ _ _) = a
 
--- | Grab 'keepReadyForData' from 'AvalonMmSubordinateConfig' at the type level
+-- | Grab 'keepReadyForData' from t'AvalonMmSubordinateConfig' at the type level
 type family KeepReadyForData (c :: AvalonMmSubordinateConfig) where
   KeepReadyForData ('AvalonMmSubordinateConfig _ _ _ _ _ _ a _ _ _) = a
 
--- | Grab 'keepDataAvailable' from 'AvalonMmSubordinateConfig' at the type level
+-- | Grab 'keepDataAvailable' from t'AvalonMmSubordinateConfig' at the type level
 type family KeepDataAvailable (c :: AvalonMmSubordinateConfig) where
   KeepDataAvailable ('AvalonMmSubordinateConfig _ _ _ _ _ _ _ a _ _) = a
 
--- | Grab 'keepIrq' from 'AvalonMmSubordinateConfig' at the type level
+-- | Grab 'keepIrq' from t'AvalonMmSubordinateConfig' at the type level
 type family KeepIrq (c :: AvalonMmSubordinateConfig) where
   KeepIrq ('AvalonMmSubordinateConfig _ _ _ _ _ _ _ _ a _) = a
 
--- | Grab 'sShared' from 'AvalonMmSubordinateConfig' at the type level
+-- | Grab 'sShared' from t'AvalonMmSubordinateConfig' at the type level
 type family SShared (c :: AvalonMmSubordinateConfig) where
   SShared ('AvalonMmSubordinateConfig _ _ _ _ _ _ _ _ _ a) = a
 
--- | Grab 'keepFlush' from 'AvalonMmManagerConfig' at the type level
+-- | Grab 'keepFlush' from t'AvalonMmManagerConfig' at the type level
 type family KeepFlush (c :: AvalonMmManagerConfig) where
   KeepFlush ('AvalonMmManagerConfig a _ _ _) = a
 
--- | Grab 'keepIrqList' from 'AvalonMmManagerConfig' at the type level
+-- | Grab 'keepIrqList' from t'AvalonMmManagerConfig' at the type level
 type family KeepIrqList (c :: AvalonMmManagerConfig) where
   KeepIrqList ('AvalonMmManagerConfig _ a _ _) = a
 
--- | Grab 'keepIrqNumber' from 'AvalonMmManagerConfig' at the type level
+-- | Grab 'keepIrqNumber' from t'AvalonMmManagerConfig' at the type level
 type family KeepIrqNumber (c :: AvalonMmManagerConfig) where
   KeepIrqNumber ('AvalonMmManagerConfig _ _ a _) = a
 
--- | Grab 'mShared' from 'AvalonMmManagerConfig' at the type level
+-- | Grab 'mShared' from t'AvalonMmManagerConfig' at the type level
 type family MShared (c :: AvalonMmManagerConfig) where
   MShared ('AvalonMmManagerConfig _ _ _ a) = a
 
-{- | Disable fields of 'AvalonMmSubordinateConfig' that are not allowed in the
+{- | Disable fields of t'AvalonMmSubordinateConfig' that are not allowed in the
 'DfConv.DfConv' instance
 -}
 type family RemoveNonDfSubordinate (cfg :: AvalonMmSubordinateConfig) where
@@ -275,7 +275,7 @@ type family RemoveNonDfSubordinate (cfg :: AvalonMmSubordinateConfig) where
       'False
       (SShared cfg)
 
-{- | Disable fields of 'AvalonMmManagerConfig' that are not allowed in the
+{- | Disable fields of t'AvalonMmManagerConfig' that are not allowed in the
 'DfConv.DfConv' instance
 -}
 type family RemoveNonDfManager (cfg :: AvalonMmManagerConfig) where
@@ -287,7 +287,7 @@ type family RemoveNonDfManager (cfg :: AvalonMmManagerConfig) where
       (MShared cfg)
 
 {- | Constraint representing a well-behaved shared config.
-This class holds for every possible @AvalonMmSharedConfig@,
+This class holds for every possible t'AvalonMmSharedConfig',
 but we need to write out the class anyway so that GHC holds.
 -}
 type KnownSharedConfig config =
@@ -326,7 +326,7 @@ type KnownSharedConfig config =
   )
 
 {- | Constraint representing a well-behaved subordinate config.
-This class holds for every possible @AvalonMmSubordinateConfig@,
+This class holds for every possible t'AvalonMmSubordinateConfig',
 but we need to write out the class anyway so that GHC holds.
 -}
 type KnownSubordinateConfig config =
@@ -358,7 +358,7 @@ type KnownSubordinateConfig config =
   )
 
 {- | Constraint representing a well-behaved manager config.
-This class holds for every possible @AvalonMmManagerConfig@,
+This class holds for every possible t'AvalonMmManagerConfig',
 but we need to write out the class anyway so that GHC holds.
 -}
 type KnownManagerConfig config =
@@ -529,7 +529,7 @@ deriving instance
   Eq (AvalonSubordinateIn config)
 
 {- | "Important" data pertaining to write transfers.
-Can be grabbed from 'AvalonManagerOut' or 'AvalonSubordinateIn'.
+Can be grabbed from t'AvalonManagerOut' or t'AvalonSubordinateIn'.
 -}
 data AvalonWriteImpt keepAddr config = AvalonWriteImpt
   { wi_writeData ::
@@ -580,7 +580,7 @@ deriving instance
   Eq (AvalonWriteImpt keepAddr config)
 
 {- | "Important" data pertaining to read requests.
-Can be grabbed from 'AvalonManagerOut' or 'AvalonSubordinateIn'.
+Can be grabbed from t'AvalonManagerOut' or t'AvalonSubordinateIn'.
 -}
 data AvalonReadReqImpt keepAddr config = AvalonReadReqImpt
   { rri_addr :: KeepType keepAddr (Unsigned (AddrWidth config))
@@ -627,7 +627,7 @@ deriving instance
   Eq (AvalonReadReqImpt keepAddr config)
 
 {- | "Important" data pertaining to subordinate-to-master read data.
-Can be grabbed from 'AvalonManagerIn' or 'AvalonSubordinateOut'.
+Can be grabbed from t'AvalonManagerIn' or t'AvalonSubordinateOut'.
 -}
 data AvalonReadImpt config = AvalonReadImpt
   { ri_readData ::
@@ -654,7 +654,7 @@ deriving instance
   (KnownSharedConfig config) =>
   Eq (AvalonReadImpt config)
 
-{- | Given an 'AvalonManagerOut', separate out the parts which are not
+{- | Given an t'AvalonManagerOut', separate out the parts which are not
 compatible with 'DfConv.DfConv'.
 -}
 managerOutRemoveNonDf ::
@@ -676,7 +676,7 @@ managerOutRemoveNonDf AvalonManagerOut{..} =
   , mo_flush
   )
 
-{- | Given an 'AvalonManagerOut' which is compatible with 'DfConv.DfConv', add
+{- | Given an t'AvalonManagerOut' which is compatible with 'DfConv.DfConv', add
 back in the parts which are not compatible with 'DfConv.DfConv'.
 -}
 managerOutAddNonDf ::
@@ -695,7 +695,7 @@ managerOutAddNonDf flush AvalonManagerOut{..} =
     , mo_flush = flush
     }
 
-{- | Given an 'AvalonManagerIn', separate out the parts which are not
+{- | Given an t'AvalonManagerIn', separate out the parts which are not
 compatible with 'DfConv.DfConv'.
 -}
 managerInRemoveNonDf ::
@@ -718,7 +718,7 @@ managerInRemoveNonDf AvalonManagerIn{..} =
   , (mi_irqList, mi_irqNumber)
   )
 
-{- | Given an 'AvalonManagerIn' which is compatible with 'DfConv.DfConv', add
+{- | Given an t'AvalonManagerIn' which is compatible with 'DfConv.DfConv', add
 back in the parts which are not compatible with 'DfConv.DfConv'.
 -}
 managerInAddNonDf ::
@@ -738,7 +738,7 @@ managerInAddNonDf (irqList, irqNumber) AvalonManagerIn{..} =
     , mi_irqNumber = irqNumber
     }
 
-{- | Given an 'AvalonSubordinateOut', separate out the parts which are not
+{- | Given an t'AvalonSubordinateOut', separate out the parts which are not
 compatible with 'DfConv.DfConv'.
 -}
 subordinateOutRemoveNonDf ::
@@ -763,7 +763,7 @@ subordinateOutRemoveNonDf AvalonSubordinateOut{..} =
   , (so_readyForData, so_dataAvailable, so_irq)
   )
 
-{- | Given an 'AvalonSubordinateOut' which is compatible with 'DfConv.DfConv',
+{- | Given an t'AvalonSubordinateOut' which is compatible with 'DfConv.DfConv',
 add back in the parts which are not compatible with 'DfConv.DfConv'.
 -}
 subordinateOutAddNonDf ::
@@ -785,7 +785,7 @@ subordinateOutAddNonDf (readyForData, dataAvailable, irq) AvalonSubordinateOut{.
     , so_irq = irq
     }
 
-{- | Given an 'AvalonSubordinateIn', separate out the parts which are not
+{- | Given an t'AvalonSubordinateIn', separate out the parts which are not
 compatible with 'DfConv.DfConv'.
 -}
 subordinateInRemoveNonDf ::
@@ -812,7 +812,7 @@ subordinateInRemoveNonDf AvalonSubordinateIn{..} =
   , (si_beginBurstTransfer, si_beginTransfer)
   )
 
-{- | Given an 'AvalonSubordinateIn' which is compatible with 'DfConv.DfConv',
+{- | Given an t'AvalonSubordinateIn' which is compatible with 'DfConv.DfConv',
 add back in the parts which are not compatible with 'DfConv.DfConv'.
 -}
 subordinateInAddNonDf ::
@@ -836,7 +836,7 @@ subordinateInAddNonDf (beginBurstTransfer, beginTransfer) AvalonSubordinateIn{..
     , si_beginTransfer = beginTransfer
     }
 
-{- | Convert a boolean value to an @AvalonSubordinateOut@ structure.
+{- | Convert a boolean value to an t'AvalonSubordinateOut' structure.
 The structure gives no read data, no IRQ, etc. Fields relating to
 "acknowledging" a write, or a read request, are controlled by the bool input.
 -}
@@ -853,7 +853,7 @@ boolToMmSubordinateAck ack =
     , so_readData = errorX "No readData for boolToAck"
     }
 
-{- | Convert a boolean value to an @AvalonManagerIn@ structure.
+{- | Convert a boolean value to an t'AvalonManagerIn' structure.
 The structure gives no read data, no IRQ, etc. The @waitRequest@ field is
 controlled by the (negated) boolean input.
 -}
@@ -869,7 +869,7 @@ boolToMmManagerAck ack =
     , mi_readData = errorX "No readData for boolToAck"
     }
 
-{- | Convert an 'AvalonReadImpt' into an 'AvalonSubordinateOut' containing that
+{- | Convert an t'AvalonReadImpt' into an t'AvalonSubordinateOut' containing that
 read data.
 -}
 mmReadImptToSubordinateOut ::
@@ -887,8 +887,8 @@ mmReadImptToSubordinateOut dat =
     , so_readData = ri_readData dat
     }
 
-{- | Grab the important read information from an 'AvalonSubordinateOut', putting
-it into an 'AvalonReadImpt'. Only works if fixed wait time is 0.
+{- | Grab the important read information from an t'AvalonSubordinateOut', putting
+it into an t'AvalonReadImpt'. Only works if fixed wait time is 0.
 -}
 mmSubordinateOutToReadImpt ::
   (KnownSubordinateConfig config, config ~ RemoveNonDfSubordinate config) =>
@@ -907,7 +907,7 @@ mmSubordinateOutToReadImpt (AvalonSubordinateOut{..})
     fromKeepTypeDef True so_readDataValid
       && not (fromKeepTypeDef False so_waitRequest)
 
-{- | Convert an 'AvalonReadImpt' into an 'AvalonManagerIn' containing that
+{- | Convert an t'AvalonReadImpt' into an t'AvalonManagerIn' containing that
 read data.
 -}
 mmReadImptToManagerIn ::
@@ -924,8 +924,8 @@ mmReadImptToManagerIn dat =
     , mi_readData = ri_readData dat
     }
 
-{- | Grab the important read information from an 'AvalonManagerIn', putting it
-into an 'AvalonReadImpt'. Only works if fixed wait time is 0.
+{- | Grab the important read information from an t'AvalonManagerIn', putting it
+into an t'AvalonReadImpt'. Only works if fixed wait time is 0.
 -}
 mmManagerInToReadImpt ::
   (KnownManagerConfig config, config ~ RemoveNonDfManager config) =>
@@ -942,7 +942,7 @@ mmManagerInToReadImpt (AvalonManagerIn{..})
  where
   cond = fromKeepTypeDef True mi_readDataValid
 
-{- | Convert an 'AvalonWriteImpt' into an 'AvalonSubordinateIn' containing
+{- | Convert an t'AvalonWriteImpt' into an t'AvalonSubordinateIn' containing
 that write data.
 -}
 mmWriteImptToSubordinateIn ::
@@ -966,8 +966,8 @@ mmWriteImptToSubordinateIn (AvalonWriteImpt{..}) =
     , si_writeData = wi_writeData
     }
 
-{- | Grab the important write information from an 'AvalonSubordinateIn',
-putting it into an 'AvalonWriteImpt'.
+{- | Grab the important write information from an t'AvalonSubordinateIn',
+putting it into an t'AvalonWriteImpt'.
 -}
 mmSubordinateInToWriteImpt ::
   (KnownSubordinateConfig config, config ~ RemoveNonDfSubordinate config) =>
@@ -989,7 +989,7 @@ mmSubordinateInToWriteImpt (AvalonSubordinateIn{..})
       && fromKeepTypeDef True si_write
       && not (fromKeepTypeDef False si_read)
 
-{- | Convert an 'AvalonWriteImpt' into an 'AvalonManagerOut' containing that
+{- | Convert an t'AvalonWriteImpt' into an t'AvalonManagerOut' containing that
 write data.
 -}
 mmWriteImptToManagerOut ::
@@ -1007,8 +1007,8 @@ mmWriteImptToManagerOut (AvalonWriteImpt{..}) =
     , mo_writeData = wi_writeData
     }
 
-{- | Grab the important write information from an 'AvalonManagerOut', putting
-it into an 'AvalonWriteImpt'.
+{- | Grab the important write information from an t'AvalonManagerOut', putting
+it into an t'AvalonWriteImpt'.
 -}
 mmManagerOutToWriteImpt ::
   (KnownManagerConfig config, config ~ RemoveNonDfManager config) =>
@@ -1029,7 +1029,7 @@ mmManagerOutToWriteImpt (AvalonManagerOut{..})
     fromKeepTypeDef True mo_write
       && not (fromKeepTypeDef False mo_read)
 
-{- | Convert an 'AvalonReadReqImpt' into an 'AvalonSubordinateIn' containing
+{- | Convert an t'AvalonReadReqImpt' into an t'AvalonSubordinateIn' containing
 that read request data.
 -}
 mmReadReqImptToSubordinateIn ::
@@ -1050,8 +1050,8 @@ mmReadReqImptToSubordinateIn (AvalonReadReqImpt{..}) =
     , si_writeData = errorX "No writeData for read req"
     }
 
-{- | Grab the important read request information from an 'AvalonSubordinateIn',
-putting it into an 'AvalonReadReqImpt'.
+{- | Grab the important read request information from an t'AvalonSubordinateIn',
+putting it into an t'AvalonReadReqImpt'.
 -}
 mmSubordinateInToReadReqImpt ::
   (KnownSubordinateConfig config, config ~ RemoveNonDfSubordinate config) =>
@@ -1072,7 +1072,7 @@ mmSubordinateInToReadReqImpt (AvalonSubordinateIn{..})
       && fromKeepTypeDef True si_read
       && not (fromKeepTypeDef False si_write)
 
-{- | Convert an 'AvalonReadReqImpt' into an 'AvalonManagerOut' containing that
+{- | Convert an t'AvalonReadReqImpt' into an t'AvalonManagerOut' containing that
 read request data.
 -}
 mmReadReqImptToManagerOut ::
@@ -1090,8 +1090,8 @@ mmReadReqImptToManagerOut (AvalonReadReqImpt{..}) =
     , mo_writeData = errorX "No writeData for read req"
     }
 
-{- | Grab the important read request information from an 'AvalonManagerOut',
-putting it into an 'AvalonReadReqImpt'.
+{- | Grab the important read request information from an t'AvalonManagerOut',
+putting it into an t'AvalonReadReqImpt'.
 -}
 mmManagerOutToReadReqImpt ::
   (KnownManagerConfig config, config ~ RemoveNonDfManager config) =>
@@ -1111,7 +1111,7 @@ mmManagerOutToReadReqImpt (AvalonManagerOut{..})
     fromKeepTypeDef True mo_read
       && not (fromKeepTypeDef False mo_write)
 
-{- | An 'AvalonSubordinateIn' containing no write data, and indicating that no
+{- | An t'AvalonSubordinateIn' containing no write data, and indicating that no
 transmission is currently occurring.
 -}
 mmSubordinateInNoData ::
@@ -1131,7 +1131,7 @@ mmSubordinateInNoData =
     , si_writeData = errorX "No writeData for noData"
     }
 
-{- | An 'AvalonManagerOut' containing no write data, and indicating that no
+{- | An t'AvalonManagerOut' containing no write data, and indicating that no
 transmission is currently occurring.
 -}
 mmManagerOutNoData :: (KnownManagerConfig config) => AvalonManagerOut config
@@ -1146,7 +1146,7 @@ mmManagerOutNoData =
     , mo_writeData = errorX "No writeData for noData"
     }
 
-{- | Grab the "acknowledgement" value from an 'AvalonSubordinateOut'.
+{- | Grab the "acknowledgement" value from an t'AvalonSubordinateOut'.
 Reasonable defaults are provided for optional fields.
 -}
 mmSubordinateOutToBool ::
@@ -1157,7 +1157,7 @@ mmSubordinateOutToBool so =
   fromKeepTypeDef True (so_readyForData so)
     && not (fromKeepTypeDef False (so_waitRequest so))
 
-{- | Grab the "acknowledgement" value from an 'AvalonManagerIn'.
+{- | Grab the "acknowledgement" value from an t'AvalonManagerIn'.
 Reasonable defaults are provided for optional fields.
 -}
 mmManagerInToBool ::

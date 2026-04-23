@@ -1,4 +1,4 @@
--- | Utility functions for working with `Vec`s of `Circuit`s.
+-- | Utility functions for working with 'Vec's of t'Circuit's.
 module Protocols.Vec (
   vecCircuits,
   append,
@@ -41,8 +41,8 @@ import Clash.Prelude qualified as C
 import Protocols.Internal (applyC)
 import Protocols.Plugin
 
-{- | "Bundle" together a 'Vec' of 'Circuit's into a 'Circuit' with 'Vec' input and output.
-The 'Circuit's all run in parallel.
+{- | "Bundle" together a 'Vec' of t'Circuit's into a t'Circuit' with 'Vec' input and output.
+The t'Circuit's all run in parallel.
 
 The inverse of 'vecCircuits' can not exist, as we can not guarantee that that the @n@th
 manager interface only depends on the @n@th subordinate interface.
