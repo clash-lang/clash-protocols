@@ -56,7 +56,7 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         clash:
-          - "1.8.2"
+          - "1.10.0"
         cabal:
           - "3.14.1.1"
         ghc:
@@ -68,7 +68,7 @@ jobs:
           - ghc: "9.6.7"
             check_haddock: "True"
             os: "ubuntu-latest"
-            clash: "1.8.2"
+            clash: "1.10.0"
             cabal: "3.14.1.1"
 
     env:
