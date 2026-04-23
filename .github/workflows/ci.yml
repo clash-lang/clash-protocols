@@ -60,13 +60,11 @@ jobs:
         cabal:
           - "3.14.1.1"
         ghc:
-          - "9.2.8"
-          - "9.4.8"
           - "9.8.4"
-          - "9.10.1"
+          - "9.10.3"
         include:
           - check_haddock: "False"
-          - ghc: "9.6.6"
+          - ghc: "9.6.7"
             check_haddock: "True"
             os: "ubuntu-latest"
             clash: "1.8.2"
