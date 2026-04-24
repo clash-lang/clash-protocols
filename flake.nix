@@ -1,5 +1,5 @@
 {
-  description = "A flake for the clash-protocols and clash-protocols-base";
+  description = "A flake for the clash-protocols, clash-protocols-base and clash-protocols-experimental";
   inputs = {
     clash-compiler.url = "github:clash-lang/clash-compiler";
     circuit-notation = {
@@ -54,6 +54,10 @@
                 root = ./clash-protocols-base;
                 overrides = _: _: final;
               };
+              clash-protocols-experimental = prev.developPackage {
+                root = ./clash-protocols-experimental;
+                overrides = _: _: final;
+              };
             } // circuit-notation.overlays.${system}.${compiler-version} final prev;
           in
             { name = compiler-version; value = overlay; }
@@ -105,6 +109,7 @@
           {
             clash-protocols = hs-pkgs.clash-protocols;
             clash-protocols-base = hs-pkgs.clash-protocols-base;
+            clash-protocols-experimental = hs-pkgs.clash-protocols-experimental;
 
             default = hs-pkgs.${default-package};
           }) all-hs-pkgs;

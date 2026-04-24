@@ -3,6 +3,7 @@ resolver: lts-23.6 # ghc-9.8.4
 packages:
   - clash-protocols-base
   - clash-protocols
+  - clash-protocols-experimental
 
 extra-deps:
 - git: https://github.com/cchalmers/circuit-notation.git

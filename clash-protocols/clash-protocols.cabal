@@ -128,6 +128,7 @@ library
     Protocols.Axi4.WriteResponse
     Protocols.Df
     Protocols.DfConv
+    Protocols.FunctorC
     Protocols.Hedgehog
     Protocols.Hedgehog.Internal
     Protocols.Idle
