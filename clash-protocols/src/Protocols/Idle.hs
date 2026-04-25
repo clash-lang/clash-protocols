@@ -47,7 +47,7 @@ idleSink = Circuit $ const (idleBwd $ Proxy @p, ())
 {- | Force a /nack/ on the backward channel and /no data/ on the forward
 channel if reset is asserted.
 
-Generic helper behind protocol-specific `forceResetSanity` combinators such as
+Generic helper behind protocol-specific @forceResetSanity@ combinators such as
 'Protocols.Df.forceResetSanity'.
 -}
 forceResetSanityGeneric ::
