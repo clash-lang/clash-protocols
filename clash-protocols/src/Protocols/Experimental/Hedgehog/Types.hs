@@ -2,8 +2,8 @@
 {-# LANGUAGE UndecidableSuperClasses #-}
 {-# OPTIONS_HADDOCK hide #-}
 
--- These types should be re-exported from the Protocols.Hedgehog module
-module Protocols.Hedgehog.Types where
+-- These types should be re-exported from the Protocols.Experimental.Hedgehog module
+module Protocols.Experimental.Hedgehog.Types where
 
 -- deepseq
 import Control.DeepSeq
@@ -12,7 +12,7 @@ import Clash.Prelude qualified as C
 import Data.Maybe (fromMaybe)
 import Data.Proxy
 import GHC.Stack (HasCallStack)
-import Protocols.Internal.Types
+import Protocols.Experimental.Simulate.Types
 
 -- hedgehog
 import Hedgehog qualified as H

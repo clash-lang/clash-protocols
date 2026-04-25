@@ -10,12 +10,22 @@ experimental protocols that rely on experimental 'DfConv' instances.
 -}
 module Protocols.Experimental.DfConv (
   module Protocols.DfConv,
+
+  -- * Simulation functions
+  drive,
+  sample,
+  stall,
+  simulate,
+  dfConvTestBench,
+  dfConvTestBenchRev,
 ) where
 
-import Clash.Prelude
+import Clash.Prelude hiding (sample, simulate)
 import Control.Monad (when)
 import Control.Monad.State (get, put, runState)
 import Data.Maybe (isJust)
+import Data.Proxy (Proxy (..))
+import GHC.Stack (HasCallStack)
 import Prelude qualified as P
 
 import Protocols
@@ -26,6 +36,8 @@ import Protocols.Experimental.Axi4.ReadData
 import Protocols.Experimental.Axi4.WriteAddress
 import Protocols.Experimental.Axi4.WriteData
 import Protocols.Experimental.Axi4.WriteResponse
+import Protocols.Experimental.Df qualified as Df
+import Protocols.Experimental.Simulate
 import Protocols.Internal
 
 -- Manager end (toDfCircuit) only allows for burst length of 1, will ignore the
@@ -293,3 +305,183 @@ instance
             , _rready dataAck
             )
         _ -> P.pure (S2M_NoReadData, False)
+
+{- | Emit values given in list. Emits no data while reset is asserted. Not
+synthesizable.
+-}
+drive ::
+  ( DfConv dfA
+  , HiddenClockResetEnable (Dom dfA)
+  ) =>
+  Proxy dfA ->
+  SimulationConfig ->
+  [Maybe (FwdPayload dfA)] ->
+  Circuit () dfA
+drive dfA conf s0 = Df.drive conf s0 |> dfToDfConvOtp dfA
+
+{- | Sample protocol to a list of values. Drops values while reset is asserted.
+Not synthesizable.
+
+For a generalized version of 'sample', check out 'sampleC'.
+-}
+sample ::
+  ( DfConv dfB
+  , HiddenClockResetEnable (Dom dfB)
+  ) =>
+  Proxy dfB ->
+  SimulationConfig ->
+  Circuit () dfB ->
+  [Maybe (FwdPayload dfB)]
+sample dfB conf c = Df.sample conf (c |> dfToDfConvInp dfB)
+
+{- | Stall every valid Df packet with a given number of cycles. If there are
+more valid packets than given numbers, passthrough all valid packets
+without stalling. Not synthesizable.
+
+For a generalized version of 'stall', check out 'stallC'.
+-}
+stall ::
+  ( DfConv dfA
+  , DfConv dfB
+  , Dom dfA ~ Dom dfB
+  , HiddenClockResetEnable (Dom dfA)
+  , FwdPayload dfA ~ FwdPayload dfB
+  , HasCallStack
+  ) =>
+  Proxy dfA ->
+  Proxy dfB ->
+  SimulationConfig ->
+  {- | Acknowledgement to send when LHS does not send data. Stall will act
+  transparently when reset is asserted.
+  -}
+  StallAck ->
+  -- Number of cycles to stall for every valid Df packet
+  [Int] ->
+  Circuit dfA dfB
+stall dfA dfB conf stallAck stalls =
+  dfToDfConvInp dfA
+    |> Df.stall conf stallAck stalls
+    |> dfToDfConvOtp dfB
+
+{- | Simulate a single domain protocol. Not synthesizable.
+
+For a generalized version of 'simulate', check out
+'Protocols.Experimental.Simulate.simulateC'.
+
+You may notice that things seem to be "switched around" in this function
+compared to others (the t'Circuit' has @Reverse@ applied to its right side,
+rather than its left, and we take the @FwdPayload@ of @dfA@ rather than
+@dfB@). This is because we are taking a t'Circuit' as a parameter, rather
+than returning a t'Circuit' like most other functions do.
+-}
+simulate ::
+  ( DfConv dfA
+  , DfConv dfB
+  , Dom dfA ~ Dom dfB
+  , KnownDomain (Dom dfA)
+  , HasCallStack
+  ) =>
+  Proxy dfA ->
+  Proxy dfB ->
+  -- | Simulation configuration. Use 'Data.Default.def' for sensible defaults.
+  SimulationConfig ->
+  -- | Circuit to simulate.
+  ( Clock (Dom dfA) ->
+    Reset (Dom dfA) ->
+    Enable (Dom dfA) ->
+    Circuit dfA dfB
+  ) ->
+  -- | Inputs
+  [Maybe (FwdPayload dfA)] ->
+  -- | Outputs
+  [Maybe (FwdPayload dfB)]
+simulate dfA dfB conf circ = Df.simulate conf circ'
+ where
+  circ' clk rst en =
+    withClockResetEnable clk rst en (dfToDfConvOtp dfA)
+      |> circ clk rst en
+      |> withClockResetEnable clk rst en (dfToDfConvInp dfB)
+
+{- | Given behavior along the backward channel, turn an arbitrary 'DfConv'
+circuit into an easily-testable 'Df' circuit representing the forward
+channel. Behavior along the backward channel is specified by a @[Bool]@
+(a list of acknowledges to provide), and a @[Maybe (BwdPayload dfB)]@ (a list
+of data values to feed in).
+-}
+dfConvTestBench ::
+  ( DfConv dfA
+  , DfConv dfB
+  , NFDataX (BwdPayload dfB)
+  , ShowX (BwdPayload dfB)
+  , Show (BwdPayload dfB)
+  , Dom dfA ~ Dom dfB
+  , HiddenClockResetEnable (Dom dfA)
+  ) =>
+  Proxy dfA ->
+  Proxy dfB ->
+  [Bool] ->
+  [Maybe (BwdPayload dfB)] ->
+  Circuit dfA dfB ->
+  Circuit
+    (Df.Df (Dom dfA) (FwdPayload dfA))
+    (Df.Df (Dom dfB) (FwdPayload dfB))
+dfConvTestBench dfA dfB bwdAcks bwdPayload circ =
+  mapCircuit (,()) P.fst P.fst (,())
+    $ tupCircuits idC (ackCircuit dfA)
+    |> toDfCircuit dfA
+    |> circ
+    |> fromDfCircuit dfB
+    |> tupCircuits idC driveCircuit
+ where
+  ackCircuit ::
+    Proxy dfA ->
+    Circuit (Reverse ()) (Reverse (Df.Df (Dom dfA) (BwdPayload dfA)))
+  ackCircuit _ =
+    reverseCircuit
+      $ Circuit
+      $ P.const
+        ( boolsToBwd (Proxy @(Df.Df _ _)) bwdAcks
+        , ()
+        )
+  driveCircuit = reverseCircuit (driveC def bwdPayload)
+
+{- | Given behavior along the forward channel, turn an arbitrary 'DfConv'
+circuit into an easily-testable 'Df' circuit representing the backward
+channel. Behavior along the forward channel is specified by a
+@[Maybe (FwdPayload dfA)]@ (a list of data values to feed in), and a @[Bool]@
+(a list of acknowledges to provide).
+-}
+dfConvTestBenchRev ::
+  ( DfConv dfA
+  , DfConv dfB
+  , NFDataX (FwdPayload dfA)
+  , ShowX (FwdPayload dfA)
+  , Show (FwdPayload dfA)
+  , Dom dfA ~ Dom dfB
+  , HiddenClockResetEnable (Dom dfA)
+  ) =>
+  Proxy dfA ->
+  Proxy dfB ->
+  [Maybe (FwdPayload dfA)] ->
+  [Bool] ->
+  Circuit dfA dfB ->
+  Circuit
+    (Df.Df (Dom dfB) (BwdPayload dfB))
+    (Df.Df (Dom dfA) (BwdPayload dfA))
+dfConvTestBenchRev dfA dfB fwdPayload fwdAcks circ =
+  mapCircuit ((),) P.snd P.snd ((),)
+    $ reverseCircuit
+    $ tupCircuits driveCircuit idC
+    |> toDfCircuit dfA
+    |> circ
+    |> fromDfCircuit dfB
+    |> tupCircuits (ackCircuit dfB) idC
+ where
+  driveCircuit = driveC def fwdPayload
+  ackCircuit :: Proxy dfB -> Circuit (Df.Df (Dom dfB) (FwdPayload dfB)) ()
+  ackCircuit _ =
+    Circuit
+      $ P.const
+        ( boolsToBwd (Proxy @(Df.Df _ _)) fwdAcks
+        , ()
+        )

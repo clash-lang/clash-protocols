@@ -33,8 +33,8 @@ import Test.Tasty.TH (testGroupGenerator)
 
 -- clash-protocols (me!)
 import Protocols
-import Protocols.DfConv qualified as DfConv
-import Protocols.Hedgehog
+import Protocols.Experimental.DfConv qualified as DfConv
+import Protocols.Experimental.Hedgehog
 import Protocols.Internal
 
 -- tests

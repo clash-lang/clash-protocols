@@ -4,12 +4,9 @@
 {-# OPTIONS_HADDOCK hide #-}
 
 {- |
-Internals for "Protocols.Hedgehog".
+Internals for "Protocols.Experimental.Hedgehog".
 -}
-module Protocols.Hedgehog.Internal (
-  module Protocols.Hedgehog.Internal,
-  module Protocols.Hedgehog.Types,
-) where
+module Protocols.Experimental.Hedgehog.Internal where
 
 -- base
 import Data.Proxy (Proxy (Proxy))
@@ -17,8 +14,9 @@ import GHC.Stack (HasCallStack)
 import Prelude
 
 -- clash-protocols
-import Protocols
-import Protocols.Hedgehog.Types
+import Protocols.Experimental.Df qualified as DfExperimental
+import Protocols.Experimental.Hedgehog.Types
+import Protocols.Experimental.Simulate
 import Protocols.Internal.TH
 
 -- clash-prelude
@@ -54,11 +52,11 @@ defExpectOptions =
     , eoTrace = False
     }
 
-instance (TestType a, C.KnownDomain dom) => Test (Df dom a) where
+instance (TestType a, C.KnownDomain dom) => Test (DfExperimental.Df dom a) where
   expectN ::
     forall m.
     (HasCallStack, H.MonadTest m) =>
-    Proxy (Df dom a) ->
+    Proxy (DfExperimental.Df dom a) ->
     ExpectOptions ->
     [Maybe a] ->
     m [a]

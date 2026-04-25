@@ -17,9 +17,8 @@ import Test.Tasty.Hedgehog.Extra (testProperty)
 import Test.Tasty.TH (testGroupGenerator)
 
 import Protocols
-import Protocols.Hedgehog
-import Protocols.PacketStream.Base
-import Protocols.PacketStream.Depacketizers
+import Protocols.Experimental.Hedgehog
+import Protocols.Experimental.PacketStream
 import Protocols.PacketStream.Hedgehog
 
 {- |

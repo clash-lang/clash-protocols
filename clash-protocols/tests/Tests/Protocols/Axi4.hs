@@ -32,7 +32,7 @@ import Protocols.Experimental.Axi4.WriteAddress
 import Protocols.Experimental.Axi4.WriteData
 import Protocols.Experimental.Axi4.WriteResponse
 import Protocols.Experimental.DfConv qualified as DfConv
-import Protocols.Hedgehog
+import Protocols.Experimental.Hedgehog
 import Protocols.Internal
 
 -- tests

@@ -18,8 +18,8 @@ import Test.Tasty.Hedgehog (HedgehogTestLimit (HedgehogTestLimit))
 import Test.Tasty.Hedgehog.Extra (testProperty)
 import Test.Tasty.TH (testGroupGenerator)
 
-import Protocols.Hedgehog
-import Protocols.PacketStream.Base
+import Protocols.Experimental.Hedgehog
+import Protocols.Experimental.PacketStream
 import Protocols.PacketStream.Hedgehog
 
 prop_strip_trailing_empty :: Property

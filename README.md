@@ -17,7 +17,7 @@ A battery-included library for writing on-chip protocols, such as AMBA AXI and A
   - [Why there is no `DfLike` instance for AXI](#why-there-is-no-dflike-instance-for-axi)
   - [Why there is no `Drivable` instance for AXI](#why-there-is-no-drivable-instance-for-axi)
   - [Why `Fwd` cannot be injective](#why-fwd-cannot-be-injective)
-  - [The `Simulate` instance](#the-simulate-instance)
+  - [Experimental `Simulate` support](#experimental-simulate-support)
   - [Interconnects](#interconnects)
 - [License](#license)
 - [Project goals](#project-goals)
@@ -43,7 +43,7 @@ The basic handshaking of `Df` is heavily inspired by _AMBA AXI_:
 
 ## Invariants
 
-The protocols `Df` imposes a contract each component should follow. These are, where possible, checked by the various test harnesses in `Protocols.Hedgehog`.
+The protocols `Df` imposes a contract each component should follow. These are, where possible, checked by the various test harnesses in `Protocols.Experimental.Hedgehog`.
 
 * _Fwd a_ cannot depend on the _Bwd a_. In other words, deciding whether or not to send data cannot depend on the acknowledgment of that same data.
 
@@ -80,7 +80,7 @@ The protocols `Df` imposes a contract each component should follow. These are, w
 
   This invariant allows developers to insert arbitrary reset delays without worrying their design breaks. Caution should still be taken though, see [Note [Deasserting resets]](#note-deasserting-resets).
 
-* When _Fwd a_ does not contain data (i.e., is `Nothing`), its corresponding _Bwd a_ may contain any value, including an error/bottom. When driving a bottom, a component should use `errorX` to make sure it can be evaluated using `seqX`. Test harnesses in `Protocols.Hedgehog` occasionally drive `errorX "No defined Ack"` when seeing `Nothing` to test this.
+* When _Fwd a_ does not contain data (i.e., is `Nothing`), its corresponding _Bwd a_ may contain any value, including an error/bottom. When driving a bottom, a component should use `errorX` to make sure it can be evaluated using `seqX`. Test harnesses in `Protocols.Experimental.Hedgehog` occasionally drive `errorX "No defined Ack"` when seeing `Nothing` to test this.
 
 * A circuit driving `Just x` must keep driving the same value until it receives an acknowledgment. This is not yet checked by test harnesses.
 
@@ -245,10 +245,10 @@ go (Just (Just d), Ack ack) = (Ack ack, Just d)
 ```
 
 ### Testing
-We'll use `Hedgehog` for testing our circuit. Conveniently, `Protocols.Hedgehog` defines some pretty handy helpers! Let's import everything:
+We'll use `Hedgehog` for testing our circuit. Conveniently, `Protocols.Experimental.Hedgehog` defines some pretty handy helpers! Let's import everything:
 
 ```haskell
-import qualified Protocols.Hedgehog as H
+import qualified Protocols.Experimental.Hedgehog as H
 import qualified Hedgehog as H
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
@@ -269,7 +269,7 @@ The explanation for the definition is out of scope for this tutorial, but it bas
 
 For `Df` circuits we can define a pretty strong property: a `Circuit (Df dom a) (Df dom a)` is functionally the same as a function `[a] -> [a]` if we strip all the backpressure and `Signal` abstractions. Similarly, we for our `Circuit (Df dom (Maybe a)) (Df dom a)` our _pure model_ would be `[Maybe a] -> [a]`, i.e. [`Data.catMaybes`](https://hackage.haskell.org/package/base-4.14.0.0/docs/Data-Maybe.html#v:catMaybes)!
 
-The function `Protocols.Hedgehog.idWithModel` takes advantage of exactly that fact. You tell it:
+The function `Protocols.Experimental.Hedgehog.idWithModel` takes advantage of exactly that fact. You tell it:
 
 * How to generate input data
 * What function to consider the _pure model_
@@ -358,16 +358,16 @@ Rerunning the tests will give us a big error, which starts out as:
 ```
 CatMaybes
   prop_catMaybes: FAIL (0.11s)
-      ✗ prop_catMaybes failed at src/Protocols/Hedgehog/Internal.hs:167:7
+      ✗ prop_catMaybes failed at src/Protocols/Experimental/Hedgehog/Internal.hs:167:7
         after 9 tests and 3 shrinks.
 ```
 
-This notes our test has failed after _9 tests_. To produce a small example Hedgehog has tried to shrink the test to a minimal test case, reflected in its _and 3 shrinks_. The test fails at `src/Protocols/Hedgehog/Internal.hs:167:7`. Usually, you'd see your own files here, but in our case we used `idWithModel` - an externally defined property. Hedgehog will try and be helpful by printing the source code of the property interspersed with the data it generated.
+This notes our test has failed after _9 tests_. To produce a small example Hedgehog has tried to shrink the test to a minimal test case, reflected in its _and 3 shrinks_. The test fails at `src/Protocols/Experimental/Hedgehog/Internal.hs:167:7`. Usually, you'd see your own files here, but in our case we used `idWithModel` - an externally defined property. Hedgehog will try and be helpful by printing the source code of the property interspersed with the data it generated.
 
 So we get:
 
 ```haskell
-    ┏━━ src/Protocols/Hedgehog.hs ━━━
+    ┏━━ src/Protocols/Experimental/Hedgehog.hs ━━━
  74 ┃ propWithModel ::
  75 ┃   forall a b .
  76 ┃   (Test a, Test b, HasCallStack) =>
@@ -585,9 +585,9 @@ catMaybes = Circuit (C.unbundle . go . C.bundle)
 The type that can be inferred for `go` by GHC is much less precise than when `Fwd` (and `Bwd` for that matter) are injective.
 
 
-## The `Simulate` instance
+## Experimental `Simulate` support
 
-The `clash-protocols` features mentioned above are all not suitable to be used with communication bus protocols such as AXI. What _is_ suitable is the `Simulate` class. For a protocol `a`, a `Simulate` instance defines conversion functions from types that are easy to use in testcases and manual simulations (usually these are lists), from and to the types that are used by the protocol `a`. Furthermore, a `Simulate` instance provides an unsynthesizable `stallC` function which generates a circuit that stalls the circuit according to a given list of stalls. This function can be used to test the circuit's behaviour under different stalls. It is most useful to define Hedgehog tests that stall the circuit arbitrarily.
+The `clash-protocols` features mentioned above are all not suitable to be used with communication bus protocols such as AXI. Generic simulation support is available from `Protocols.Experimental.Simulate`, with protocol-specific instances and helpers in modules such as `Protocols.Experimental.Df`, `Protocols.Experimental.DfConv`, and `Protocols.Experimental.PacketStream`. These modules are experimental because the API and organization are expected to change as protocol-specific drivers, consumers, dashboards, and test infrastructure become more mature. For a protocol `a`, a `Simulate` instance defines conversion functions from types that are easy to use in testcases and manual simulations (usually these are lists), from and to the types that are used by the protocol `a`. Furthermore, a `Simulate` instance provides an unsynthesizable `stallC` function which generates a circuit that stalls the circuit according to a given list of stalls. This function can be used to test the circuit's behaviour under different stalls. It is most useful to define Hedgehog tests that stall the circuit arbitrarily.
 
 ## Interconnects
 

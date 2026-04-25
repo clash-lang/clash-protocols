@@ -26,7 +26,7 @@ import Protocols
 import Protocols.Experimental.Avalon.MemMap
 import Protocols.Experimental.Avalon.Stream
 import Protocols.Experimental.DfConv qualified as DfConv
-import Protocols.Hedgehog
+import Protocols.Experimental.Hedgehog
 import Protocols.Internal
 
 -- tests

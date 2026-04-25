@@ -69,9 +69,7 @@ import Data.Maybe qualified as Maybe
 import Data.Proxy
 
 import Protocols
-import Protocols.Df qualified as Df
 import Protocols.DfConv qualified as DfConv
-import Protocols.Hedgehog (Test (..))
 import Protocols.Idle
 
 {- |
@@ -217,9 +215,6 @@ instance IdleCircuit (PacketStream dom dataWidth meta) where
   idleBwd _ = pure (PacketStreamS2M False)
   idleFwd _ = pure Nothing
 
-instance Backpressure (PacketStream dom dataWidth meta) where
-  boolsToBwd _ = fromList_lazy . fmap PacketStreamS2M
-
 instance DfConv.DfConv (PacketStream dom dataWidth meta) where
   type Dom (PacketStream dom dataWidth meta) = dom
   type FwdPayload (PacketStream dom dataWidth meta) = PacketStreamM2S dataWidth meta
@@ -243,57 +238,6 @@ instance DfConv.DfConv (PacketStream dom dataWidth meta) where
         , pure (deepErrorX "PacketStream fromDfCircuit: undefined")
         )
       )
-
-instance
-  (KnownDomain dom) =>
-  Simulate (PacketStream dom dataWidth meta)
-  where
-  type
-    SimulateFwdType (PacketStream dom dataWidth meta) =
-      [Maybe (PacketStreamM2S dataWidth meta)]
-  type SimulateBwdType (PacketStream dom dataWidth meta) = [PacketStreamS2M]
-  type SimulateChannels (PacketStream dom dataWidth meta) = 1
-
-  simToSigFwd _ = fromList_lazy
-  simToSigBwd _ = fromList_lazy
-  sigToSimFwd _ s = sample_lazy s
-  sigToSimBwd _ s = sample_lazy s
-
-  stallC conf (head -> (stallAck, stalls)) =
-    withClockResetEnable clockGen resetGen enableGen
-      $ DfConv.stall Proxy Proxy conf stallAck stalls
-
-instance
-  (KnownDomain dom) =>
-  Drivable (PacketStream dom dataWidth meta)
-  where
-  type
-    ExpectType (PacketStream dom dataWidth meta) =
-      [PacketStreamM2S dataWidth meta]
-
-  toSimulateType Proxy = fmap Just
-  fromSimulateType Proxy = Maybe.catMaybes
-
-  driveC conf vals =
-    withClockResetEnable clockGen resetGen enableGen
-      $ DfConv.drive Proxy conf vals
-  sampleC conf ckt =
-    withClockResetEnable clockGen resetGen enableGen
-      $ DfConv.sample Proxy conf ckt
-
-instance
-  ( KnownNat dataWidth
-  , NFDataX meta
-  , NFData meta
-  , ShowX meta
-  , Show meta
-  , Eq meta
-  , KnownDomain dom
-  ) =>
-  Test (PacketStream dom dataWidth meta)
-  where
-  expectN Proxy options sampled =
-    expectN (Proxy @(Df.Df dom _)) options sampled
 
 {- |
 Undefined PacketStream null byte. Will throw an error if evaluated. The source

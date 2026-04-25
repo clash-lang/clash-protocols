@@ -14,10 +14,10 @@ import Hedgehog
 import Hedgehog.Gen qualified as Gen
 import Hedgehog.Range qualified as Range
 import Protocols
+import Protocols.Experimental.Hedgehog (defExpectOptions, eoSampleMax)
 import Protocols.Experimental.Wishbone
 import Protocols.Experimental.Wishbone.Standard
 import Protocols.Experimental.Wishbone.Standard.Hedgehog
-import Protocols.Hedgehog (defExpectOptions, eoSampleMax)
 import Test.Tasty
 import Test.Tasty.Hedgehog (HedgehogTestLimit (HedgehogTestLimit))
 import Test.Tasty.Hedgehog.Extra (testProperty)

@@ -13,7 +13,6 @@ module Protocols (
   -- * Circuit definition
   Circuit (Circuit),
   Protocol (Fwd, Bwd),
-  Backpressure (boolsToBwd),
   Ack (..),
   Reverse,
 
@@ -35,30 +34,6 @@ module Protocols (
   applyC,
   prod2C,
 
-  -- * Simulation
-  Simulate (
-    SimulateFwdType,
-    SimulateBwdType,
-    SimulateChannels,
-    sigToSimFwd,
-    sigToSimBwd,
-    simToSigFwd,
-    simToSigBwd,
-    stallC
-  ),
-  Drivable (
-    ExpectType,
-    toSimulateType,
-    fromSimulateType,
-    driveC,
-    sampleC
-  ),
-  SimulationConfig (..),
-  StallAck (..),
-  simulateC,
-  simulateCS,
-  def,
-
   -- * Circuit notation plugin
   circuit,
   (-<),
@@ -66,6 +41,5 @@ module Protocols (
   TaggedBundle (..),
 ) where
 
-import Data.Default (def)
 import Protocols.Df (Df)
 import Protocols.Internal

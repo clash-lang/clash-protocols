@@ -8,7 +8,8 @@ import Control.Monad.Extra (concatMapM)
 import Data.Proxy
 import GHC.TypeNats
 import Language.Haskell.TH
-import Protocols.Hedgehog.Types
+import Protocols.Experimental.Hedgehog.Types
+import Protocols.Experimental.Simulate.Types
 import Protocols.Internal.Types
 import Protocols.Plugin
 

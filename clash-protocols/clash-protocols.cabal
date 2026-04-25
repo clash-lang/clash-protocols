@@ -15,11 +15,10 @@ description:
   * 'Protocols' + https://github.com/clash-lang/clash-protocols/blob/main/README.md
   * 'Protocols.Df'
   * 'Protocols.Plugin'
-  * 'Protocols.Hedgehog'
 
 data-files:
-  src/Protocols/Hedgehog.hs
-  src/Protocols/Hedgehog/*.hs
+  src/Protocols/Experimental/Hedgehog.hs
+  src/Protocols/Experimental/Hedgehog/*.hs
 
 source-repository head
   type: git
@@ -129,12 +128,14 @@ library
     Protocols.Experimental.Axi4.WriteAddress
     Protocols.Experimental.Axi4.WriteData
     Protocols.Experimental.Axi4.WriteResponse
+    Protocols.Experimental.Df
     Protocols.Experimental.DfConv
+    Protocols.Experimental.Hedgehog
+    Protocols.Experimental.PacketStream
+    Protocols.Experimental.Simulate
     Protocols.Experimental.Wishbone
     Protocols.Experimental.Wishbone.Standard
     Protocols.Experimental.Wishbone.Standard.Hedgehog
-    Protocols.Hedgehog
-    Protocols.Hedgehog.Internal
     Protocols.Idle
     Protocols.Internal
     Protocols.Internal.TH
@@ -161,7 +162,9 @@ library
     Data.Constraint.Nat.Extra
     Data.Maybe.Extra
     Paths_clash_protocols
-    Protocols.Hedgehog.Types
+    Protocols.Experimental.Hedgehog.Internal
+    Protocols.Experimental.Hedgehog.Types
+    Protocols.Experimental.Simulate.Types
     Protocols.Internal.Types
 
   default-language: GHC2021

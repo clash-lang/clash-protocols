@@ -20,11 +20,10 @@ import Test.Tasty.Hedgehog (HedgehogTestLimit (HedgehogTestLimit))
 import Test.Tasty.Hedgehog.Extra (testProperty)
 import Test.Tasty.TH (testGroupGenerator)
 
-import Protocols
-import Protocols.Hedgehog
-import Protocols.PacketStream.Base
+import Protocols.Experimental.Hedgehog
+import Protocols.Experimental.PacketStream
+import Protocols.Experimental.Simulate
 import Protocols.PacketStream.Hedgehog
-import Protocols.PacketStream.PacketFifo
 
 -- | Drops packets that consist of more than 2^n transfers.
 dropBigPackets ::

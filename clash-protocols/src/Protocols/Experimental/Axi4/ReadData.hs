@@ -42,6 +42,7 @@ import Clash.Prelude qualified as C
 
 -- me
 import Protocols.Experimental.Axi4.Common
+import Protocols.Experimental.Simulate
 import Protocols.Idle
 import Protocols.Internal
 

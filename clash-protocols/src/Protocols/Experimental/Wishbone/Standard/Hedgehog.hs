@@ -70,9 +70,9 @@ import Hedgehog ((===))
 import Hedgehog qualified as H
 import Hedgehog.Gen qualified as Gen
 import Hedgehog.Range qualified as Range
-import Protocols hiding (circuit, stallC)
+import Protocols hiding (circuit)
+import Protocols.Experimental.Hedgehog
 import Protocols.Experimental.Wishbone
-import Protocols.Hedgehog
 import Prelude as P hiding (cycle)
 
 -- | Datatype representing a single transaction request sent from a Wishbone Master to a Wishbone Slave

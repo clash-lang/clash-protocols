@@ -5,7 +5,7 @@ A collection of Hedgehog helpers to test Circuit components. To test a
 protocol component against a combinatorial model, see 'idWithModel'. To write
 your own tester, see 'Test'.
 -}
-module Protocols.Hedgehog (
+module Protocols.Experimental.Hedgehog (
   -- * Types
   ExpectOptions (..),
   defExpectOptions,
@@ -42,7 +42,9 @@ import Prelude
 
 -- clash-protocols
 import Protocols
-import Protocols.Hedgehog.Internal
+import Protocols.Experimental.Hedgehog.Internal
+import Protocols.Experimental.Hedgehog.Types
+import Protocols.Experimental.Simulate
 
 -- clash-prelude
 import Clash.Prelude qualified as C

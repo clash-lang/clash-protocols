@@ -54,7 +54,7 @@ import Test.Tasty.TH (testGroupGenerator)
 -- clash-protocols (me!)
 import Protocols
 import Protocols.Df qualified as Df
-import Protocols.Hedgehog
+import Protocols.Experimental.Hedgehog
 
 -- tests
 import Util

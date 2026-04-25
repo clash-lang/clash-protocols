@@ -21,8 +21,9 @@ import Clash.Prelude qualified as C
 -- me
 
 import Protocols.Df qualified as Df
-import Protocols.DfConv qualified as DfConv
-import Protocols.Hedgehog
+import Protocols.Experimental.DfConv qualified as DfConv
+import Protocols.Experimental.Hedgehog
+import Protocols.Experimental.Simulate
 import Protocols.Idle
 import Protocols.Internal
 
