@@ -6,7 +6,7 @@
 {- |
 Types modelling the Wishbone bus protocol.
 -}
-module Protocols.Wishbone where
+module Protocols.Experimental.Wishbone where
 
 import Clash.Prelude (Nat, (:::))
 import Prelude hiding (head, not, (&&))

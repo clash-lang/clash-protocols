@@ -12,7 +12,7 @@ maintainer: Martijn Bastiaan <martijn@hmbastiaan.nl>
 description:
   Suggested reading order:
   .
-  * 'Protocols' + README.md
+  * 'Protocols' + https://github.com/clash-lang/clash-protocols/blob/main/README.md
   * 'Protocols.Df'
   * 'Protocols.Plugin'
   * 'Protocols.Hedgehog'
@@ -133,6 +133,9 @@ library
     Protocols.Experimental.Axi4.WriteData
     Protocols.Experimental.Axi4.WriteResponse
     Protocols.Experimental.DfConv
+    Protocols.Experimental.Wishbone
+    Protocols.Experimental.Wishbone.Standard
+    Protocols.Experimental.Wishbone.Standard.Hedgehog
     Protocols.Hedgehog
     Protocols.Hedgehog.Internal
     Protocols.Idle
@@ -150,9 +153,6 @@ library
     Protocols.PacketStream.Routing
     Protocols.ToConst
     Protocols.Vec
-    Protocols.Wishbone
-    Protocols.Wishbone.Standard
-    Protocols.Wishbone.Standard.Hedgehog
     Test.Tasty.Hedgehog.Extra
 
   reexported-modules:

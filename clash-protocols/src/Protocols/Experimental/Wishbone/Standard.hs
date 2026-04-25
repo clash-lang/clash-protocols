@@ -2,12 +2,12 @@
 {-# OPTIONS_GHC -fconstraint-solver-iterations=10 #-}
 
 -- | Circuits and utilities for working with Standard-mode Wishbone circuits.
-module Protocols.Wishbone.Standard where
+module Protocols.Experimental.Wishbone.Standard where
 
 import Clash.Prelude
 import Data.Bifunctor qualified as B
 import Protocols
-import Protocols.Wishbone
+import Protocols.Experimental.Wishbone
 import Prelude hiding (head, not, repeat, (!!), (&&), (||))
 
 -- | Distribute requests amongst N slave circuits
