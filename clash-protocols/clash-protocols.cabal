@@ -64,12 +64,9 @@ common common-options
     -- source code in compiled modules
     -Wall
     -Wcompat
-    -fplugin
-    GHC.TypeLits.Extra.Solver
-    -fplugin
-    GHC.TypeLits.Normalise
-    -fplugin
-    GHC.TypeLits.KnownNat.Solver
+    -fplugin=GHC.TypeLits.Extra.Solver
+    -fplugin=GHC.TypeLits.Normalise
+    -fplugin=GHC.TypeLits.KnownNat.Solver
     -fexpose-all-unfoldings
     -fno-worker-wrapper
 
