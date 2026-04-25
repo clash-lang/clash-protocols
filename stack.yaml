@@ -1,13 +1,14 @@
-resolver: lts-23.6 # ghc-9.8.4
+resolver: lts-24.37 # ghc-9.10.3
 
 packages:
   - clash-protocols-base
   - clash-protocols
 
 extra-deps:
-- git: https://github.com/cchalmers/circuit-notation.git
-  commit: 564769c52aa05b90f81bbc898b7af7087d96613d
-- clash-prelude-1.8.2
-- clash-prelude-hedgehog-1.8.2
-- hedgehog-1.4@sha256:9860ab34ab3951d9515c71b777d8c9c47610aae7339933e17d26ad9a4afa5618,4754
-- tasty-1.4.3@sha256:5b53fded93109f6704b599c3498eb73c5b0ed1a975f1912dd98b4b19c61f8bc9,2653
+- circuit-notation-0.2.0.0@sha256:a9385711f2fc8eb602b556b4ef3b9b2f3f26ad42eacc6f854555b3c8d6188cc6,1583
+- clash-prelude-1.10.0
+- clash-prelude-hedgehog-1.10.0
+- ghc-typelits-extra-0.5.3@sha256:4fae3c698c15132181a431e52f95aa8f655dc78bcd2a5fdf35a7e222eb7d2d19,5830
+- ghc-typelits-knownnat-0.8.3@sha256:84114e2d8a4389c37921ed1b3dd030c6acd8af0eb47d5cb516e3a374ade0f9b4,5993
+- ghc-typelits-natnormalise-0.9.5@sha256:692d7a936ecee9e3a994f0a60d136be1f03137d38aca90f03b8efcb40bed90ca,3973
+- ghc-tcplugin-api-0.18.2.0@sha256:126b0b16d56b5ecb3b5a3dd74e1581619208604d89db8f09bc1bdba95a08b8f2,5414

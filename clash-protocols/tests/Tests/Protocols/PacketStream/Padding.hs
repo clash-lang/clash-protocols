@@ -17,8 +17,8 @@ import Test.Tasty.Hedgehog (HedgehogTestLimit (HedgehogTestLimit))
 import Test.Tasty.Hedgehog.Extra (testProperty)
 import Test.Tasty.TH (testGroupGenerator)
 
-import Protocols.Hedgehog
-import Protocols.PacketStream
+import Protocols.Experimental.Hedgehog
+import Protocols.Experimental.PacketStream
 import Protocols.PacketStream.Hedgehog
 
 -- | Pure model of `stripPaddingC`.

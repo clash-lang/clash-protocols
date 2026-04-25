@@ -5,9 +5,9 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 {- |
-Types and instance declarations for the Avalon-stream protocol.
+Types and instance declarations for the Avalon Stream protocol.
 -}
-module Protocols.Avalon.Stream where
+module Protocols.Experimental.Avalon.Stream where
 
 -- base
 import Control.DeepSeq (NFData)
@@ -25,15 +25,16 @@ import Clash.Prelude qualified as C
 -- me
 
 import Protocols.Df qualified as Df
-import Protocols.DfConv qualified as DfConv
-import Protocols.Hedgehog
+import Protocols.Experimental.DfConv qualified as DfConv
+import Protocols.Experimental.Hedgehog
+import Protocols.Experimental.Simulate
 import Protocols.Idle
 import Protocols.Internal
 
 instance Hashable (C.Unsigned n)
 
-{- | Configuration for AXI4 Stream protocol. Determines the width of some
-fields in 'AvalonStreamM2S', and toggles some others. Also sets the ready
+{- | Configuration for the Avalon Stream protocol. Determines the width of some
+fields in t'AvalonStreamM2S', and toggles some others. Also sets the ready
 latency (see specs for more info on this).
 -}
 data AvalonStreamConfig = AvalonStreamConfig
@@ -83,7 +84,7 @@ type KnownAvalonStreamConfig conf =
   )
 
 {- | Data sent from manager to subordinate.
-The tvalid field is left out: messages with
+The @tvalid@ field is left out: messages with
 @tvalid = False@ should be sent as a @Nothing@.
 -}
 data AvalonStreamM2S (conf :: AvalonStreamConfig) (dataType :: Type) = AvalonStreamM2S
@@ -133,7 +134,7 @@ deriving instance
   Hashable (AvalonStreamM2S conf dataType)
 
 {- | Data sent from subordinate to manager. A simple acknowledge message.
-Manager can only send 'AvalonStreamM2S' when '_ready' was true
+Manager can only send t'AvalonStreamM2S' when '_ready' was true
 @readyLatency@ clock cycles ago.
 -}
 newtype AvalonStreamS2M (readyLatency :: Nat) = AvalonStreamS2M {_ready :: Bool}

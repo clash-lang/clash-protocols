@@ -1,9 +1,9 @@
 {-# LANGUAGE TypeFamilyDependencies #-}
 
 {- |
-Types and utilities shared between AXI4, AXI4-Lite, and AXI3.
+Shared types and helpers for the experimental AXI4-family channel definitions.
 -}
-module Protocols.Axi4.Common where
+module Protocols.Experimental.Axi4.Common where
 
 -- base
 
@@ -24,7 +24,7 @@ type BurstType (keep :: Bool) = KeepType keep BurstMode
 -- | Enables or disables burst length
 type BurstLengthType (keep :: Bool) = KeepType keep (C.Index (2 ^ 8))
 
--- | Enables or disables the 'ArCache' for Write Address operations
+-- | Enables or disables the 'AwCache' for Write Address operations
 type AwCacheType (keep :: Bool) = KeepType keep AwCache
 
 -- | Enables or disables the 'ArCache' for Read Address operations
@@ -71,13 +71,15 @@ class KeepStrobeClass (keepStrobe :: Bool) where
   -- | Get the value of @keepStrobe@ at the term level.
   getKeepStrobe :: StrobeDataType keepStrobe -> Bool
 
-  -- | Convert a byte into a possibly-strobed byte.
-  -- The 'Bool' value determines the strobe value
-  -- if strobe is enabled.
+  {- | Convert a byte into a possibly-strobed byte.
+  The 'Bool' value determines the strobe value
+  if strobe is enabled.
+  -}
   toStrobeDataType :: Bool -> C.BitVector 8 -> StrobeDataType keepStrobe
 
-  -- | Convert a possibly-strobed byte into a byte,
-  -- or 'Nothing' if strobe is enabled and strobe = false.
+  {- | Convert a possibly-strobed byte into a byte,
+  or 'Nothing' if strobe is enabled and strobe = false.
+  -}
   fromStrobeDataType :: StrobeDataType keepStrobe -> Maybe (C.BitVector 8)
 
 instance KeepStrobeClass 'True where
@@ -92,7 +94,7 @@ instance KeepStrobeClass 'False where
   fromStrobeDataType v = Just v
 
 {- | The protocol does not specify the exact use of the QoS identifier. This
-specification recommends that AxQOS is used as a priority indicator for the
+AXI specification recommends that AxQOS is used as a priority indicator for the
 associated write or read transaction. A higher value indicates a higher
 priority transaction.
 
@@ -105,42 +107,45 @@ type Qos = C.Index ((2 ^ 4) - 1)
 each transfer within the burst is calculated.
 -}
 data BurstMode
-  = -- | In a fixed burst, the address is the same for every transfer in the
-    -- burst. This burst type is used for repeated accesses to the same location
-    -- such as when loading or emptying a FIFO
+  = {- | In a fixed burst, the address is the same for every transfer in the
+    burst. This burst type is used for repeated accesses to the same location
+    such as when loading or emptying a FIFO
+    -}
     BmFixed
-  | -- | Incrementing. In an incrementing burst, the address for each transfer in
-    -- the burst is an increment of the address for the previous transfer. The
-    -- increment value depends on the size of the transfer. For example, the
-    -- address for each transfer in a burst with a size of four bytes is the
-    -- previous address plus four. This burst type is used for accesses to normal
-    -- sequential memory.
+  | {- | Incrementing. In an incrementing burst, the address for each transfer in
+    the burst is an increment of the address for the previous transfer. The
+    increment value depends on the size of the transfer. For example, the
+    address for each transfer in a burst with a size of four bytes is the
+    previous address plus four. This burst type is used for accesses to normal
+    sequential memory.
+    -}
     BmIncr
-  | -- | A wrapping burst is similar to an incrementing burst, except that the
-    -- address wraps around to a lower address if an upper address limit is
-    -- reached. The following restrictions apply to wrapping bursts:
-    --
-    --   * the start address must be aligned to the size of each transfer
-    --   * the length of the burst must be 2, 4, 8, or 16 transfers.
-    --
-    -- The behavior of a wrapping burst is:
-    --
-    --   * The lowest address used by the burst is aligned to the total size of
-    --     the data to be transferred, that is, to ((size of each transfer in the
-    --     burst) × (number of transfers in the burst)). This address is defined
-    --     as the _wrap boundary_.
-    --
-    --   * After each transfer, the address increments in the same way as for an
-    --     INCR burst. However, if this incremented address is ((wrap boundary) +
-    --     (total size of data to be transferred)) then the address wraps round to
-    --     the wrap boundary.
-    --
-    --   * The first transfer in the burst can use an address that is higher than
-    --     the wrap boundary, subject to the restrictions that apply to wrapping
-    --     bursts. This means that the address wraps for any WRAP burst for which
-    --     the first address is higher than the wrap boundary.
-    --
-    -- This burst type is used for cache line accesses.
+  | {- | A wrapping burst is similar to an incrementing burst, except that the
+    address wraps around to a lower address if an upper address limit is
+    reached. The following restrictions apply to wrapping bursts:
+
+    * the start address must be aligned to the size of each transfer
+    * the length of the burst must be 2, 4, 8, or 16 transfers.
+
+    The behavior of a wrapping burst is:
+
+    * The lowest address used by the burst is aligned to the total size of
+    the data to be transferred, that is, to ((size of each transfer in the
+    burst) × (number of transfers in the burst)). This address is defined
+    as the _wrap boundary_.
+
+    * After each transfer, the address increments in the same way as for an
+    INCR burst. However, if this incremented address is ((wrap boundary) +
+    (total size of data to be transferred)) then the address wraps round to
+    the wrap boundary.
+
+    * The first transfer in the burst can use an address that is higher than
+    the wrap boundary, subject to the restrictions that apply to wrapping
+    bursts. This means that the address wraps for any WRAP burst for which
+    the first address is higher than the wrap boundary.
+
+    This burst type is used for cache line accesses.
+    -}
     BmWrap
   deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq, C.BitPack)
 
@@ -187,28 +192,32 @@ data OtherAllocate = OtherNoLookupCache | OtherLookupCache
   deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq, C.BitPack)
 
 {- | Memory attributes. Note that the 'Allocate' and 'OtherAllocate' bits are
-in different posistions for read and write requests.
+in different positions for read and write requests.
 -}
 type AwCache = (Bufferable, Modifiable, OtherAllocate, Allocate)
 
 {- | Memory attributes. Note that the 'Allocate' and 'OtherAllocate' bits are
-in different posistions for read and write requests.
+in different positions for read and write requests.
 -}
 type ArCache = (Bufferable, Modifiable, Allocate, OtherAllocate)
 
 -- | Status of the write transaction.
 data Resp
-  = -- | Normal access success. Indicates that a normal access has been
-    -- successful. Can also indicate an exclusive access has failed.
+  = {- | Normal access success. Indicates that a normal access has been
+    successful. Can also indicate an exclusive access has failed.
+    -}
     ROkay
-  | -- | Exclusive access okay. Indicates that either the read or write portion
-    -- of an exclusive access has been successful.
+  | {- | Exclusive access okay. Indicates that either the read or write portion
+    of an exclusive access has been successful.
+    -}
     RExclusiveOkay
-  | -- | Slave error. Used when the access has reached the slave successfully, but
-    -- the slave wishes to return an error condition to the originating master.
+  | {- | Slave error. Used when the access has reached the slave successfully, but
+    the slave wishes to return an error condition to the originating master.
+    -}
     RSlaveError
-  | -- | Decode error. Generated, typically by an interconnect component, to
-    -- indicate that there is no slave at the transaction address.
+  | {- | Decode error. Generated, typically by an interconnect component, to
+    indicate that there is no slave at the transaction address.
+    -}
     RDecodeError
   deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq, C.BitPack)
 
@@ -252,5 +261,5 @@ data InstructionOrData
   | Instruction
   deriving (Show, C.ShowX, Generic, C.NFDataX, NFData, Eq, C.BitPack)
 
--- | Enables or disables 'Privileged', 'Secure', and 'InstructionOrData'
+-- | Enables or disables t'Privileged', t'Secure', and 'InstructionOrData'
 type Permissions = (Privileged, Secure, InstructionOrData)

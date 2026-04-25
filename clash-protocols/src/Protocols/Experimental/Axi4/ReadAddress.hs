@@ -7,7 +7,7 @@
 Defines ReadAddress channel of full AXI4 protocol with port names corresponding
 to the AXI4 specification.
 -}
-module Protocols.Axi4.ReadAddress (
+module Protocols.Experimental.Axi4.ReadAddress (
   M2S_ReadAddress (..),
   S2M_ReadAddress (..),
   Axi4ReadAddress,
@@ -45,7 +45,8 @@ import GHC.Generics (Generic)
 import Clash.Prelude qualified as C
 
 -- me
-import Protocols.Axi4.Common
+import Protocols.Experimental.Axi4.Common
+import Protocols.Experimental.Simulate
 import Protocols.Idle
 import Protocols.Internal
 
@@ -63,72 +64,72 @@ data Axi4ReadAddressConfig = Axi4ReadAddressConfig
   , _arKeepQos :: Bool
   }
 
-{- | Grab '_arKeepBurst' from 'Axi4ReadAddressConfig' at the type level.
+{- | Grab '_arKeepBurst' from t'Axi4ReadAddressConfig' at the type level.
 This boolean value determines whether to keep the '_arburst' field
-in 'M2S_ReadAddress'.
+in t'M2S_ReadAddress'.
 -}
 type family ARKeepBurst (conf :: Axi4ReadAddressConfig) where
   ARKeepBurst ('Axi4ReadAddressConfig a _ _ _ _ _ _ _ _ _) = a
 
-{- | Grab '_arKeepSize' from 'Axi4ReadAddressConfig' at the type level.
+{- | Grab '_arKeepSize' from t'Axi4ReadAddressConfig' at the type level.
 This boolean value determines whether to keep the '_arsize' field
-in 'M2S_ReadAddress'.
+in t'M2S_ReadAddress'.
 -}
 type family ARKeepSize (conf :: Axi4ReadAddressConfig) where
   ARKeepSize ('Axi4ReadAddressConfig _ a _ _ _ _ _ _ _ _) = a
 
-{- | Grab '_arIdWidth' from 'Axi4ReadAddressConfig' at the type level.
+{- | Grab '_arIdWidth' from t'Axi4ReadAddressConfig' at the type level.
 This nat value determines the size of the '_arid' field
-in 'M2S_ReadAddress'.
+in t'M2S_ReadAddress'.
 -}
 type family ARIdWidth (conf :: Axi4ReadAddressConfig) where
   ARIdWidth ('Axi4ReadAddressConfig _ _ a _ _ _ _ _ _ _) = a
 
-{- | Grab '_arAddrWidth' from 'Axi4ReadAddressConfig' at the type level.
+{- | Grab '_arAddrWidth' from t'Axi4ReadAddressConfig' at the type level.
 This nat value determines the size of the '_araddr' field
-in 'M2S_ReadAddress'.
+in t'M2S_ReadAddress'.
 -}
 type family ARAddrWidth (conf :: Axi4ReadAddressConfig) where
   ARAddrWidth ('Axi4ReadAddressConfig _ _ _ a _ _ _ _ _ _) = a
 
-{- | Grab '_arKeepRegion' from 'Axi4ReadAddressConfig' at the type level.
+{- | Grab '_arKeepRegion' from t'Axi4ReadAddressConfig' at the type level.
 This boolean value determines whether to keep the '_arregion' field
-in 'M2S_ReadAddress'.
+in t'M2S_ReadAddress'.
 -}
 type family ARKeepRegion (conf :: Axi4ReadAddressConfig) where
   ARKeepRegion ('Axi4ReadAddressConfig _ _ _ _ a _ _ _ _ _) = a
 
-{- | Grab '_arKeepBurstLength' from 'Axi4ReadAddressConfig' at the type level.
+{- | Grab '_arKeepBurstLength' from t'Axi4ReadAddressConfig' at the type level.
 This boolean value determines whether to keep the '_arlen' field
-in 'M2S_ReadAddress'.
+in t'M2S_ReadAddress'.
 -}
 type family ARKeepBurstLength (conf :: Axi4ReadAddressConfig) where
   ARKeepBurstLength ('Axi4ReadAddressConfig _ _ _ _ _ a _ _ _ _) = a
 
-{- | Grab '_arKeepLock' from 'Axi4ReadAddressConfig' at the type level.
+{- | Grab '_arKeepLock' from t'Axi4ReadAddressConfig' at the type level.
 This boolean value determines whether to keep the '_arlock' field
-in 'M2S_ReadAddress'.
+in t'M2S_ReadAddress'.
 -}
 type family ARKeepLock (conf :: Axi4ReadAddressConfig) where
   ARKeepLock ('Axi4ReadAddressConfig _ _ _ _ _ _ a _ _ _) = a
 
-{- | Grab '_arKeepCache' from 'Axi4ReadAddressConfig' at the type level.
+{- | Grab '_arKeepCache' from t'Axi4ReadAddressConfig' at the type level.
 This boolean value determines whether to keep the '_arcache' field
-in 'M2S_ReadAddress'.
+in t'M2S_ReadAddress'.
 -}
 type family ARKeepCache (conf :: Axi4ReadAddressConfig) where
   ARKeepCache ('Axi4ReadAddressConfig _ _ _ _ _ _ _ a _ _) = a
 
-{- | Grab '_arKeepPermissions' from 'Axi4ReadAddressConfig' at the type level.
+{- | Grab '_arKeepPermissions' from t'Axi4ReadAddressConfig' at the type level.
 This boolean value determines whether to keep the '_arprot' field
-in 'M2S_ReadAddress'.
+in t'M2S_ReadAddress'.
 -}
 type family ARKeepPermissions (conf :: Axi4ReadAddressConfig) where
   ARKeepPermissions ('Axi4ReadAddressConfig _ _ _ _ _ _ _ _ a _) = a
 
-{- | Grab '_arKeepQos' from 'Axi4ReadAddressConfig' at the type level.
+{- | Grab '_arKeepQos' from t'Axi4ReadAddressConfig' at the type level.
 This boolean value determines whether to keep the '_arqos' field
-in 'M2S_ReadAddress'.
+in t'M2S_ReadAddress'.
 -}
 type family ARKeepQos (conf :: Axi4ReadAddressConfig) where
   ARKeepQos ('Axi4ReadAddressConfig _ _ _ _ _ _ _ _ _ a) = a
@@ -266,11 +267,12 @@ type KnownAxi4ReadAddressConfig conf =
   , Eq (QosType (ARKeepQos conf))
   )
 
-{- | Mainly for use in @DfConv@.
+{- | Mainly for use in 'Protocols.DfConv.DfConv'.
 
 Data carried along 'Axi4ReadAddress' channel which is put in control of
-the user, rather than being managed by the @DfConv@ instances. Matches up
-one-to-one with the fields of 'M2S_ReadAddress' except for '_arlen',
+the user, rather than being managed by the 'Protocols.DfConv.DfConv' instances.
+Matches up
+one-to-one with the fields of t'M2S_ReadAddress' except for '_arlen',
 '_arsize', and '_arburst'.
 -}
 data Axi4ReadAddressInfo (conf :: Axi4ReadAddressConfig) (userType :: Type) = Axi4ReadAddressInfo
@@ -329,7 +331,7 @@ deriving instance
   ) =>
   Eq (Axi4ReadAddressInfo conf userType)
 
--- | Convert 'M2S_ReadAddress' to 'Axi4ReadAddressInfo', dropping some info
+-- | Convert t'M2S_ReadAddress' to t'Axi4ReadAddressInfo', dropping some info
 axi4ReadAddrMsgToReadAddrInfo ::
   M2S_ReadAddress conf userType ->
   Axi4ReadAddressInfo conf userType
@@ -349,7 +351,7 @@ axi4ReadAddrMsgToReadAddrInfo M2S_ReadAddress{..} =
     , _ariuser = _aruser
     }
 
--- | Convert 'Axi4ReadAddressInfo' to 'M2S_ReadAddress', adding some info
+-- | Convert t'Axi4ReadAddressInfo' to t'M2S_ReadAddress', adding some info
 axi4ReadAddrMsgFromReadAddrInfo ::
   Axi4ReadAddressInfo conf userType -> M2S_ReadAddress conf userType
 axi4ReadAddrMsgFromReadAddrInfo Axi4ReadAddressInfo{..} =

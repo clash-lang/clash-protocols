@@ -1,4 +1,4 @@
--- | Utility functions for working with `Vec`s of `Circuit`s.
+-- | Utility functions for working with 'Vec's of t'Circuit's.
 module Protocols.Vec (
   vecCircuits,
   append,
@@ -41,11 +41,11 @@ import Clash.Prelude qualified as C
 import Protocols.Internal (applyC)
 import Protocols.Plugin
 
-{- | "Bundle" together a 'Vec' of 'Circuit's into a 'Circuit' with 'Vec' input and output.
-The 'Circuit's all run in parallel.
+{- | Bundle together a 'Vec' of t'Circuit's into a t'Circuit' with 'Vec' input
+and output. The t'Circuit's all run in parallel.
 
-The inverse of 'vecCircuits' can not exist, as we can not guarantee that that the @n@th
-manager interface only depends on the @n@th subordinate interface.
+A general inverse of 'vecCircuits' cannot exist, because we cannot guarantee
+that the @n@th output circuit depends only on the @n@th input circuit.
 -}
 vecCircuits :: (C.KnownNat n) => C.Vec n (Circuit a b) -> Circuit (C.Vec n a) (C.Vec n b)
 vecCircuits fs = Circuit (\inps -> C.unzip $ f <$> fs <*> uncurry C.zip inps)
@@ -142,13 +142,13 @@ unzip5 = applyC C.unzip5 (uncurry5 C.zip5)
   uncurry5 :: (a -> b -> c -> d -> e -> f) -> ((a, b, c, d, e) -> f)
   uncurry5 f ~(a, b, c, d, e) = f a b c d e
 
--- | transform a vector of vectors of circuits into a vector of circuits.
+-- | Transform a vector of vectors of circuits into a vector of circuits.
 concat ::
   (C.KnownNat n0, C.KnownNat n1) =>
   Circuit (C.Vec n0 (C.Vec n1 circuit)) (C.Vec (n0 * n1) circuit)
 concat = applyC C.concat (C.unconcat SNat)
 
--- | transform a vector of circuits into a vector of vectors of circuits.
+-- | Transform a vector of circuits into a vector of vectors of circuits.
 unconcat ::
   (C.KnownNat n, C.KnownNat m) =>
   SNat m ->

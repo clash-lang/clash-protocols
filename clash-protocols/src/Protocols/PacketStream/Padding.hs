@@ -26,9 +26,10 @@ import Protocols.PacketStream.Base
 data StripPaddingState p dataWidth meta
   = Counting
       { _buffer :: PacketStreamM2S dataWidth meta
-      -- ^ Contains the last transfer, with `_abort` set if a premature end
-      --   was detected. If the packet contained padding, `_last` is already
-      --   correctly adjusted.
+      {- ^ Contains the last transfer, with `_abort` set if a premature end
+      was detected. If the packet contained padding, `_last` is already
+      correctly adjusted.
+      -}
       , _valid :: Bool
       -- ^ Qualifier for _buffer. If false, its value is undefined.
       , _counter :: Unsigned p
@@ -36,9 +37,10 @@ data StripPaddingState p dataWidth meta
       }
   | Strip
       { _buffer :: PacketStreamM2S dataWidth meta
-      -- ^ We need to wait until forwarding the last transfer, as the padding
-      --   may be aborted. In this state we do not need _valid, as the buffered
-      --   transfer is always valid.
+      {- ^ We need to wait until forwarding the last transfer, as the padding
+      may be aborted. In this state we do not need _valid, as the buffered
+      transfer is always valid.
+      -}
       }
   deriving (Generic, NFDataX)
 

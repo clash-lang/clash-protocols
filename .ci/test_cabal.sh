@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -xeou pipefail
 
 cabal v2-run unittests --enable-tests

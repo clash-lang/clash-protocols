@@ -69,9 +69,7 @@ import Data.Maybe qualified as Maybe
 import Data.Proxy
 
 import Protocols
-import Protocols.Df qualified as Df
 import Protocols.DfConv qualified as DfConv
-import Protocols.Hedgehog (Test (..))
 import Protocols.Idle
 
 {- |
@@ -92,18 +90,20 @@ data PacketStreamM2S (dataWidth :: Nat) (meta :: Type) = PacketStreamM2S
   { _data :: Vec dataWidth (BitVector 8)
   -- ^ The bytes to be transmitted.
   , _last :: Maybe (Index (dataWidth + 1))
-  -- ^ If this is @Just@ then it signals that this transfer is the end of a
-  --   packet and contains the number of valid bytes in '_data', starting from
-  --   index @0@.
-  --
-  --   If it is @Nothing@ then this transfer is not yet the end of a packet and all
-  --   bytes are valid. This implies that no null bytes are allowed in the middle of
-  --   a packet, only after a packet.
+  {- ^ If this is @Just@ then it signals that this transfer is the end of a
+  packet and contains the number of valid bytes in '_data', starting from
+  index @0@.
+
+  If it is @Nothing@ then this transfer is not yet the end of a packet and all
+  bytes are valid. This implies that no null bytes are allowed in the middle of
+  a packet, only after a packet.
+  -}
   , _meta :: meta
   -- ^ Metadata of a packet. Must be constant during a packet.
   , _abort :: Bool
-  -- ^ Iff true, the packet corresponding to this transfer is invalid. The subordinate
-  --   must either drop the packet or forward the `_abort`.
+  {- ^ Iff true, the packet corresponding to this transfer is invalid. The subordinate
+  must either drop the packet or forward the `_abort`.
+  -}
   }
   deriving (Generic, ShowX, Show, NFData, Bundle, Functor)
 
@@ -215,9 +215,6 @@ instance IdleCircuit (PacketStream dom dataWidth meta) where
   idleBwd _ = pure (PacketStreamS2M False)
   idleFwd _ = pure Nothing
 
-instance Backpressure (PacketStream dom dataWidth meta) where
-  boolsToBwd _ = fromList_lazy . fmap PacketStreamS2M
-
 instance DfConv.DfConv (PacketStream dom dataWidth meta) where
   type Dom (PacketStream dom dataWidth meta) = dom
   type FwdPayload (PacketStream dom dataWidth meta) = PacketStreamM2S dataWidth meta
@@ -241,57 +238,6 @@ instance DfConv.DfConv (PacketStream dom dataWidth meta) where
         , pure (deepErrorX "PacketStream fromDfCircuit: undefined")
         )
       )
-
-instance
-  (KnownDomain dom) =>
-  Simulate (PacketStream dom dataWidth meta)
-  where
-  type
-    SimulateFwdType (PacketStream dom dataWidth meta) =
-      [Maybe (PacketStreamM2S dataWidth meta)]
-  type SimulateBwdType (PacketStream dom dataWidth meta) = [PacketStreamS2M]
-  type SimulateChannels (PacketStream dom dataWidth meta) = 1
-
-  simToSigFwd _ = fromList_lazy
-  simToSigBwd _ = fromList_lazy
-  sigToSimFwd _ s = sample_lazy s
-  sigToSimBwd _ s = sample_lazy s
-
-  stallC conf (head -> (stallAck, stalls)) =
-    withClockResetEnable clockGen resetGen enableGen
-      $ DfConv.stall Proxy Proxy conf stallAck stalls
-
-instance
-  (KnownDomain dom) =>
-  Drivable (PacketStream dom dataWidth meta)
-  where
-  type
-    ExpectType (PacketStream dom dataWidth meta) =
-      [PacketStreamM2S dataWidth meta]
-
-  toSimulateType Proxy = fmap Just
-  fromSimulateType Proxy = Maybe.catMaybes
-
-  driveC conf vals =
-    withClockResetEnable clockGen resetGen enableGen
-      $ DfConv.drive Proxy conf vals
-  sampleC conf ckt =
-    withClockResetEnable clockGen resetGen enableGen
-      $ DfConv.sample Proxy conf ckt
-
-instance
-  ( KnownNat dataWidth
-  , NFDataX meta
-  , NFData meta
-  , ShowX meta
-  , Show meta
-  , Eq meta
-  , KnownDomain dom
-  ) =>
-  Test (PacketStream dom dataWidth meta)
-  where
-  expectN Proxy options sampled =
-    expectN (Proxy @(Df.Df dom _)) options sampled
 
 {- |
 Undefined PacketStream null byte. Will throw an error if evaluated. The source
@@ -586,8 +532,9 @@ Like 'filterMeta' but can reason over signals,
 this circuit combinator is akin to `Clash.HaskellPrelude.<*>`.
 -}
 filterMetaS ::
-  -- | Predicate which specifies whether to keep a fragment based on its metadata,
-  --   wrapped in a @Signal@
+  {- | Predicate which specifies whether to keep a fragment based on its metadata,
+  wrapped in a @Signal@
+  -}
   Signal dom (meta -> Bool) ->
   Circuit (PacketStream dom dataWidth meta) (PacketStream dom dataWidth meta)
 filterMetaS pS = Circuit $ \(fwdIn, bwdIn) -> unbundle (go <$> bundle (fwdIn, bwdIn, pS))

@@ -7,7 +7,7 @@
 Defines WriteAddress channel of full AXI4 protocol with port names corresponding
 to the AXI4 specification.
 -}
-module Protocols.Axi4.WriteAddress (
+module Protocols.Experimental.Axi4.WriteAddress (
   M2S_WriteAddress (..),
   S2M_WriteAddress (..),
   Axi4WriteAddress,
@@ -43,7 +43,8 @@ import GHC.Generics (Generic)
 import Clash.Prelude qualified as C
 
 -- me
-import Protocols.Axi4.Common
+import Protocols.Experimental.Axi4.Common
+import Protocols.Experimental.Simulate
 import Protocols.Idle
 import Protocols.Internal
 
@@ -61,72 +62,72 @@ data Axi4WriteAddressConfig = Axi4WriteAddressConfig
   , _awKeepQos :: Bool
   }
 
-{- | Grab '_awKeepBurst' from 'Axi4WriteAddressConfig' at the type level.
+{- | Grab '_awKeepBurst' from t'Axi4WriteAddressConfig' at the type level.
 This boolean value determines whether to keep the '_awburst' field
-in 'M2S_WriteAddress'.
+in t'M2S_WriteAddress'.
 -}
 type family AWKeepBurst (c :: Axi4WriteAddressConfig) where
   AWKeepBurst ('Axi4WriteAddressConfig a _ _ _ _ _ _ _ _ _) = a
 
-{- | Grab '_awKeepSize' from 'Axi4WriteAddressConfig' at the type level.
+{- | Grab '_awKeepSize' from t'Axi4WriteAddressConfig' at the type level.
 This boolean value determines whether to keep the '_awsize' field
-in 'M2S_WriteAddress'.
+in t'M2S_WriteAddress'.
 -}
 type family AWKeepSize (c :: Axi4WriteAddressConfig) where
   AWKeepSize ('Axi4WriteAddressConfig _ a _ _ _ _ _ _ _ _) = a
 
-{- | Grab '_awIdWidth' from 'Axi4WriteAddressConfig' at the type level.
+{- | Grab '_awIdWidth' from t'Axi4WriteAddressConfig' at the type level.
 This nat value determines the size of the '_awid' field
-in 'M2S_WriteAddress'.
+in t'M2S_WriteAddress'.
 -}
 type family AWIdWidth (c :: Axi4WriteAddressConfig) where
   AWIdWidth ('Axi4WriteAddressConfig _ _ a _ _ _ _ _ _ _) = a
 
-{- | Grab '_awAddrWidth' from 'Axi4WriteAddressConfig' at the type level.
+{- | Grab '_awAddrWidth' from t'Axi4WriteAddressConfig' at the type level.
 This nat value determines the size of the '_awaddr' field
-in 'M2S_WriteAddress'.
+in t'M2S_WriteAddress'.
 -}
 type family AWAddrWidth (c :: Axi4WriteAddressConfig) where
   AWAddrWidth ('Axi4WriteAddressConfig _ _ _ a _ _ _ _ _ _) = a
 
-{- | Grab '_awKeepRegion' from 'Axi4WriteAddressConfig' at the type level.
+{- | Grab '_awKeepRegion' from t'Axi4WriteAddressConfig' at the type level.
 This boolean value determines whether to keep the '_awregion' field
-in 'M2S_WriteAddress'.
+in t'M2S_WriteAddress'.
 -}
 type family AWKeepRegion (c :: Axi4WriteAddressConfig) where
   AWKeepRegion ('Axi4WriteAddressConfig _ _ _ _ a _ _ _ _ _) = a
 
-{- | Grab '_awKeepBurstLength' from 'Axi4WriteAddressConfig' at the type level.
+{- | Grab '_awKeepBurstLength' from t'Axi4WriteAddressConfig' at the type level.
 This boolean value determines whether to keep the '_awlen' field
-in 'M2S_WriteAddress'.
+in t'M2S_WriteAddress'.
 -}
 type family AWKeepBurstLength (c :: Axi4WriteAddressConfig) where
   AWKeepBurstLength ('Axi4WriteAddressConfig _ _ _ _ _ a _ _ _ _) = a
 
-{- | Grab '_awKeepLock' from 'Axi4WriteAddressConfig' at the type level.
+{- | Grab '_awKeepLock' from t'Axi4WriteAddressConfig' at the type level.
 This boolean value determines whether to keep the '_awlock' field
-in 'M2S_WriteAddress'.
+in t'M2S_WriteAddress'.
 -}
 type family AWKeepLock (c :: Axi4WriteAddressConfig) where
   AWKeepLock ('Axi4WriteAddressConfig _ _ _ _ _ _ a _ _ _) = a
 
-{- | Grab '_awKeepCache' from 'Axi4WriteAddressConfig' at the type level.
+{- | Grab '_awKeepCache' from t'Axi4WriteAddressConfig' at the type level.
 This boolean value determines whether to keep the '_awcache' field
-in 'M2S_WriteAddress'.
+in t'M2S_WriteAddress'.
 -}
 type family AWKeepCache (c :: Axi4WriteAddressConfig) where
   AWKeepCache ('Axi4WriteAddressConfig _ _ _ _ _ _ _ a _ _) = a
 
-{- | Grab '_awKeepPermissions' from 'Axi4WriteAddressConfig' at the type level.
+{- | Grab '_awKeepPermissions' from t'Axi4WriteAddressConfig' at the type level.
 This boolean value determines whether to keep the '_awprot' field
-in 'M2S_WriteAddress'.
+in t'M2S_WriteAddress'.
 -}
 type family AWKeepPermissions (c :: Axi4WriteAddressConfig) where
   AWKeepPermissions ('Axi4WriteAddressConfig _ _ _ _ _ _ _ _ a _) = a
 
-{- | Grab '_awKeepQos' from 'Axi4WriteAddressConfig' at the type level.
+{- | Grab '_awKeepQos' from t'Axi4WriteAddressConfig' at the type level.
 This boolean value determines whether to keep the '_awqos' field
-in 'M2S_WriteAddress'.
+in t'M2S_WriteAddress'.
 -}
 type family AWKeepQos (c :: Axi4WriteAddressConfig) where
   AWKeepQos ('Axi4WriteAddressConfig _ _ _ _ _ _ _ _ _ a) = a
@@ -281,11 +282,12 @@ deriving instance
   ) =>
   C.BitPack (M2S_WriteAddress conf userType)
 
-{- | Mainly for use in @DfConv@.
+{- | Mainly for use in 'Protocols.DfConv.DfConv'.
 
 Data carried along 'Axi4WriteAddress' channel which is put in control of
-the user, rather than being managed by the @DfConv@ instances. Matches up
-one-to-one with the fields of 'M2S_WriteAddress' except for '_awlen',
+the user, rather than being managed by the 'Protocols.DfConv.DfConv' instances.
+Matches up
+one-to-one with the fields of t'M2S_WriteAddress' except for '_awlen',
 '_awsize', and '_awburst'.
 -}
 data Axi4WriteAddressInfo (conf :: Axi4WriteAddressConfig) (userType :: Type) = Axi4WriteAddressInfo
@@ -340,7 +342,7 @@ deriving instance
   ) =>
   Eq (Axi4WriteAddressInfo conf userType)
 
--- | Convert 'M2S_WriteAddress' to 'Axi4WriteAddressInfo', dropping some info
+-- | Convert t'M2S_WriteAddress' to t'Axi4WriteAddressInfo', dropping some info
 axi4WriteAddrMsgToWriteAddrInfo ::
   M2S_WriteAddress conf userType ->
   Axi4WriteAddressInfo conf userType
@@ -358,7 +360,7 @@ axi4WriteAddrMsgToWriteAddrInfo M2S_WriteAddress{..} =
     , _awiuser = _awuser
     }
 
--- | Convert 'Axi4WriteAddressInfo' to 'M2S_WriteAddress', adding some info
+-- | Convert t'Axi4WriteAddressInfo' to t'M2S_WriteAddress', adding some info
 axi4WriteAddrMsgFromWriteAddrInfo ::
   BurstLengthType (AWKeepBurstLength conf) ->
   BurstType (AWKeepBurst conf) ->
