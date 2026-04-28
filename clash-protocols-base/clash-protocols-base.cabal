@@ -1,6 +1,6 @@
 cabal-version: 2.4
 name: clash-protocols-base
-synopsis: a battery-included library for (dataflow) protocols
+synopsis: Internal support package for clash-protocols; use clash-protocols instead.
 homepage: https://github.com/clash-lang/clash-protocols
 bug-reports: https://github.com/clash-lang/clash-protocols/issues
 version: 0.1
@@ -9,8 +9,11 @@ license: BSD-2-Clause
 license-file: LICENSE
 author: Martijn Bastiaan, QBayLogic B.V.
 maintainer: QBayLogic B.V. <devops@qbaylogic.com>
+extra-doc-files:
+  CHANGELOG.md
 description:
-  Core plugin and protocol support types for the clash-protocols package family.
+  Internal core plugin and protocol support types for the clash-protocols
+  package family. Users should depend on @clash-protocols@ instead.
 
 source-repository head
   type: git

@@ -9,10 +9,12 @@ license: BSD-2-Clause
 license-file: LICENSE
 author: Martijn Bastiaan, QBayLogic B.V.
 maintainer: QBayLogic B.V. <devops@qbaylogic.com>
+extra-doc-files:
+  CHANGELOG.md
 description:
   Suggested reading order:
   .
-  * 'Protocols' + https://github.com/clash-lang/clash-protocols/blob/main/README.md
+  * 'Protocols' + https://github.com/clash-lang/clash-protocols/v0.1/main/README.md
   * 'Protocols.Df'
   * 'Protocols.Plugin'
 
