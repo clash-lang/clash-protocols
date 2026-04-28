@@ -380,8 +380,9 @@ data PacketOptions = PacketOptions
   , poAllowTrailingEmpty :: Bool
   -- ^ Whether to allow the generation of trailing zero-byte transfers.
   , poAbortMode :: AbortMode
-  -- ^ If set to @NoAbort@, no transfers in the packet will have '_abort' set.
-  -- Else, randomly generate them according to some distribution. See 'AbortMode'.
+  {- ^ If set to @NoAbort@, no transfers in the packet will have '_abort' set.
+  Else, randomly generate them according to some distribution. See 'AbortMode'.
+  -}
   }
 
 {- |
@@ -437,8 +438,9 @@ genValidPacket ::
   PacketOptions ->
   -- | Generator for the metadata.
   Gen meta ->
-  -- | The amount of transfers with @_last = Nothing@ to generate.
-  --   This function will always generate an extra transfer with @_last = Just i@.
+  {- | The amount of transfers with @_last = Nothing@ to generate.
+  This function will always generate an extra transfer with @_last = Just i@.
+  -}
   Range Int ->
   Gen [PacketStreamM2S dataWidth meta]
 genValidPacket PacketOptions{..} metaGen size =
@@ -466,9 +468,10 @@ genTransfer ::
   forall (dataWidth :: Nat) (meta :: Type).
   (1 <= dataWidth) =>
   (KnownNat dataWidth) =>
-  -- | We need to use the same metadata
-  --   for every transfer in a packet to satisfy the protocol
-  --   invariant that metadata is constant for an entire packet.
+  {- | We need to use the same metadata
+  for every transfer in a packet to satisfy the protocol
+  invariant that metadata is constant for an entire packet.
+  -}
   meta ->
   -- | Whether to set '_abort'.
   Gen Bool ->
@@ -488,9 +491,10 @@ genLastTransfer ::
   forall (dataWidth :: Nat) (meta :: Type).
   (1 <= dataWidth) =>
   (KnownNat dataWidth) =>
-  -- | We need to use the same metadata
-  --   for every transfer in a packet to satisfy the protocol
-  --   invariant that metadata is constant for an entire packet.
+  {- | We need to use the same metadata
+  for every transfer in a packet to satisfy the protocol
+  invariant that metadata is constant for an entire packet.
+  -}
   meta ->
   -- | Whether we are allowed to generate a 0-byte transfer.
   Bool ->

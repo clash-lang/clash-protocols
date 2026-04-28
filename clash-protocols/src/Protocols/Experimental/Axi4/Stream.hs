@@ -6,7 +6,7 @@
 {- |
 Types and instance declarations for the AXI4-stream protocol.
 -}
-module Protocols.Axi4.Stream where
+module Protocols.Experimental.Axi4.Stream where
 
 -- base
 import Control.DeepSeq (NFData)
@@ -21,8 +21,9 @@ import Clash.Prelude qualified as C
 -- me
 
 import Protocols.Df qualified as Df
-import Protocols.DfConv qualified as DfConv
-import Protocols.Hedgehog
+import Protocols.Experimental.DfConv qualified as DfConv
+import Protocols.Experimental.Hedgehog
+import Protocols.Experimental.Simulate
 import Protocols.Idle
 import Protocols.Internal
 
@@ -31,7 +32,7 @@ instance (KnownNat n, Hashable a) => Hashable (Vec n a) where
   hashWithSalt s v = hashWithSalt s (toList v)
 
 {- | Configuration for AXI4 Stream protocol. Determines the width of some
-fields in 'Axi4StreamM2S'.
+fields in t'Axi4StreamM2S'.
 -}
 data Axi4StreamConfig = Axi4StreamConfig
   { _dataWidth :: Nat

@@ -29,8 +29,9 @@ type PacketStreamContent (dataWidth :: Nat) (meta :: Type) =
 data FullMode
   = -- | Assert backpressure when the FIFO is full.
     Backpressure
-  | -- | Drop new packets when the FIFO is full.
-    --   The FIFO never asserts backpressure.
+  | {- | Drop new packets when the FIFO is full.
+    The FIFO never asserts backpressure.
+    -}
     Drop
 
 toPacketStreamContent ::
@@ -47,8 +48,9 @@ data PacketFifoState contentDepth metaDepth = PacketFifoState
   , _dropping :: Bool
   -- ^ Whether we are dropping the current packet.
   , _basePtr :: Unsigned contentDepth
-  -- ^ Points to the base address of the current packet, i.e. the address of
-  --   the first transfer.
+  {- ^ Points to the base address of the current packet, i.e. the address of
+  the first transfer.
+  -}
   , _cReadPtr :: Unsigned contentDepth
   -- ^ Read pointer in the content block ram.
   , _cWritePtr :: Unsigned contentDepth

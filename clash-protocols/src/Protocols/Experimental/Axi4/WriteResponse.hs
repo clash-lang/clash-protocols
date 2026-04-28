@@ -5,7 +5,7 @@
 Defines WriteResponse channel of full AXI4 protocol with port names corresponding
 to the AXI4 specification.
 -}
-module Protocols.Axi4.WriteResponse (
+module Protocols.Experimental.Axi4.WriteResponse (
   M2S_WriteResponse (..),
   S2M_WriteResponse (..),
   Axi4WriteResponse,
@@ -26,7 +26,8 @@ import GHC.Generics (Generic)
 import Clash.Prelude qualified as C
 
 -- me
-import Protocols.Axi4.Common
+import Protocols.Experimental.Axi4.Common
+import Protocols.Experimental.Simulate
 import Protocols.Idle
 import Protocols.Internal
 
@@ -36,21 +37,21 @@ data Axi4WriteResponseConfig = Axi4WriteResponseConfig
   , _bIdWidth :: C.Nat
   }
 
-{- | Grab '_bKeepResponse' from 'Axi4WriteResponseConfig' at the type level.
+{- | Grab '_bKeepResponse' from t'Axi4WriteResponseConfig' at the type level.
 This boolean value determines whether to keep the '_bresp' field
-in 'S2M_WriteResponse'.
+in t'S2M_WriteResponse'.
 -}
 type family BKeepResponse (conf :: Axi4WriteResponseConfig) where
   BKeepResponse ('Axi4WriteResponseConfig a _) = a
 
-{- | Grab '_bIdWidth' from 'Axi4WriteResponseConfig' at the type level.
+{- | Grab '_bIdWidth' from t'Axi4WriteResponseConfig' at the type level.
 This nat value determines the size of the '_bid' field
-in 'S2M_WriteResponse'.
+in t'S2M_WriteResponse'.
 -}
 type family BIdWidth (conf :: Axi4WriteResponseConfig) where
   BIdWidth ('Axi4WriteResponseConfig _ a) = a
 
--- | AXI4 Read Data channel protocol
+-- | AXI4 write response channel protocol
 data
   Axi4WriteResponse
     (dom :: C.Domain)

@@ -30,7 +30,7 @@ This "common sense" compliance checking additionally checks for:
    - response data respects the 'busSelect' signal
  - A write request must contain valid data according to the 'busSelect' signal
 -}
-module Protocols.Wishbone.Standard.Hedgehog (
+module Protocols.Experimental.Wishbone.Standard.Hedgehog (
   -- * Types
   WishboneMasterRequest (..),
 
@@ -70,9 +70,9 @@ import Hedgehog ((===))
 import Hedgehog qualified as H
 import Hedgehog.Gen qualified as Gen
 import Hedgehog.Range qualified as Range
-import Protocols hiding (circuit, stallC)
-import Protocols.Hedgehog
-import Protocols.Wishbone
+import Protocols hiding (circuit)
+import Protocols.Experimental.Hedgehog
+import Protocols.Experimental.Wishbone
 import Prelude as P hiding (cycle)
 
 -- | Datatype representing a single transaction request sent from a Wishbone Master to a Wishbone Slave
@@ -98,9 +98,12 @@ deriving instance
   (KnownNat addressBits, KnownNat dataBytes) =>
   (Eq (WishboneMasterRequest addressBits dataBytes))
 
-{- | Checks equality for relevant parts of a 'WishboneS2M' response based on the
-corresponding 'WishboneMasterRequest'. For a 'Protocols.Wishbone.Standard.Hedgehog.Write' request, the 'readData' field
-is ignored, for a 'Protocols.Wishbone.Standard.Hedgehog.Read' request only the selected bytes are checked.
+{- | Checks equality for relevant parts of a t'WishboneS2M' response based on the
+corresponding 'WishboneMasterRequest'. For a
+'Protocols.Experimental.Wishbone.Standard.Hedgehog.Write' request, the
+'readData' field is ignored, for a
+'Protocols.Experimental.Wishbone.Standard.Hedgehog.Read' request only the
+selected bytes are checked.
 
 >>>
 :{
@@ -540,9 +543,10 @@ wishbonePropWithModel ::
   , Monad m
   ) =>
   ExpectOptions ->
-  -- | Check whether a S2M signal for a given request is matching a pure model using @st@
-  --   as its state.
-  --   Return an error message 'Left' or the updated state 'Right'
+  {- | Check whether a S2M signal for a given request is matching a pure model using @st@
+  as its state.
+  Return an error message 'Left' or the updated state 'Right'
+  -}
   ( WishboneMasterRequest addressBits dataBytes ->
     WishboneS2M dataBytes ->
     st ->
@@ -626,7 +630,7 @@ genWishboneTransfer addrRange = do
     , pure $ Write (pack addr) sel dat
     ]
 
-{- | Interpret a 'WishboneM2S' as a 'WishboneMasterRequest'.
+{- | Interpret a t'WishboneM2S' as a 'WishboneMasterRequest'.
 Only works for valid requests and performs no checks.
 -}
 m2sToRequest ::

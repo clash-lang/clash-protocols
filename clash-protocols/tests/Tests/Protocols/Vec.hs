@@ -21,7 +21,7 @@ import Protocols
 import Protocols.Vec qualified as Vec
 
 import Clash.Hedgehog.Sized.Vector (genVec)
-import Protocols.Hedgehog
+import Protocols.Experimental.Hedgehog
 
 -- tests
 import Tests.Protocols.Df (genData, genSmallInt, genVecData)

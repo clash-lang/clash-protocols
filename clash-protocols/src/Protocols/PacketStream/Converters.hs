@@ -32,10 +32,11 @@ data UpConverterState (dwIn :: Nat) (n :: Nat) (meta :: Type) = UpConverterState
   , _ucIdx :: Index n
   -- ^ Where in _ucBuf we need to write the next data.
   , _ucIdx2 :: Index (dwIn * n + 1)
-  -- ^ Used when @dwIn@ is not a power of two to determine the adjusted '_last',
-  --   to avoid multiplication (infers an expensive DSP slice).
-  --   If @dwIn@ is a power of two then we can multiply by shifting left with
-  --   a constant, which is free in hardware in terms of resource usage.
+  {- ^ Used when @dwIn@ is not a power of two to determine the adjusted '_last',
+  to avoid multiplication (infers an expensive DSP slice).
+  If @dwIn@ is a power of two then we can multiply by shifting left with
+  a constant, which is free in hardware in terms of resource usage.
+  -}
   , _ucFlush :: Bool
   -- ^ If true, we should output the current state as a PacketStream transfer.
   , _ucAborted :: Bool
@@ -218,14 +219,16 @@ data DownConverterState (dwOut :: Nat) (n :: Nat) (meta :: Type) = DownConverter
   , _dcMeta :: meta
   -- ^ Registered _meta of the last transfer.
   , _dcAborted :: Bool
-  -- ^ Registered _abort of the last transfer. All sub-transfers corresponding
-  --   to this transfer need to be marked with the same _abort value.
+  {- ^ Registered _abort of the last transfer. All sub-transfers corresponding
+  to this transfer need to be marked with the same _abort value.
+  -}
   , _dcSize :: Index (dwOut * n + 1)
   -- ^ Number of valid bytes in _dcBuf.
   , _dcZeroByteTransfer :: Bool
-  -- ^ Is the current transfer we store a zero-byte transfer? In this case,
-  --   _dcSize is 0 but we still need to transmit something in order to
-  --   preserve zero-byte transfers.
+  {- ^ Is the current transfer we store a zero-byte transfer? In this case,
+  _dcSize is 0 but we still need to transmit something in order to
+  preserve zero-byte transfers.
+  -}
   }
   deriving (Generic, NFDataX)
 

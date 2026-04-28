@@ -86,6 +86,7 @@
             hs-pkgs.cabal-install
             hs-pkgs.cabal-plan
             hs-pkgs.fourmolu
+            hs-pkgs.cabal-gild
           ];
         };
 

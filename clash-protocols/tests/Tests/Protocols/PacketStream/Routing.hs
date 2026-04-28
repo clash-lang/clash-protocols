@@ -16,10 +16,9 @@ import Test.Tasty.Hedgehog.Extra (testProperty)
 import Test.Tasty.TH (testGroupGenerator)
 
 import Protocols.Df qualified as Df
-import Protocols.Hedgehog
-import Protocols.PacketStream.Base
+import Protocols.Experimental.Hedgehog
+import Protocols.Experimental.PacketStream
 import Protocols.PacketStream.Hedgehog
-import Protocols.PacketStream.Routing
 
 import Data.List qualified as L
 

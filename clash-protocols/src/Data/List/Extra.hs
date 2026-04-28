@@ -19,8 +19,9 @@ takeWhileAnyInWindow ::
   (a -> Bool) ->
   -- | Input list
   [a] ->
-  -- | List of elements that satisfied the predicate. Ends at an element that
-  -- satisfies the predicate.
+  {- | List of elements that satisfied the predicate. Ends at an element that
+  satisfies the predicate.
+  -}
   [a]
 takeWhileAnyInWindow wdw predicate = go wdw []
  where

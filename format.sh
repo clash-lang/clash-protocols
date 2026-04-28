@@ -24,15 +24,16 @@ if [[ "$#" -eq 0 || "$1" == "-h" || "$1" == "--help" ]]; then
 fi
 
 exclude_files=(
+  ".stack-work"
   "clash-protocols-base/src/Protocols/Plugin/Cpp.hs"
   "dist-newstyle"
 )
 
 # Make sure it doesn't matter from where this script is executed
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-cd $DIR
+cd "$DIR"
 
-if [ $1 == "diff" ] ; then
+if [ "$1" == "diff" ] ; then
   src_files=$(git diff --cached --name-only --diff-filter=ACMR -- '*.hs')
 else
   src_files=$(find -type f -name "*.hs")
@@ -40,7 +41,7 @@ fi
 
 src_files_str=$(printf "%s\n" "${src_files[@]}" | sed 's| |\\ |g')
 exclude_files_str=$(printf "%s\n" "${exclude_files[@]}" | sed 's| |\\ |g')
-src_files=$(echo "$src_files_str" | grep -vwE  "$exclude_files_str")
+src_files=$(echo "$src_files_str" | grep -vwE "$exclude_files_str")
 
 if [ -z "$src_files" ]; then
   exit 0;

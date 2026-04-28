@@ -5,7 +5,7 @@ A collection of Hedgehog helpers to test Circuit components. To test a
 protocol component against a combinatorial model, see 'idWithModel'. To write
 your own tester, see 'Test'.
 -}
-module Protocols.Hedgehog (
+module Protocols.Experimental.Hedgehog (
   -- * Types
   ExpectOptions (..),
   defExpectOptions,
@@ -42,7 +42,9 @@ import Prelude
 
 -- clash-protocols
 import Protocols
-import Protocols.Hedgehog.Internal
+import Protocols.Experimental.Hedgehog.Internal
+import Protocols.Experimental.Hedgehog.Types
+import Protocols.Experimental.Simulate
 
 -- clash-prelude
 import Clash.Prelude qualified as C
@@ -103,7 +105,7 @@ argument.
 propWithModel ::
   forall a b.
   (Test a, Test b, HasCallStack) =>
-  -- | Options, see 'ExpectOptions'
+  -- | Options, see t'ExpectOptions'
   ExpectOptions ->
   -- | Test data generator
   H.Gen (ExpectType a) ->
@@ -111,8 +113,9 @@ propWithModel ::
   (ExpectType a -> ExpectType b) ->
   -- | Implementation
   Circuit a b ->
-  -- | Property to test for. Function is given the data produced by the model
-  -- as a first argument, and the sampled data as a second argument.
+  {- | Property to test for. Function is given the data produced by the model
+  as a first argument, and the sampled data as a second argument.
+  -}
   (ExpectType b -> ExpectType b -> H.PropertyT IO ()) ->
   H.Property
 propWithModel eOps gen model dut prop = H.property $ propWithModelT eOps gen model dut prop
@@ -125,7 +128,7 @@ This is useful for integrating with monadic test frameworks or when additional e
 propWithModelT ::
   forall a b m.
   (Test a, Test b, HasCallStack, Monad m, MonadIO m, MonadBaseControl IO m) =>
-  -- | Options, see 'ExpectOptions'
+  -- | Options, see t'ExpectOptions'
   ExpectOptions ->
   -- | Test data generator
   H.Gen (ExpectType a) ->
@@ -133,8 +136,9 @@ propWithModelT ::
   (ExpectType a -> ExpectType b) ->
   -- | Implementation
   Circuit a b ->
-  -- | Property to test for. Function is given the data produced by the model
-  -- as a first argument, and the sampled data as a second argument.
+  {- | Property to test for. Function is given the data produced by the model
+  as a first argument, and the sampled data as a second argument.
+  -}
   (ExpectType b -> ExpectType b -> H.PropertyT m ()) ->
   H.PropertyT m ()
 propWithModelT eOpts genData model prot prop =
@@ -214,7 +218,7 @@ For testing custom properties, see 'propWithModel'.
 idWithModel ::
   forall a b.
   (Test a, Test b, HasCallStack) =>
-  -- | Options, see 'ExpectOptions'
+  -- | Options, see t'ExpectOptions'
   ExpectOptions ->
   -- | Test data generator
   H.Gen (ExpectType a) ->
@@ -233,7 +237,7 @@ Use this when you want to run the test in a monadic context or need additional e
 idWithModelT ::
   forall a b m.
   (Test a, Test b, HasCallStack, Monad m, MonadIO m, MonadBaseControl IO m) =>
-  -- | Options, see 'ExpectOptions'
+  -- | Options, see t'ExpectOptions'
   ExpectOptions ->
   -- | Test data generator
   H.Gen (ExpectType a) ->
@@ -248,7 +252,7 @@ idWithModelT eOpts genData model prot = propWithModelT eOpts genData model prot 
 propWithModelSingleDomain ::
   forall dom a b.
   (Test a, Test b, C.KnownDomain dom, HasCallStack) =>
-  -- | Options, see 'ExpectOptions'
+  -- | Options, see t'ExpectOptions'
   ExpectOptions ->
   -- | Test data generator
   H.Gen (ExpectType a) ->
@@ -256,8 +260,9 @@ propWithModelSingleDomain ::
   (C.Clock dom -> C.Reset dom -> C.Enable dom -> ExpectType a -> ExpectType b) ->
   -- | Implementation
   (C.Clock dom -> C.Reset dom -> C.Enable dom -> Circuit a b) ->
-  -- | Property to test for. Function is given the data produced by the model
-  -- as a first argument, and the sampled data as a second argument.
+  {- | Property to test for. Function is given the data produced by the model
+  as a first argument, and the sampled data as a second argument.
+  -}
   (ExpectType b -> ExpectType b -> H.PropertyT IO ()) ->
   H.Property
 propWithModelSingleDomain eOpts genData model dut prop =
@@ -279,7 +284,7 @@ propWithModelSingleDomainT ::
   , MonadIO m
   , MonadBaseControl IO m
   ) =>
-  -- | Options, see 'ExpectOptions'
+  -- | Options, see t'ExpectOptions'
   ExpectOptions ->
   -- | Test data generator
   H.Gen (ExpectType a) ->
@@ -287,8 +292,9 @@ propWithModelSingleDomainT ::
   (C.Clock dom -> C.Reset dom -> C.Enable dom -> ExpectType a -> ExpectType b) ->
   -- | Implementation
   (C.Clock dom -> C.Reset dom -> C.Enable dom -> Circuit a b) ->
-  -- | Property to test for. Function is given the data produced by the model
-  -- as a first argument, and the sampled data as a second argument.
+  {- | Property to test for. Function is given the data produced by the model
+  as a first argument, and the sampled data as a second argument.
+  -}
   (ExpectType b -> ExpectType b -> H.PropertyT m ()) ->
   H.PropertyT m ()
 propWithModelSingleDomainT eOpts genData model0 circuit0 =
@@ -305,7 +311,7 @@ propWithModelSingleDomainT eOpts genData model0 circuit0 =
 idWithModelSingleDomain ::
   forall dom a b.
   (Test a, Test b, C.KnownDomain dom, HasCallStack) =>
-  -- | Options, see 'ExpectOptions'
+  -- | Options, see t'ExpectOptions'
   ExpectOptions ->
   -- | Test data generator
   H.Gen (ExpectType a) ->
@@ -333,7 +339,7 @@ idWithModelSingleDomainT ::
   , MonadIO m
   , MonadBaseControl IO m
   ) =>
-  -- | Options, see 'ExpectOptions'
+  -- | Options, see t'ExpectOptions'
   ExpectOptions ->
   -- | Test data generator
   H.Gen (ExpectType a) ->

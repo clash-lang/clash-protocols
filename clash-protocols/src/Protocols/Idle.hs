@@ -1,7 +1,7 @@
 {-# OPTIONS_GHC "-Wno-orphans" #-}
 
 {- |
-Functionalities to easily create idle circuits for protocols.
+Utilities to easily create idle circuits for protocols.
 -}
 module Protocols.Idle (
   -- * Type classes
@@ -46,6 +46,9 @@ idleSink = Circuit $ const (idleBwd $ Proxy @p, ())
 
 {- | Force a /nack/ on the backward channel and /no data/ on the forward
 channel if reset is asserted.
+
+Generic helper behind protocol-specific @forceResetSanity@ combinators such as
+'Protocols.Df.forceResetSanity'.
 -}
 forceResetSanityGeneric ::
   forall dom a fwd bwd.

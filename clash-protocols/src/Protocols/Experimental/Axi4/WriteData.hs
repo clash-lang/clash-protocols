@@ -6,7 +6,7 @@
 Defines WriteData channel of full AXI4 protocol with port names corresponding
 to the AXI4 specification.
 -}
-module Protocols.Axi4.WriteData (
+module Protocols.Experimental.Axi4.WriteData (
   M2S_WriteData (..),
   S2M_WriteData (..),
   Axi4WriteData,
@@ -39,7 +39,8 @@ import Prelude hiding (
 import Clash.Prelude qualified as C
 
 -- me
-import Protocols.Axi4.Common
+import Protocols.Experimental.Axi4.Common
+import Protocols.Experimental.Simulate
 import Protocols.Idle
 import Protocols.Internal
 
@@ -49,16 +50,16 @@ data Axi4WriteDataConfig = Axi4WriteDataConfig
   , _wNBytes :: C.Nat
   }
 
-{- | Grab '_wKeepStrobe' from 'Axi4WriteDataConfig' at the type level.
+{- | Grab '_wKeepStrobe' from t'Axi4WriteDataConfig' at the type level.
 This boolean value determines whether to keep strobe values in the '_wdata' field
-in 'M2S_WriteData'.
+in t'M2S_WriteData'.
 -}
 type family WKeepStrobe (conf :: Axi4WriteDataConfig) where
   WKeepStrobe ('Axi4WriteDataConfig a _) = a
 
-{- | Grab '_wNBytes' from 'Axi4WriteDataConfig' at the type level.
+{- | Grab '_wNBytes' from t'Axi4WriteDataConfig' at the type level.
 This nat value determines the size of the '_wdata' field
-in 'M2S_WriteData'.
+in t'M2S_WriteData'.
 -}
 type family WNBytes (conf :: Axi4WriteDataConfig) where
   WNBytes ('Axi4WriteDataConfig _ a) = a
