@@ -3,7 +3,7 @@ name: clash-protocols
 synopsis: a battery-included library for (dataflow) protocols
 homepage: https://github.com/clash-lang/clash-protocols
 bug-reports: https://github.com/clash-lang/clash-protocols/issues
-version: 0.1
+version: 0.1.1
 category: Hardware
 license: BSD-2-Clause
 license-file: LICENSE
@@ -14,7 +14,7 @@ extra-doc-files:
 description:
   Suggested reading order:
   .
-  * 'Protocols' + https://github.com/clash-lang/clash-protocols/v0.1/main/README.md
+  * 'Protocols' + https://github.com/clash-lang/clash-protocols/blob/v0.1.1/README.md
   * 'Protocols.Df'
   * 'Protocols.Plugin'
 
