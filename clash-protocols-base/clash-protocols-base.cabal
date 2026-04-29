@@ -3,7 +3,7 @@ name: clash-protocols-base
 synopsis: Internal support package for clash-protocols; use clash-protocols instead.
 homepage: https://github.com/clash-lang/clash-protocols
 bug-reports: https://github.com/clash-lang/clash-protocols/issues
-version: 0.1
+version: 0.1.1
 category: Hardware
 license: BSD-2-Clause
 license-file: LICENSE
