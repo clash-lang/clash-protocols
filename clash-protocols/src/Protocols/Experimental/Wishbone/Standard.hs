@@ -178,3 +178,51 @@ latchResponse = Circuit goS
     cond = m2s.busCycle
     stored = regEn emptyWishboneS2M cond s2m
     s2m' = mux cond s2m stored
+
+{- | Splits a master bus into multiple slaves based on the bus select signal.
+The circuit will send the transaction to all slaves where each slave gets their respective part
+of the byte enables and write data. The circuit utilizes 'latchResponse' to ensure all responses
+are available when the last slave responds. The circuit contains a register that ensures
+the transaction is only sent once by deasserting strobe after the slave has responded.
+-}
+splitOnMask ::
+  forall dom addressBits width nSubs.
+  ( HiddenClockResetEnable dom
+  , KnownNat addressBits
+  , KnownNat nSubs
+  , KnownNat width
+  ) =>
+  Circuit
+    (Wishbone dom 'Standard addressBits (nSubs * width))
+    (Vec nSubs (Wishbone dom 'Standard addressBits width))
+splitOnMask =
+  Circuit (B.second unbundle . mealyB go (repeat False) . B.second bundle)
+    |> repeatC latchResponse
+ where
+  go transactionDones (m2s, s2ms) = (newTransactionDones, (s2m, m2ss1))
+   where
+    allDone = all hasTerminateFlag s2ms
+
+    newTransactionDones
+      | not m2s.busCycle = repeat False
+      | allDone = repeat False
+      | otherwise = zipWith (||) transactionDones (fmap hasTerminateFlag s2ms)
+
+    readData = pack $ fmap (.readData) s2ms
+    acknowledge = all (.acknowledge) s2ms
+    err = any (.err) s2ms
+    s2m
+      | m2s.busCycle && allDone =
+          (emptyWishboneS2M @(nSubs * width)){readData, acknowledge, err}
+      | otherwise = emptyWishboneS2M
+
+    selectLanes i =
+      m2s
+        { busSelect = resize $ shiftR (m2s.busSelect) (fromIntegral i * natToNum @width)
+        , writeData = resize $ shiftR (m2s.writeData) (fromIntegral i * natToNum @width * 8)
+        }
+    m2ss0 = fmap selectLanes (reverse indicesI)
+    m2ss1 = zipWith goM transactionDones m2ss0
+    goM transactionDone m2s'
+      | transactionDone = m2s'{strobe = False}
+      | otherwise = m2s'

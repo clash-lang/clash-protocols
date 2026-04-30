@@ -8,6 +8,8 @@ module Tests.Protocols.Wishbone where
 
 import Clash.Prelude as C
 
+import Clash.Hedgehog.Sized.Vector (genVec)
+import Clash.Sized.Vector.ToTuple (vecToTuple)
 import Control.DeepSeq (force)
 import Control.Exception (SomeException, evaluate, try)
 import Control.Monad.IO.Class (MonadIO (liftIO))
@@ -364,6 +366,73 @@ prop_latchResponse_retains = property $ do
 
   footnoteShow trace
   assert $ and checks
+
+--
+-- splitOnMask
+--
+
+{- | We test splitOnMask by checking if we can use it to create a byte addresable version of 'memoryWb'.
+To do so we generate arbitrary wishbone transactions, split those into separate lists of transactions
+(one for each byte lane) and supply those to single byte wide versions of 'memoryWb'.
+We combine the responses we obtain and that should behave the same as driveStandard |> splitOnMask |> repeatC (memoryWb (blockRam (C.replicate d256 0))).
+-}
+prop_splitOnMask :: Property
+prop_splitOnMask = property $ do
+  reqs <- forAll $ genData (genWishboneTransfer @8 @4 Range.constantBounded)
+  stallCounts <- forAll $ Gen.list (Range.singleton (L.length reqs)) genSmallInt
+  stallsLanes <- forAll $ genVec @4 $ Gen.list (Range.singleton (L.length reqs)) genSmallInt
+  let
+    reqPairs = L.zip reqs stallCounts
+    eOpts = defExpectOptions{eoSampleMax = 10_000}
+
+    splitReq :: WishboneMasterRequest 8 4 -> Vec 4 (WishboneMasterRequest 8 1)
+    splitReq (Read addr sel) =
+      C.map (Read addr . resize . (sel `shiftR`) . fromIntegral) indicesI
+    splitReq (Write addr sel dat) =
+      C.map
+        ( (\idx -> Write addr (resize $ shiftR sel idx) (resize $ shiftR dat (idx * 8)))
+            . fromIntegral
+        )
+        indicesI
+
+    runLane :: [WishboneMasterRequest 8 1] -> [Int] -> [WishboneS2M 1]
+    runLane laneReqs laneStalls =
+      withClockResetEnable @System clockGen resetGen enableGen
+        $ L.filter hasTerminateFlag
+        $ fmap snd
+        $ WbStd.sample
+          eOpts
+          (driveStandard eOpts (L.zip laneReqs laneStalls))
+          (memoryWb (blockRam (C.replicate d256 0)))
+
+    perLaneReqs = sequenceA $ L.map splitReq reqs
+
+    combine lanes =
+      (emptyWishboneS2M @4)
+        { readData = pack $ fmap (.readData) lanes
+        , acknowledge = C.all (.acknowledge) lanes
+        , err = C.any (.err) lanes
+        }
+
+    (l0, l1, l2, l3) = vecToTuple $ reverse $ zipWith runLane perLaneReqs stallsLanes
+    expected = L.zipWith4 (\s0 s1 s2 s3 -> combine (s0 :> s1 :> s2 :> s3 :> Nil)) l0 l1 l2 l3
+
+    actual =
+      withClockResetEnable @System clockGen resetGen enableGen
+        $ L.filter hasTerminateFlag
+        $ fmap snd
+        $ WbStd.sample
+          eOpts
+          (driveStandard eOpts reqPairs)
+          ( splitOnMask @_ @_ @1 @4
+              |> repeatC (memoryWb (blockRam (C.replicate d256 0)))
+              |> Circuit (\(_, ()) -> (C.repeat (), ()))
+          )
+
+  footnote $ [i| Per lane requests: #{perLaneReqs}|]
+  footnote $ [i| Expected: #{expected}|]
+  footnote $ [i| Actual: #{actual}|]
+  assert (and $ L.zipWith3 eqWishboneS2M reqs actual expected)
 
 tests :: TestTree
 tests =
