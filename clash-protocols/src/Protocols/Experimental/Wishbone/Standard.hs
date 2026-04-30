@@ -8,7 +8,18 @@ import Clash.Prelude
 import Data.Bifunctor qualified as B
 import Protocols
 import Protocols.Experimental.Wishbone
-import Prelude hiding (head, not, repeat, (!!), (&&), (||))
+import Prelude hiding (
+  head,
+  map,
+  not,
+  repeat,
+  reverse,
+  zipWith,
+  zipWith3,
+  (!!),
+  (&&),
+  (||),
+ )
 
 -- | Distribute requests amongst N slave circuits
 roundrobin ::
@@ -147,3 +158,23 @@ memoryWb ram = Circuit go
     isWrite = managerActive && m2s.writeEnable
     isRead = managerActive && not (m2s.writeEnable)
     write = Just (m2s.addr, m2s.writeData)
+
+{- | Latch the response from the slave when a transaction is completed. This is
+useful for circuits that need the response for more than one cycle.
+As soon as the manager sets `busCycle`, the latched response will be dropped.
+-}
+latchResponse ::
+  forall dom addressBits dataBytes.
+  ( HiddenClockResetEnable dom
+  , KnownNat dataBytes
+  ) =>
+  Circuit
+    (Wishbone dom 'Standard addressBits dataBytes)
+    (Wishbone dom 'Standard addressBits dataBytes)
+latchResponse = Circuit goS
+ where
+  goS (m2s, s2m) = (s2m', m2s)
+   where
+    cond = m2s.busCycle
+    stored = regEn emptyWishboneS2M cond s2m
+    s2m' = mux cond s2m stored

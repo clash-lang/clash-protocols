@@ -1,28 +1,32 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# OPTIONS_GHC -fconstraint-solver-iterations=10 #-}
 
 module Tests.Protocols.Wishbone where
 
-import Clash.Prelude as C hiding (not, (&&))
+import Clash.Prelude as C
+
 import Control.DeepSeq (force)
 import Control.Exception (SomeException, evaluate, try)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Either (isLeft)
 import Data.List qualified as L
+import Data.String.Interpolate (i)
 import Hedgehog
 import Hedgehog.Gen qualified as Gen
 import Hedgehog.Range qualified as Range
 import Protocols
-import Protocols.Experimental.Hedgehog (defExpectOptions, eoSampleMax)
+import Protocols.Experimental.Hedgehog (defExpectOptions, eoResetCycles, eoSampleMax)
 import Protocols.Experimental.Wishbone
 import Protocols.Experimental.Wishbone.Standard
 import Protocols.Experimental.Wishbone.Standard.Hedgehog
+import Protocols.Experimental.Wishbone.Standard.Hedgehog qualified as WbStd
 import Test.Tasty
 import Test.Tasty.Hedgehog (HedgehogTestLimit (HedgehogTestLimit))
 import Test.Tasty.Hedgehog.Extra (testProperty)
 import Test.Tasty.TH (testGroupGenerator)
-import Prelude hiding (undefined)
 
 smallInt :: Range Int
 smallInt = Range.linear 0 10
@@ -82,14 +86,14 @@ addrReadIdWbModel Write{} s@WishboneS2M{..} ()
 
 prop_addrReadIdWb_model :: Property
 prop_addrReadIdWb_model =
-  property $
-    withClockResetEnable clockGen resetGen enableGen $
-      wishbonePropWithModel @System @10 @4
-        defExpectOptions{eoSampleMax = 10_000}
-        addrReadIdWbModel
-        addrReadIdWb
-        (genData $ genWishboneTransfer Range.constantBounded)
-        ()
+  property
+    $ withClockResetEnable clockGen resetGen enableGen
+    $ wishbonePropWithModel @System @10 @4
+      defExpectOptions{eoSampleMax = 10_000}
+      addrReadIdWbModel
+      addrReadIdWb
+      (genData $ genWishboneTransfer Range.constantBounded)
+      ()
 
 --
 -- memory element circuit
@@ -111,17 +115,17 @@ memoryWbModel (Read addr sel) s st
       Just x | readData s == x && acknowledge s -> Right st
       Just x
         | otherwise ->
-            Left $
-              "Read from a known address did not yield the same value "
-                <> showX x
-                <> " : "
-                <> show s
+            Left
+              $ "Read from a known address did not yield the same value "
+              <> showX x
+              <> " : "
+              <> show s
       Nothing | acknowledge s && hasX (readData s) == Right def -> Right st
       Nothing
         | otherwise ->
-            Left $
-              "Read from unknown address did no ACK with undefined result : "
-                <> show s
+            Left
+              $ "Read from unknown address did no ACK with undefined result : "
+              <> show s
 memoryWbModel (Write addr sel a) s st
   | sel /= maxBound && err s = Right st
   | sel /= maxBound && not (err s) =
@@ -131,14 +135,14 @@ memoryWbModel (Write addr sel a) s st
 
 prop_memoryWb_model :: Property
 prop_memoryWb_model =
-  property $
-    withClockResetEnable clockGen resetGen enableGen $
-      wishbonePropWithModel @System @8 @4
-        defExpectOptions{eoSampleMax = 10_000}
-        memoryWbModel
-        (memoryWb (blockRam (C.replicate d256 0)))
-        (genData (genWishboneTransfer Range.constantBounded))
-        [] -- initial state
+  property
+    $ withClockResetEnable clockGen resetGen enableGen
+    $ wishbonePropWithModel @System @8 @4
+      defExpectOptions{eoSampleMax = 10_000}
+      memoryWbModel
+      (memoryWb (blockRam (C.replicate d256 0)))
+      (genData (genWishboneTransfer Range.constantBounded))
+      [] -- initial state
 
 --
 -- Helpers
@@ -170,15 +174,15 @@ prop_addrReadId_validator = property $ do
 
   let
     circuitSignalsN =
-      withClockResetEnable @System clockGen resetGen enableGen $
-        let
-          driver = driveStandard defExpectOptions{eoSampleMax = 10_000} reqs
-          addrRead = addrReadIdWb
-         in
-          evaluateUnitCircuit
-            sampleNumber
-            driver
-            (validatorCircuit |> addrRead)
+      withClockResetEnable @System clockGen resetGen enableGen
+        $ let
+            driver = driveStandard defExpectOptions{eoSampleMax = 10_000} reqs
+            addrRead = addrReadIdWb
+           in
+            evaluateUnitCircuit
+              sampleNumber
+              driver
+              (validatorCircuit |> addrRead)
 
   -- force evalution of sampling somehow
   assert (circuitSignalsN == sampleNumber)
@@ -189,15 +193,15 @@ prop_memoryWb_validator = property $ do
 
   let
     circuitSignalsN =
-      withClockResetEnable @System clockGen resetGen enableGen $
-        let
-          driver = driveStandard defExpectOptions{eoSampleMax = 10_000} reqs
-          memory = memoryWb (blockRam (C.replicate d256 0))
-         in
-          evaluateUnitCircuit
-            sampleNumber
-            driver
-            (validatorCircuit |> memory)
+      withClockResetEnable @System clockGen resetGen enableGen
+        $ let
+            driver = driveStandard defExpectOptions{eoSampleMax = 10_000} reqs
+            memory = memoryWb (blockRam (C.replicate d256 0))
+           in
+            evaluateUnitCircuit
+              sampleNumber
+              driver
+              (validatorCircuit |> memory)
 
   -- force evalution of sampling somehow
   assert (circuitSignalsN == sampleNumber)
@@ -212,15 +216,15 @@ prop_addrReadId_validator_lenient = property $ do
 
   let
     circuitSignalsN =
-      withClockResetEnable @System clockGen resetGen enableGen $
-        let
-          driver = driveStandard defExpectOptions{eoSampleMax = 10_000} reqs
-          addrRead = addrReadIdWb
-         in
-          evaluateUnitCircuit
-            sampleNumber
-            driver
-            (validatorCircuitLenient |> addrRead)
+      withClockResetEnable @System clockGen resetGen enableGen
+        $ let
+            driver = driveStandard defExpectOptions{eoSampleMax = 10_000} reqs
+            addrRead = addrReadIdWb
+           in
+            evaluateUnitCircuit
+              sampleNumber
+              driver
+              (validatorCircuitLenient |> addrRead)
 
   -- force evalution of sampling somehow
   assert (circuitSignalsN == sampleNumber)
@@ -231,15 +235,15 @@ prop_memoryWb_validator_lenient = property $ do
 
   let
     circuitSignalsN =
-      withClockResetEnable @System clockGen resetGen enableGen $
-        let
-          driver = driveStandard defExpectOptions{eoSampleMax = 10_000} reqs
-          memory = memoryWb (blockRam (C.replicate d256 0))
-         in
-          evaluateUnitCircuit
-            sampleNumber
-            driver
-            (validatorCircuitLenient |> memory)
+      withClockResetEnable @System clockGen resetGen enableGen
+        $ let
+            driver = driveStandard defExpectOptions{eoSampleMax = 10_000} reqs
+            memory = memoryWb (blockRam (C.replicate d256 0))
+           in
+            evaluateUnitCircuit
+              sampleNumber
+              driver
+              (validatorCircuitLenient |> memory)
 
   -- force evalution of sampling somehow
   assert (circuitSignalsN == sampleNumber)
@@ -251,15 +255,15 @@ prop_specViolation_lenient = property $ do
 
   let
     circuitSignalsN =
-      withClockResetEnable @System clockGen resetGen enableGen $
-        let
-          driver = driveStandard @System @8 @1 defExpectOptions{eoSampleMax = 10_000} reqs
-          invalid = invalidCircuit
-         in
-          evaluateUnitCircuit
-            sampleNumber
-            driver
-            (validatorCircuitLenient |> invalid)
+      withClockResetEnable @System clockGen resetGen enableGen
+        $ let
+            driver = driveStandard @System @8 @1 defExpectOptions{eoSampleMax = 10_000} reqs
+            invalid = invalidCircuit
+           in
+            evaluateUnitCircuit
+              sampleNumber
+              driver
+              (validatorCircuitLenient |> invalid)
 
   -- an ErrorCall is expected, but really *any* exception is expected
   -- from the validator circuit
@@ -287,11 +291,85 @@ prop_specViolation_lenient = property $ do
 sampleNumber :: Int
 sampleNumber = 1000
 
+--
+-- latchResponse
+--
+
+-- | Check whether 'latchResponse' acts as an identity circuit on a transactional level.
+prop_latchResponse_identity :: Property
+prop_latchResponse_identity = property $ do
+  reqs <- forAll $ genData (genWishboneTransfer @8 @4 Range.linearBounded)
+  earlyBusCycle <- forAll Gen.bool
+  driveStalls <- forAll $ Gen.list (Range.singleton (L.length reqs)) genSmallInt
+  memStalls <- forAll $ Gen.list (Range.singleton (L.length reqs)) genSmallInt
+  let
+    eOpts = defExpectOptions{eoSampleMax = 10_000}
+
+    run ::
+      ((HiddenClockResetEnable System) => Circuit (Wishbone System 'Standard 8 4) ()) ->
+      [WishboneS2M 4]
+    run ckt =
+      withClockResetEnable @System clockGen resetGen enableGen
+        $ L.filter hasTerminateFlag
+        $ fmap snd
+        $ WbStd.sample
+          eOpts
+          (driveStandard eOpts (L.zip reqs driveStalls))
+          ckt
+
+    expected = run (memoryWb (blockRam (C.replicate d256 0)))
+    actual =
+      run
+        ( latchResponse
+            |> stallStandard earlyBusCycle memStalls
+            |> memoryWb (blockRam (C.replicate d256 0))
+        )
+
+  L.length actual === L.length expected
+
+  footnote [i| Expected: #{expected}|]
+  footnote [i| Actual: #{actual}|]
+  assert (and $ L.zipWith3 eqWishboneS2M reqs actual expected)
+
+-- | Check whether 'latchResponse' retains the last response until a new transaction is started.
+prop_latchResponse_retains :: Property
+prop_latchResponse_retains = property $ do
+  reqs <-
+    forAll $ Gen.list (Range.linear 1 300) (genWishboneTransfer @8 @4 Range.linearBounded)
+  earlyBusCycle <- forAll Gen.bool
+  driveStalls <- forAll $ Gen.list (Range.singleton (L.length reqs)) genSmallInt
+  memStalls <- forAll $ Gen.list (Range.singleton (L.length reqs)) genSmallInt
+  let
+    eOpts = defExpectOptions{eoResetCycles = 5}
+
+    trace =
+      withClockResetEnable @System clockGen resetGen enableGen
+        $ sampleUnfiltered
+          eOpts
+          (driveStandard eOpts (L.zip reqs driveStalls))
+          ( latchResponse
+              |> stallStandard earlyBusCycle memStalls
+              |> memoryWb (blockRam (C.replicate d256 0))
+          )
+
+    checkCycle (lastReq, latched) (m2s, s2m)
+      | busCycle m2s =
+          ((Just m2s, s2m), True)
+      | Just req <- lastReq =
+          ((lastReq, latched), eqWishboneS2M (m2sToRequest req) latched s2m)
+      | otherwise =
+          ((lastReq, latched), True)
+
+    (_, checks) = L.mapAccumL checkCycle (Nothing, emptyWishboneS2M) trace
+
+  footnoteShow trace
+  assert $ and checks
+
 tests :: TestTree
 tests =
   -- TODO: Move timeout option to hedgehog for better error messages.
   -- TODO: Does not seem to work for combinatorial loops like @let x = x in x@??
-  localOption (mkTimeout 60_000_000 {- 60 seconds -}) $
-    localOption
+  localOption (mkTimeout 60_000_000 {- 60 seconds -})
+    $ localOption
       (HedgehogTestLimit (Just 1000))
       $(testGroupGenerator)
