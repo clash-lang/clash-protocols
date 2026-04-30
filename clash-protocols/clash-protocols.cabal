@@ -57,8 +57,8 @@ common common-options
     TypeOperators
     ViewPatterns
 
-  -- Prelude isn't imported by default as Clash offers Clash.Prelude
-  -- NoImplicitPrelude
+    -- Prelude isn't imported by default as Clash offers Clash.Prelude
+    -- NoImplicitPrelude
   ghc-options:
     -- Plugins to support type-level constraint solving on naturals
     -- `-fexpose-all-unfoldings` is required because clash needs access to the
@@ -130,17 +130,20 @@ library
     Protocols.Experimental.Axi4.WriteAddress
     Protocols.Experimental.Axi4.WriteData
     Protocols.Experimental.Axi4.WriteResponse
+    Protocols.Experimental.BiDf
     Protocols.Experimental.Df
+    Protocols.Experimental.Df.Extra
     Protocols.Experimental.DfConv
     Protocols.Experimental.FunctorC
     Protocols.Experimental.Hedgehog
     Protocols.Experimental.Hedgehog.Internal
     Protocols.Experimental.PacketStream
+    Protocols.Experimental.ReqResp
     Protocols.Experimental.Simulate
     Protocols.Experimental.Wishbone
+    Protocols.Experimental.Wishbone.Extra
     Protocols.Experimental.Wishbone.Standard
     Protocols.Experimental.Wishbone.Standard.Hedgehog
-    Protocols.Experimental.Hedgehog
     Protocols.Idle
     Protocols.Internal
     Protocols.Internal.TH
@@ -167,7 +170,6 @@ library
     Data.Constraint.Nat.Extra
     Data.Maybe.Extra
     Paths_clash_protocols
-    Protocols.Experimental.Hedgehog.Internal
     Protocols.Experimental.Hedgehog.Types
     Protocols.Experimental.Simulate.Types
     Protocols.Internal.Types
@@ -188,7 +190,9 @@ test-suite unittests
     Tests.Protocols
     Tests.Protocols.Avalon
     Tests.Protocols.Axi4
+    Tests.Protocols.BiDf
     Tests.Protocols.Df
+    Tests.Protocols.Df.Extra
     Tests.Protocols.DfConv
     Tests.Protocols.PacketStream
     Tests.Protocols.PacketStream.AsyncFifo
@@ -200,14 +204,17 @@ test-suite unittests
     Tests.Protocols.PacketStream.Padding
     Tests.Protocols.PacketStream.Routing
     Tests.Protocols.Plugin
+    Tests.Protocols.ReqResp
     Tests.Protocols.Vec
     Tests.Protocols.Wishbone
+    Tests.Protocols.Wishbone.Extra
     Util
 
   build-depends:
     clash-prelude-hedgehog,
     clash-protocols,
     clash-protocols-base,
+    containers,
     deepseq,
     extra,
     hashable,

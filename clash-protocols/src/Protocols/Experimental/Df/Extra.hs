@@ -4,7 +4,9 @@
 {-# OPTIONS_GHC -fplugin Protocols.Plugin #-}
 
 -- | Extra utilities for 'Df'.
-module Protocols.Df.Extra where
+module Protocols.Experimental.Df.Extra where
+
+import Prelude hiding (not, (&&), (||))
 
 import Clash.Prelude
 import Data.Bifunctor (Bifunctor (bimap))

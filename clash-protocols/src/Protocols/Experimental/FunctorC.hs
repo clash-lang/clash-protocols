@@ -4,7 +4,7 @@
 {-# OPTIONS_GHC -fplugin Protocols.Plugin #-}
 
 -- | Version of `Functor` for `Circuit`s.
-module Protocols.FunctorC (
+module Protocols.Experimental.FunctorC (
   FunctorC (..),
 ) where
 

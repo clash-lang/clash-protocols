@@ -3,11 +3,13 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 -- | Extra utilities for 'Wishbone'.
-module Protocols.Wishbone.Extra (delayWishbone) where
+module Protocols.Experimental.Wishbone.Extra (delayWishbone) where
+
+import Prelude hiding ((&&))
 
 import Clash.Prelude
 import Protocols
-import Protocols.Wishbone
+import Protocols.Experimental.Wishbone
 
 -- | State for 'delayWishbone'.
 data DelayWishboneState aw n

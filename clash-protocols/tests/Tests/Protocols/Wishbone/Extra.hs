@@ -5,15 +5,17 @@
 
 module Tests.Protocols.Wishbone.Extra where
 
+import Prelude hiding (repeat, (!!), (&&))
+
 import Clash.Prelude
 
 import Data.Map.Strict (Map)
 import Hedgehog (Gen, Property)
 import Protocols
-import Protocols.Hedgehog (defExpectOptions)
-import Protocols.Wishbone
-import Protocols.Wishbone.Extra (delayWishbone)
-import Protocols.Wishbone.Standard.Hedgehog (
+import Protocols.Experimental.Hedgehog (defExpectOptions)
+import Protocols.Experimental.Wishbone
+import Protocols.Experimental.Wishbone.Extra (delayWishbone)
+import Protocols.Experimental.Wishbone.Standard.Hedgehog (
   WishboneMasterRequest (Read, Write),
   wishbonePropWithModel,
  )
@@ -69,14 +71,14 @@ responses.
 -}
 prop_delayWishbone :: Property
 prop_delayWishbone =
-  H.property
-    $ withClockResetEnable @System clockGen resetGen enableGen
-    $ wishbonePropWithModel
-      defExpectOptions
-      model
-      (delayWishbone |> simpleWbMemory)
-      genInputs
-      Map.empty
+  H.property $
+    withClockResetEnable @System clockGen resetGen enableGen $
+      wishbonePropWithModel
+        defExpectOptions
+        model
+        (delayWishbone |> simpleWbMemory)
+        genInputs
+        Map.empty
  where
   model ::
     WishboneMasterRequest AddressWidth 4 ->
@@ -97,8 +99,8 @@ prop_delayWishbone =
 
   genInputs :: Gen [WishboneMasterRequest AddressWidth 4]
   genInputs =
-    Gen.list (Range.linear 0 32)
-      $ Gen.choice
+    Gen.list (Range.linear 0 32) $
+      Gen.choice
         [ Read <$> genBoundedIntegral <*> genBoundedIntegral
         , Write <$> genBoundedIntegral <*> genBoundedIntegral <*> genBoundedIntegral
         ]

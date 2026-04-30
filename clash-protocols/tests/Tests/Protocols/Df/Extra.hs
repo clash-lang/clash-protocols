@@ -9,7 +9,7 @@ import Clash.Prelude
 
 import Hedgehog (Gen, Property, Range)
 import Protocols
-import Protocols.Hedgehog (
+import Protocols.Experimental.Hedgehog (
   defExpectOptions,
   eoStopAfterEmpty,
   idWithModelSingleDomain,
@@ -25,7 +25,7 @@ import Hedgehog qualified as H
 import Hedgehog.Gen qualified as Gen
 import Hedgehog.Range qualified as Range
 import Protocols.Df qualified as Df
-import Protocols.Df.Extra qualified as Df
+import Protocols.Experimental.Df.Extra qualified as Df
 
 smallInt :: Range Int
 smallInt = Range.linear 0 10

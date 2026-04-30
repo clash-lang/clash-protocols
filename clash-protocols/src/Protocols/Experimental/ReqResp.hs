@@ -9,7 +9,7 @@ together with utilities for working with it. `ReqResp` is suitable for simple re
 interactions where pipelining is not required. If you need pipelining, you can use the `BiDf`
 protocol instead.
 -}
-module Protocols.ReqResp (
+module Protocols.Experimental.ReqResp (
   -- * Types
   ReqResp,
 
@@ -26,18 +26,21 @@ module Protocols.ReqResp (
   forceResetSanity,
 ) where
 
+import Prelude hiding (not, (&&))
+
 import Clash.Prelude
 
 import Data.Bifunctor (Bifunctor (..))
 import Data.Maybe
 import Protocols
-import Protocols.BiDf (BiDf)
+import Protocols.Experimental.BiDf (BiDf)
+import Protocols.Experimental.Simulate
 import Protocols.Idle
 
 import Clash.Explicit.Prelude qualified as E
 import Clash.Prelude qualified as C
-import Protocols qualified as Df
-import Protocols.BiDf qualified as BiDf
+import Protocols.Experimental.BiDf qualified as BiDf
+import Protocols.Experimental.Df qualified as Df
 
 {- |
 Simplest possible protocol for request-response communication.
@@ -189,7 +192,7 @@ fromBiDf = circuit $ \biDf -> do
   (reqresp, response) <- fromDfs -< request
   idC -< reqresp
 
--- | Convert a 'ReqResp' protocol where the response type is '()' to a 'Df' stream of requests.
+-- | Convert a 'ReqResp' protocol where the response type is @()@ to a 'Df' stream of requests.
 requests ::
   forall dom req.
   (C.KnownDomain dom) =>

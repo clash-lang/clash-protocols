@@ -4,7 +4,7 @@
 {-# OPTIONS_GHC -fplugin Protocols.Plugin #-}
 
 -- | Bi-directional request/response-style 'Df' channels.
-module Protocols.BiDf (
+module Protocols.Experimental.BiDf (
   BiDf,
 
   -- * Conversion
@@ -25,11 +25,13 @@ module Protocols.BiDf (
   fanin,
 ) where
 
+import Prelude hiding (map, unzip, zip, zipWith)
+
 import Clash.Prelude hiding (map)
 import Protocols
 
 import Protocols.Df qualified as Df
-import Protocols.Df.Extra qualified as Df
+import Protocols.Experimental.Df.Extra qualified as Df
 
 {- | A 'Protocol' allowing requests to be passed downstream, with corresponding
 responses being passed back upstream. Responses are provided in the order that
@@ -51,7 +53,7 @@ their corresponding requests were submitted.
 type BiDf dom req resp =
   (Df dom req, Reverse (Df dom resp))
 
--- | Convert a circuit of 'Df's to a 'BiDf' circuit.
+-- | Convert a circuit of 'Df.Df's to a 'BiDf' circuit.
 toBiDf ::
   Circuit (Df dom req) (Df dom resp) ->
   Circuit (BiDf dom req resp) ()
@@ -60,7 +62,7 @@ toBiDf c = circuit $ \bidf -> do
   req <- toDfs -< (bidf, resp)
   idC -< ()
 
--- | Convert a 'BiDf' circuit to a circuit of 'Df's.
+-- | Convert a 'BiDf' circuit to a circuit of 'Df.Df's.
 fromBiDf ::
   Circuit (BiDf dom req resp) () ->
   Circuit (Df dom req) (Df dom resp)
@@ -69,12 +71,12 @@ fromBiDf c = circuit $ \req -> do
   c -< biDf
   idC -< resp
 
--- | Convert a pair of a request and response 'Df`s into a 'BiDf'.
+-- | Convert a pair of a request and response 'Df.Df`s into a 'BiDf'.
 toDfs :: Circuit (BiDf dom req resp, Df dom resp) (Df dom req)
 toDfs = fromSignals $ \(~((reqData, respAck), respData), reqAck) ->
   (((reqAck, respData), respAck), reqData)
 
--- | Convert a 'BiDf' into a pair of request and response 'Df`s.
+-- | Convert a 'BiDf' into a pair of request and response 'Df.Df`s.
 fromDfs :: Circuit (Df dom req) (BiDf dom req resp, Df dom resp)
 fromDfs = fromSignals $ \(reqData, ~((reqAck, respData), respAck)) ->
   (reqAck, ((reqData, respAck), respData))
@@ -95,7 +97,7 @@ loopback f = Circuit go
  where
   go (~(req, respAck), _) = ((respAck, fmap (fmap f) req), ())
 
--- | Map requests and responses of a 'BiDf' using separate `Df` circuits.
+-- | Map requests and responses of a 'BiDf' using separate `Df.Df` circuits.
 map ::
   Circuit (Df dom req) (Df dom req') ->
   Circuit (Df dom resp) (Df dom resp') ->

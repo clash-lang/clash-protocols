@@ -10,9 +10,10 @@ import Clash.Prelude as C
 import Clash.Hedgehog.Sized.Vector (genVec)
 import Hedgehog (Gen, Property)
 import Protocols
-import Protocols.BiDf as BiDf
-import Protocols.FunctorC (fmapC)
-import Protocols.Hedgehog (ExpectOptions (eoResetCycles), defExpectOptions)
+import Protocols.Experimental.BiDf as BiDf
+import Protocols.Experimental.FunctorC (fmapC)
+import Protocols.Experimental.Hedgehog (ExpectOptions (eoResetCycles), defExpectOptions)
+import Protocols.Experimental.Simulate
 import Test.Tasty (TestTree)
 import Test.Tasty.Hedgehog.Extra (testProperty)
 import Test.Tasty.TH (testGroupGenerator)
@@ -22,8 +23,8 @@ import Hedgehog qualified as H
 import Hedgehog.Gen qualified as Gen
 import Hedgehog.Range qualified as Range
 import Protocols.Df qualified as Df
-import Protocols.Df.Extra qualified as Df
-import Protocols.Hedgehog qualified as PH
+import Protocols.Experimental.Df.Extra qualified as Df
+import Protocols.Experimental.Hedgehog qualified as PH
 import Protocols.Vec qualified as Vec
 
 smallInt :: Gen Int
