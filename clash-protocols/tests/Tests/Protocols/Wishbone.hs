@@ -3,6 +3,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# OPTIONS_GHC -fconstraint-solver-iterations=10 #-}
+{-# OPTIONS_GHC -fplugin=Protocols.Plugin #-}
 
 module Tests.Protocols.Wishbone where
 
@@ -20,11 +21,13 @@ import Hedgehog
 import Hedgehog.Gen qualified as Gen
 import Hedgehog.Range qualified as Range
 import Protocols
-import Protocols.Experimental.Hedgehog (defExpectOptions, eoResetCycles, eoSampleMax)
+import Protocols.Experimental.Hedgehog (ExpectOptions (..), defExpectOptions)
+import Protocols.Experimental.Simulate
 import Protocols.Experimental.Wishbone
 import Protocols.Experimental.Wishbone.Standard
 import Protocols.Experimental.Wishbone.Standard.Hedgehog
 import Protocols.Experimental.Wishbone.Standard.Hedgehog qualified as WbStd
+import Protocols.Internal (circuitMonitor)
 import Test.Tasty
 import Test.Tasty.Hedgehog (HedgehogTestLimit (HedgehogTestLimit))
 import Test.Tasty.Hedgehog.Extra (testProperty)
@@ -433,6 +436,66 @@ prop_splitOnMask = property $ do
   footnote $ [i| Expected: #{expected}|]
   footnote $ [i| Actual: #{actual}|]
   assert (and $ L.zipWith3 eqWishboneS2M reqs actual expected)
+
+--
+-- stallStandard
+
+-- | Check whether stallStandard actually stalls the outgoing bus using 'memoryWb' as subordinate.
+prop_stallStandard_early :: Property
+prop_stallStandard_early = property $ do
+  reqs <- forAll $ genData (genWishboneTransfer @8 @4 Range.linearBounded)
+  earlyBusCycle <- forAll Gen.bool
+  driveStalls <- forAll $ Gen.list (Range.singleton (L.length reqs)) genSmallInt
+  memStalls <- forAll $ Gen.list (Range.singleton (L.length reqs)) genSmallInt
+  let
+    eOpts = defExpectOptions{eoSampleMax = 10_000}
+    simConfig = def{timeoutAfter = 10_000}
+    reqPairs = L.zip reqs driveStalls
+
+    (preStall, postStall) =
+      withClockResetEnable @System clockGen resetGen enableGen
+        $ sampleC simConfig
+        $ let
+            monitoredCircuit = circuit $ \wb -> do
+              (wb1, preSig) <- circuitMonitor -< wb
+              wb2 <- stallStandard earlyBusCycle memStalls -< wb1
+              (wb3, postSig) <- circuitMonitor -< wb2
+              memoryWb (blockRam (C.replicate d256 0)) -< wb3
+              idC -< (preSig, postSig)
+           in
+            driveStandard eOpts reqPairs |> monitoredCircuit
+
+    verifyStalls (n : stalls) trace =
+      let
+        active = L.dropWhile (\(pre, _) -> not (busCycle pre && strobe pre)) trace
+
+        (stallCycles, afterStall) = L.splitAt n active
+
+        -- busCycle asserted, strobe deasserted.
+        stallOk =
+          L.map
+            ( \(_pre, (post, _s2m)) ->
+                not (strobe post) && busCycle post == earlyBusCycle
+            )
+            stallCycles
+
+        -- busCycle and strobe asserted.
+        (waitCycles, termAndRest) = L.span (\(_, (_, s2m)) -> not (hasTerminateFlag s2m)) afterStall
+        waitOk = L.map (\(_pre, (post, _s2m)) -> busCycle post && strobe post) waitCycles
+
+        -- Termination cycle and remaining samples.
+        (termOk, rest) = case termAndRest of
+          ((_pre, (post, _s2m)) : rs) -> ([busCycle post && strobe post], rs)
+          [] -> ([], [])
+       in
+        L.concat [stallOk, waitOk, termOk, verifyStalls stalls rest]
+    verifyStalls [] _ = []
+
+    checks = verifyStalls memStalls (L.zip (L.map fst preStall) postStall)
+
+  footnote [i| earlyBusCycle: #{earlyBusCycle}|]
+  footnote [i| memStalls: #{memStalls}|]
+  assert $ and checks
 
 tests :: TestTree
 tests =
