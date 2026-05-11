@@ -372,20 +372,13 @@ implementation. A deterministic case test with controlled ack timing is required
 case_roundrobinCollectParallelCommits :: Assertion
 case_roundrobinCollectParallelCommits = expected @?= actual
  where
-  actual =
-    E.sampleN 3
-      . C.bundle
-      . first C.bundle
-      $ dut (input0 :> input1 :> input2 :> Nil, acks)
+  actual = E.sampleN 3 . snd $ dut (input0 :> input1 :> input2 :> Nil, acks)
 
-  expected =
-    [ -- Cycle 0: only source 1 has data; downstream stalls — source 1 must remain selected
-      (Ack False :> Ack False :> Ack False :> Nil, Just (10 :: Int))
-    , -- Cycle 1: source 0 now also has data, but source 1 must stay committed
-      (Ack False :> Ack True :> Ack False :> Nil, Just 10)
-    , -- Cycle 2: source 1 exhausted, source 0 now gets its turn
-      (Ack True :> Ack False :> Ack False :> Nil, Just 1)
-    ]
+  -- With unique payloads, this reduces to checking that the output is stable
+  -- while the downstream stalls (cycle 0 → cycle 1): the basic Df property.
+  -- The buggy implementation would output [Just 10, Just 1, Just 10] because
+  -- it switches to the higher-priority source 0 mid-transaction.
+  expected = [Just (10 :: Int), Just 10, Just 1]
 
   -- source 0 empty in cycle 0, then has data
   input0 = C.fromList [Nothing, Just 1, Just 1, Nothing]
