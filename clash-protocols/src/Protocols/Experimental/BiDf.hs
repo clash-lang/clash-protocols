@@ -116,7 +116,9 @@ bimap ::
   Circuit (BiDf dom req resp') (BiDf dom req' resp)
 bimap f g = map (Df.map f) (Df.map g)
 
--- | Merge a number of 'BiDf's, preferring requests from the last channel.
+{- | Merge a number of 'BiDf's, preferring requests from the first channel. This
+function inserts bubbles.
+-}
 fanin ::
   forall n dom req resp.
   ( KnownNat n
@@ -146,7 +148,7 @@ fanin = fromSignals $ \(upFwds, (reqAck, respData)) ->
         <| repeatWithIndexC (\i -> Df.map (\x -> (i, x)))
         -< reqs
 
-    (activeN, Fwd rdy) <- Df.skid <| Df.map fst -< fwd1
+    (activeN, Fwd rdy) <- Df.singleEntryBuffer <| Df.map fst -< fwd1
     req1 <- Df.stallNext rdy -< req0
     resps <- Df.route <| Df.zip -< (activeN, resp0)
     req0 <- Df.map snd -< fwd0

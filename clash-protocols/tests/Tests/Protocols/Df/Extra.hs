@@ -42,23 +42,23 @@ genData genA = do
   n <- genSmallInt
   Gen.list (Range.singleton n) genA
 
--- | Wrapper around 'skid' that discards the Ready signal
-skidDropReady ::
+-- | Wrapper around 'singleEntryBuffer' that discards the Ready signal
+singleEntryBufferDropReady ::
   forall dom a.
   (NFDataX a, HiddenClockResetEnable dom) =>
   Circuit (Df dom a) (Df dom a)
-skidDropReady = circuit $ \dfIn -> do
-  (dfOut, _ready) <- Df.skid -< dfIn
+singleEntryBufferDropReady = circuit $ \dfIn -> do
+  (dfOut, _ready) <- Df.singleEntryBuffer -< dfIn
   idC -< dfOut
 
-prop_skid :: Property
-prop_skid =
+prop_singleEntryBuffer :: Property
+prop_singleEntryBuffer =
   idWithModelSingleDomain
     @C.System
     defExpectOptions
     (genData genSmallInt)
     (C.exposeClockResetEnable id)
-    (C.exposeClockResetEnable skidDropReady)
+    (C.exposeClockResetEnable singleEntryBufferDropReady)
 
 prop_bypassFifo :: Property
 prop_bypassFifo =
