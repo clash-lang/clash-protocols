@@ -112,7 +112,7 @@ prop_fanin = H.property $ do
     impl ::
       forall dom.
       (HiddenClockResetEnable dom) =>
-      Circuit (Vec 3 (Df dom Int)) (Vec 3 (Df dom Int))
+      Circuit (Vec 3 (Df dom (Index 3, Int))) (Vec 3 (Df dom (Index 3, Int)))
     impl = circuit $ \reqs -> do
       (biDfs, resps) <- Vec.unzip <| fmapC (BiDf.fromDfs) -< reqs
       respBiDf0 <- BiDf.fanin -< biDfs
@@ -130,10 +130,19 @@ prop_fanin = H.property $ do
  where
   simConfig = def
   eOpts = defExpectOptions{PH.eoStopAfterEmpty = Just 300}
-  gen :: Gen (Vec 3 [Int])
-  gen = genVec (Gen.list (Range.linear 0 10) smallInt)
+  gen :: Gen (Vec 3 [(Index 3, Int)])
+  gen = do
+    vec <- genVec (Gen.list (Range.linear 0 10) smallInt)
+    return $ (C.zipWith (\idx lst -> fmap (idx,) lst) indicesI) vec
   -- Since stalling can change the order of the samples, we only check if they are all present
-  prop expected sampled = L.sort (L.concat (toList sampled)) H.=== L.sort (L.concat (toList expected))
+  prop expected sampled = do
+    let
+      (idxsSampled, intsSampled) = C.unzip $ fmap L.unzip sampled
+      (idxsExpected, intsExpected) = C.unzip $ fmap L.unzip expected
+    -- Check that the values are all present
+    L.sort (L.concat (toList intsSampled)) H.=== L.sort (L.concat (toList intsExpected))
+
+    idxsSampled H.=== idxsExpected
 
 tests :: TestTree
 tests = $(testGroupGenerator)

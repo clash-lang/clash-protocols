@@ -360,6 +360,46 @@ case_roundrobinCollectParallel = do
       C.withClockResetEnable @C.System C.clockGen noReset C.enableGen $
         Df.roundrobinCollect @3 Df.Parallel
 
+{- | Asserts that roundrobinCollect with Parallel mode commits to a source once
+selected, even if a higher-priority source becomes available while a transaction
+is still in progress (i.e. downstream has not yet acked).
+
+A property-based test cannot catch this bug: the bug only causes cross-source
+priority violations, not within-source reordering or data loss, so no model
+function over (input, output) pairs distinguishes the buggy from the fixed
+implementation. A deterministic case test with controlled ack timing is required.
+-}
+case_roundrobinCollectParallelCommits :: Assertion
+case_roundrobinCollectParallelCommits = expected @?= actual
+ where
+  actual =
+    E.sampleN 3
+      . C.bundle
+      . first C.bundle
+      $ dut (input0 :> input1 :> input2 :> Nil, acks)
+
+  expected =
+    [ -- Cycle 0: only source 1 has data; downstream stalls — source 1 must remain selected
+      (Ack False :> Ack False :> Ack False :> Nil, Just (10 :: Int))
+    , -- Cycle 1: source 0 now also has data, but source 1 must stay committed
+      (Ack False :> Ack True :> Ack False :> Nil, Just 10)
+    , -- Cycle 2: source 1 exhausted, source 0 now gets its turn
+      (Ack True :> Ack False :> Ack False :> Nil, Just 1)
+    ]
+
+  -- source 0 empty in cycle 0, then has data
+  input0 = C.fromList [Nothing, Just 1, Just 1, Nothing]
+  -- source 1 has data in cycles 0–1
+  input1 = C.fromList [Just 10, Just 10, Nothing, Nothing]
+  input2 = C.fromList [Nothing, Nothing, Nothing, Nothing]
+  -- downstream stalls in cycle 0, then accepts
+  acks = C.fromList [Ack False, Ack True, Ack True, Ack True]
+
+  dut =
+    toSignals $
+      C.withClockResetEnable @C.System C.clockGen noReset C.enableGen $
+        Df.roundrobinCollect @3 Df.Parallel
+
 prop_unbundleVec :: Property
 prop_unbundleVec =
   idWithModelSingleDomain

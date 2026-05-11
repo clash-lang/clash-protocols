@@ -786,7 +786,7 @@ roundrobinCollect Parallel =
     nextIm =
       if Maybe.isNothing fwd || ack
         then Nothing
-        else im
+        else Just i
 
 -- | Place register on /forward/ part of a circuit. This adds combinational delay on the /backward/ path.
 registerFwd ::
