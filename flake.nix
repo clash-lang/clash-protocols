@@ -41,19 +41,42 @@
               else
                 {};
 
+            # Each package ships its CHANGELOG.md as a symlink to the repo-root
+            # CHANGELOG.md (../CHANGELOG.md). Nix copies the package directory
+            # without that out-of-root target, so the symlink dangles in the
+            # build sandbox. Cabal >=3.12 (ghc9101+) merely warns about the
+            # unmatched 'extra-doc-files' wildcard, but the Cabal 3.10 shipped
+            # with ghc96*/ghc98* treats it as a fatal error. Replace the
+            # dangling symlink with the real file for those.
+            changelog = ./CHANGELOG.md;
+            # True for ghc96* / ghc98*, which ship Cabal 3.10.
+            uses-cabal-3-10 =
+              clash-compiler.inputs.nixpkgs.lib.hasPrefix "ghc96" compiler-version
+              || clash-compiler.inputs.nixpkgs.lib.hasPrefix "ghc98" compiler-version;
+            fixup-changelog = drv:
+              if uses-cabal-3-10 then
+                drv.overrideAttrs (pAttr: {
+                  postPatch = pAttr.postPatch or "" + ''
+                    rm -f CHANGELOG.md
+                    cp ${changelog} CHANGELOG.md
+                  '';
+                })
+              else
+                drv;
+
             overlay = final: prev: {
               # Append the package set with clash-protocols*
-              clash-protocols = (prev.developPackage {
+              clash-protocols = fixup-changelog ((prev.developPackage {
                 root = ./clash-protocols;
                 overrides = _: _: final;
                 # Remove me when https://github.com/clash-lang/clash-protocols/issues/131
                 # has been solved
                 modifier = drv: drv.overrideAttrs (_: { doCheck = false; });
-              }).overrideAttrs override-attrs;
-              clash-protocols-base = prev.developPackage {
+              }).overrideAttrs override-attrs);
+              clash-protocols-base = fixup-changelog (prev.developPackage {
                 root = ./clash-protocols-base;
                 overrides = _: _: final;
-              };
+              });
             } // circuit-notation.overlays.${system}.${compiler-version} final prev;
           in
             { name = compiler-version; value = overlay; }
