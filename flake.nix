@@ -2,12 +2,8 @@
   description = "A flake for the clash-protocols and clash-protocols-base";
   inputs = {
     clash-compiler.url = "github:clash-lang/clash-compiler";
-    circuit-notation = {
-      url = "github:cchalmers/circuit-notation";
-      inputs.clash-compiler.follows = "clash-compiler";
-    };
   };
-  outputs = { self, flake-utils, clash-compiler, circuit-notation, ... }:
+  outputs = { self, flake-utils, clash-compiler, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         # The package to expose as 'default'
@@ -65,6 +61,14 @@
                 drv;
 
             overlay = final: prev: {
+              # The clash package set ships circuit-notation 0.1.0.0, but
+              # clash-protocols requires >=0.2. Pull 0.2.0.0 from Hackage.
+              circuit-notation = prev.callHackageDirect {
+                pkg = "circuit-notation";
+                ver = "0.2.0.0";
+                sha256 = "sha256-tdM3spbXjQvcnBrmVS0i0tLqoHJ/pnniSOy3eTEZKuw=";
+              } {};
+
               # Append the package set with clash-protocols*
               clash-protocols = fixup-changelog ((prev.developPackage {
                 root = ./clash-protocols;
@@ -77,7 +81,7 @@
                 root = ./clash-protocols-base;
                 overrides = _: _: final;
               });
-            } // circuit-notation.overlays.${system}.${compiler-version} final prev;
+            };
           in
             { name = compiler-version; value = overlay; }
           ) supported-versions);
@@ -141,10 +145,6 @@
         # A devShell for each supported version
         #
         # These can be invoked using `nix develop .#ghc9101-minimal`
-        #
-        # Please do note that if you work with Nix, you need to remove the `cabal.project` file at
-        # the root of the directory! Cabal prioritizes local source overrides over Nix, which causes
-        # the circuit-notation package to incorrectly fetched from Hackage rather than Nix.
         devShells = all-shells // { default = all-shells."${default-version}-minimal"; };
 
         # The default directly refers to the default package of the default ghc version of this flake
