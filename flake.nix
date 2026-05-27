@@ -98,7 +98,7 @@
             hs-pkgs
           ) all-overlays;
 
-        minimal-shell = hs-pkgs: hs-pkgs.shellFor {
+        minimal-shell = compiler-version: hs-pkgs: hs-pkgs.shellFor {
           packages = p: [
             p.clash-protocols
             p.clash-protocols-base
@@ -113,16 +113,23 @@
             hs-pkgs.cabal-install
             hs-pkgs.cabal-plan
             hs-pkgs.fourmolu
-            hs-pkgs.cabal-gild
-          ];
+          ]
+          # The cabal-gild in the clash package set requires base >=4.19, which
+          # ghc96* (base-4.18) doesn't provide, so it can't be built there. We
+          # exclude it rather than pin a compatible version, because the last
+          # cabal-gild supporting base-4.18 is 1.5.0.0 (everything from 1.5.0.1
+          # onwards dropped it), which is too old to be worth carrying for ghc96*.
+          ++ clash-compiler.inputs.nixpkgs.lib.optional
+               (!clash-compiler.inputs.nixpkgs.lib.hasPrefix "ghc96" compiler-version)
+               hs-pkgs.cabal-gild;
         };
 
         all-shells = clash-compiler.inputs.nixpkgs.lib.attrsets.concatMapAttrs (name: hs-pkgs: {
             # The difference between the `-minimal` and `-full` is the addition of HLS in the full version
             # This is because HLS is slow to compile and not everyone uses it
             # We default to using the `-minimal` version when `nix develop`ing
-            "${name}-minimal" = minimal-shell hs-pkgs;
-            "${name}-full" = (minimal-shell hs-pkgs).overrideAttrs (fAttr: pAttr: {
+            "${name}-minimal" = minimal-shell name hs-pkgs;
+            "${name}-full" = (minimal-shell name hs-pkgs).overrideAttrs (fAttr: pAttr: {
               nativeBuildInputs = pAttr.nativeBuildInputs ++ [
                 hs-pkgs.haskell-language-server
               ];
