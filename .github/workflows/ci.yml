@@ -18,7 +18,7 @@ jobs:
     runs-on: self-hosted
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Stack / GHC
         uses: haskell-actions/setup@v2
@@ -35,7 +35,7 @@ jobs:
           stack config set system-ghc --global true
 
       - name: Cache dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         id: cache
         with:
           path: ${{ steps.setup-haskell.outputs.stack-root }}
@@ -75,7 +75,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Haskell
         uses: haskell-actions/setup@v2
@@ -94,7 +94,7 @@ jobs:
           mv cabal.project.freeze frozen
 
       - name: Restore cached dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         id: cache
         with:
           path: ${{ steps.setup-haskell.outputs.cabal-store }}
@@ -120,8 +120,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Note that you must checkout your code before running haskell-actions/run-fourmolu
-      - uses: actions/checkout@v3
-      - uses: haskell-actions/run-fourmolu@v9
+      - uses: actions/checkout@v6
+      - uses: haskell-actions/run-fourmolu@v12
         with:
           version: "0.19.0.1"
           pattern: |
@@ -133,7 +133,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Whitespace
         run: |
@@ -147,7 +147,7 @@ jobs:
         ghc-version: [ "ghc9124", "ghc9103", "ghc984", "ghc967" ]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Build & test
         run: |
@@ -187,7 +187,7 @@ jobs:
         # If dependencies are already cached, we can simply reuse them!
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Build devshell
         run: |
@@ -230,7 +230,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Check dependencies for failures
         run: |
