@@ -556,7 +556,7 @@ pure df a =
   Df.pure a
     |> dfToDfConvOtp df
 
--- | Ignore incoming data
+-- | Acknowledge but ignore values when out of reset, otherwise give backpressure.
 void ::
   ( DfConv df
   , HiddenClockResetEnable (Dom df)
@@ -943,7 +943,7 @@ fanin dfA dfB f =
       )
     |> toDfCircuit dfB
 
--- | Merge data of multiple streams using Monoid's '<>'.
+-- | Merge data of multiple streams using Semigroup's '<>'.
 mfanin ::
   ( DfConv dfA
   , DfConv dfB
@@ -952,7 +952,7 @@ mfanin ::
   , HiddenClockResetEnable (Dom dfA)
   , FwdPayload dfA ~ FwdPayload dfB
   , NFDataX (FwdPayload dfA)
-  , Monoid (FwdPayload dfA)
+  , Semigroup (FwdPayload dfA)
   , KnownNat numA
   , numA ~ (decNumA + 1)
   ) =>

@@ -40,6 +40,7 @@ import Control.DeepSeq (NFData)
 import Data.Hashable (Hashable)
 
 -- hedgehog
+import Clash.Hedgehog.Sized.Vector (genVec)
 import Hedgehog
 import Hedgehog.Gen qualified as Gen
 import Hedgehog.Range qualified as Range
