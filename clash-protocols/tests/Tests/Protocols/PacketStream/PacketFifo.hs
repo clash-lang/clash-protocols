@@ -41,7 +41,20 @@ prop_packet_fifo_id :: Property
 prop_packet_fifo_id =
   idWithModelSingleDomain
     @System
-    defExpectOptions
+    -- To account for latency of the FIFO we need to wait longer than default
+    --   30   reset samples
+    --   100  max LHS inserted stall cycles: 10 stalls * 10 cycles
+    --   110  max transfers before first output:
+    --        10 packets * (10 non-last transfers + 1 last transfer)
+    --        e.g. 9 aborted packets, then 1 full valid packet
+    --   2    packetFifo latency completing the first valid packet
+    --   10   max RHS stall before exposing the first output
+    --   ----
+    --   252 empty output samples before first Just
+    --
+    --   500 is a nice number that gives some leeway if the implementation changes
+    --   in the future.
+    defExpectOptions{eoStopAfterEmpty = Just 500}
     (genPackets 1 10 (genValidPacket defPacketOptions Gen.enumBounded (Range.linear 0 10)))
     (exposeClockResetEnable dropAbortedPackets)
     (exposeClockResetEnable (packetFifoC @_ @1 @Int16 d10 d10 Backpressure))
