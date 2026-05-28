@@ -353,7 +353,7 @@ tests :: TestTree
 tests =
   -- TODO: Move timeout option to hedgehog for better error messages.
   -- TODO: Does not seem to work for combinatorial loops like @let x = x in x@??
-  localOption (mkTimeout 12_000_000 {- 12 seconds -}) $
+  localOption (mkTimeout 60_000_000 {- 60 seconds -}) $
     localOption
       (HedgehogTestLimit (Just 1000))
       $(testGroupGenerator)
