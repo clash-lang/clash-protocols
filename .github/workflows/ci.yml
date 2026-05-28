@@ -15,10 +15,10 @@ concurrency:
 jobs:
   stack:
     name: Stack tests
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Stack / GHC
         uses: haskell-actions/setup@v2
@@ -35,7 +35,7 @@ jobs:
           stack config set system-ghc --global true
 
       - name: Cache dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         id: cache
         with:
           path: ${{ steps.setup-haskell.outputs.stack-root }}
@@ -50,11 +50,10 @@ jobs:
 
   cabal:
     name: Cabal tests - ghc ${{ matrix.ghc }} / clash ${{ matrix.clash }} / doc ${{ matrix.check_haddock }}
-    runs-on: ${{ matrix.os }}
+    runs-on: self-hosted
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
         clash:
           - "1.10.0"
         cabal:
@@ -67,7 +66,6 @@ jobs:
           - check_haddock: "False"
           - ghc: "9.6.7"
             check_haddock: "True"
-            os: "ubuntu-latest"
             clash: "1.10.0"
             cabal: "3.14.1.1"
 
@@ -77,7 +75,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Haskell
         uses: haskell-actions/setup@v2
@@ -96,7 +94,7 @@ jobs:
           mv cabal.project.freeze frozen
 
       - name: Restore cached dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         id: cache
         with:
           path: ${{ steps.setup-haskell.outputs.cabal-store }}
@@ -122,8 +120,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Note that you must checkout your code before running haskell-actions/run-fourmolu
-      - uses: actions/checkout@v3
-      - uses: haskell-actions/run-fourmolu@v9
+      - uses: actions/checkout@v6
+      - uses: haskell-actions/run-fourmolu@v12
         with:
           version: "0.19.0.1"
           pattern: |
@@ -135,11 +133,87 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Whitespace
         run: |
           .ci/test_whitespace.sh
+
+  packages:
+    name: Push package to cache
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        ghc-version: [ "ghc9124", "ghc9103", "ghc984", "ghc967" ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Build & test
+        run: |
+          # The -L flag outputs build logs to stderr
+          nix build -L .#${{ matrix.ghc-version }}.clash-protocols-base
+          nix build -L .#${{ matrix.ghc-version }}.clash-protocols
+
+        # Pushes the binaries to the local network
+        # url: http://192.168.102.136:9200/public
+        # public key: public:Wne+du2QhXD0O30YJ93NxG8xJRdfHvFQgKU0XVgENsg=
+      - name: Push package to cache
+        env:
+          ATTIC_AUTH_TOKEN: ${{ secrets.ATTIC_SECRET }}
+        run: |
+          .ci/attic-auth.sh
+          attic push public $(nix path-info .#${{ matrix.ghc-version }}.clash-protocols-base)
+          attic push public $(nix path-info .#${{ matrix.ghc-version }}.clash-protocols)
+
+      - name: Push package to cachix
+        if: github.ref == 'refs/heads/main'
+        env:
+          # Having the variable be named `CACHIX_AUTH_TOKEN` authenticates cachix
+          # https://docs.cachix.org/getting-started#authenticating
+          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_SECRET }}
+        run: |
+          nix path-info .#${{ matrix.ghc-version }}.clash-protocols-base | cachix push clash-lang
+          nix path-info .#${{ matrix.ghc-version }}.clash-protocols | cachix push clash-lang
+
+  devshells:
+    name: Push Nix developer shell to cache
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        ghc-version: [ "ghc9124", "ghc9103", "ghc984", "ghc967" ]
+    steps:
+        # There's no need to configure Nix, the dockerfile handling the GHA has it done for us!
+        # If dependencies are already cached, we can simply reuse them!
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Build devshell
+        run: |
+          # Since the server is x86_64-linux, we can only build the devshell
+          # for that
+          nix build -L .#devShells.x86_64-linux.${{ matrix.ghc-version }}-full
+
+        # Pushes the binaries to the local network
+        # url: http://192.168.102.136:9200/public
+        # public key: public:Wne+du2QhXD0O30YJ93NxG8xJRdfHvFQgKU0XVgENsg=
+      - name: Push devshell to cache
+        env:
+          ATTIC_AUTH_TOKEN: ${{ secrets.ATTIC_SECRET }}
+        run: |
+          .ci/attic-auth.sh
+          attic push public $(nix path-info .#devShells.x86_64-linux.${{ matrix.ghc-version }}-full)
+
+        # Pushes the binaries to Cachix
+      - name: Push devshell to cachix
+        if: github.ref == 'refs/heads/main'
+        env:
+          # Having the variable be named `CACHIX_AUTH_TOKEN` authenticates cachix
+          # https://docs.cachix.org/getting-started#authenticating
+          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_SECRET }}
+        run: |
+          nix path-info .#devShells.x86_64-linux.${{ matrix.ghc-version }}-full | cachix push clash-lang
 
   # Mandatory check on GitHub
   all:
@@ -150,11 +224,13 @@ jobs:
         fourmolu,
         linting,
         stack,
+        packages,
+        devshells,
       ]
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Check dependencies for failures
         run: |
