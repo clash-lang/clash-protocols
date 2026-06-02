@@ -4,6 +4,8 @@ import Data.Proxy
 import GHC.Base (Type)
 import Protocols.Plugin
 
+{-# ANN module "doctest-parallel: --no-implicit-module-import" #-}
+
 {- $setup
 >>> import Protocols
 -}

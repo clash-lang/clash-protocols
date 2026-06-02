@@ -79,14 +79,6 @@ common common-options
     ghc-typelits-knownnat,
     ghc-typelits-natnormalise,
 
-custom-setup
-  setup-depends:
-    -- XXX: Keep Cabal constraint at current minimum, unless this is fixed:
-    -- https://github.com/clash-lang/clash-compiler/pull/2665#issuecomment-1939044550
-    Cabal >=3.10.3.0 && <3.17,
-    base >=4.18 && <5,
-    cabal-doctest >=1.0.1 && <1.1,
-
 library
   import: common-options
   hs-source-dirs: src
@@ -238,5 +230,5 @@ test-suite doctests
     base,
     clash-protocols,
     clash-protocols-base,
-    doctest,
-    process,
+    doctest-parallel >=0.4 && <0.5,
+    filepath,

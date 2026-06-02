@@ -5,6 +5,12 @@ module Data.List.Extra where
 
 import "base" Data.List qualified as L
 
+{-# ANN module "doctest-parallel: --no-implicit-module-import" #-}
+
+{- $setup
+>>> import "clash-protocols" Data.List.Extra
+-}
+
 {- |
 Takes elements from a list while the predicate holds, considers up to @window@ elements
 since the last element that satisfied the predicate.

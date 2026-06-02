@@ -35,6 +35,7 @@ import Protocols.Internal.TH (
 import Protocols.Plugin.Cpp (maxTupleSize)
 
 {- $setup
+>>> import qualified Clash.Prelude as C
 >>> import Protocols
 >>> import Protocols.Experimental.Df
 >>> import Protocols.Experimental.Simulate

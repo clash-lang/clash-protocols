@@ -30,3 +30,5 @@ package clash-protocols
 
   -- Don't pollute docs with large tuple instances
   haddock-options: --optghc=-DHADDOCK_ONLY
+
+write-ghc-environment-files: always

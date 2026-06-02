@@ -41,6 +41,7 @@ import Data.Tuple (swap)
 import GHC.Generics (Generic)
 
 {- $setup
+>>> import qualified Clash.Prelude as C
 >>> import Protocols
 -}
 
