@@ -314,22 +314,22 @@ stallStandard ::
 stallStandard earlyBusCycle stalls0 =
   Circuit goS
  where
-  goS (m2s, s2m) = (s2m, go stalls0 m2s s2m)
+  goS (m2s, s2m) = unbundle $ go stalls0 m2s s2m
   go ::
     [Int] ->
     Signal dom (WishboneM2S addressBits dataBytes) ->
     Signal dom (WishboneS2M dataBytes) ->
-    Signal dom (WishboneM2S addressBits dataBytes)
+    Signal dom (WishboneS2M dataBytes, WishboneM2S addressBits dataBytes)
   -- Idle, waiting for a request
-  go (stall : stalls) (m :- ms) (s :- ss) = m' :- go stalls' ms ss
+  go (stall : stalls) (m :- ms) (s :- ss) = response :- go stalls' ms ss
    where
     -- Only propagate the buscycle while stalling, this allows the manager to reserve the bus, but postpones the actual
     -- transaction until the stall is over.
-    m'
-      | stall > 0 = block m
-      | otherwise = m
+    response
+      | stall > 0 = (emptyWishboneS2M, block m)
+      | otherwise = (s, m)
     stalls' = nextStall stall stalls m s
-  go [] ms _ = ms
+  go [] ms ss = bundle (ss, ms)
 
   -- Select the correct implementation of the blocking logic based on earlyBusCycle.
   block
