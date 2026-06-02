@@ -471,6 +471,7 @@ prop_stallStandard_early = property $ do
 
         (stallCycles, afterStall) = L.splitAt n active
 
+        traceNonEmpty = not $ null trace
         -- busCycle asserted, strobe deasserted.
         stallOk =
           L.map
@@ -488,7 +489,7 @@ prop_stallStandard_early = property $ do
           ((_pre, (post, _s2m)) : rs) -> ([busCycle post && strobe post], rs)
           [] -> ([], [])
        in
-        L.concat [stallOk, waitOk, termOk, verifyStalls stalls rest]
+        L.concat [[traceNonEmpty], stallOk, waitOk, termOk, verifyStalls stalls rest]
     verifyStalls [] _ = []
 
     checks = verifyStalls memStalls (L.zip (L.map fst preStall) postStall)
