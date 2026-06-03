@@ -62,7 +62,6 @@ import Clash.Hedgehog.Sized.Unsigned (genUnsigned)
 import Clash.Prelude as C hiding (cycle, indices, not, sample, (&&), (||))
 import Clash.Signal.Internal (Signal ((:-)))
 import Control.DeepSeq (NFData)
-import Data.Bifunctor qualified as B
 import Data.List.Extra
 import Data.String.Interpolate (i)
 import GHC.Stack (HasCallStack)
@@ -303,83 +302,54 @@ stallStandard ::
   , C.KnownDomain dom
   , C.KnownNat dataBytes
   ) =>
+  {- | Early busCycle propagation, when 'True', the busCycle signal will always be propagated.
+  When 'False', the busCycle signal will be stalled just like the 'strobe' signal.
+  -}
+  Bool ->
   -- | Number of cycles to stall the master for on each valid bus-cycle
   [Int] ->
   Circuit
     (Wishbone dom 'Standard addressBits dataBytes)
     (Wishbone dom 'Standard addressBits dataBytes)
-stallStandard stallsPerCycle =
-  Circuit $
-    B.second (emptyWishboneM2S :-)
-      . uncurry (go stallsPerCycle Nothing)
+stallStandard earlyBusCycle stalls0 =
+  Circuit goS
  where
+  goS (m2s, s2m) = unbundle $ go stalls0 m2s s2m
   go ::
     [Int] ->
-    Maybe (WishboneS2M dataBytes) ->
     Signal dom (WishboneM2S addressBits dataBytes) ->
     Signal dom (WishboneS2M dataBytes) ->
-    ( Signal dom (WishboneS2M dataBytes)
-    , Signal dom (WishboneM2S addressBits dataBytes)
-    )
+    Signal dom (WishboneS2M dataBytes, WishboneM2S addressBits dataBytes)
+  -- Idle, waiting for a request
+  go (stall : stalls) (m :- ms) (s :- ss) = response :- go stalls' ms ss
+   where
+    -- Only propagate the buscycle while stalling, this allows the manager to reserve the bus, but postpones the actual
+    -- transaction until the stall is over.
+    response
+      | stall > 0 = (emptyWishboneS2M, block m)
+      | otherwise = (s, m)
+    stalls' = nextStall stall stalls m s
+  go [] ms ss = bundle (ss, ms)
 
-  go [] lastRep (_ :- m2s) ~(_ :- s2m) =
-    B.bimap (emptyWishboneS2M :-) (emptyWishboneM2S :-) $ go [] lastRep m2s s2m
-  go (st : stalls) lastRep (m :- m2s) ~(_ :- s2m)
-    -- not in a bus cycle, just pass through
-    | not (busCycle m) =
-        B.bimap
-          (emptyWishboneS2M :-)
-          (emptyWishboneM2S :-)
-          (go (st : stalls) lastRep m2s s2m)
-  go (st : stalls) Nothing (m :- m2s) ~(s :- s2m)
-    -- received a reply but still need to stall
-    | busCycle m && strobe m && st > 0 && hasTerminateFlag s =
-        B.bimap
-          -- tell the master that the slave has no reply yet
-          (emptyWishboneS2M :-)
-          -- tell the slave that the cycle is over
-          (emptyWishboneM2S :-)
-          (go (st - 1 : stalls) (Just s) m2s s2m)
-    -- received a reply but still need to stall
-    | busCycle m && strobe m && st > 0 && not (hasTerminateFlag s) =
-        B.bimap
-          -- tell the master that the slave has no reply yet
-          (emptyWishboneS2M :-)
-          -- tell the slave that the cycle is over
-          (m :-)
-          (go (st - 1 : stalls) Nothing m2s s2m)
-    -- done stalling, got a reply last second, pass through
-    | busCycle m && strobe m && st == 0 && hasTerminateFlag s =
-        B.bimap
-          (s :-)
-          (m :-)
-          (go stalls Nothing m2s s2m)
-    -- done stalling but no termination signal yet, just pass through to give the slave
-    -- the chance to reply
-    | busCycle m && strobe m && st == 0 && not (hasTerminateFlag s) =
-        B.bimap
-          (emptyWishboneS2M :-)
-          (m :-)
-          (go (0 : stalls) Nothing m2s s2m)
-    -- master cancelled cycle
-    | otherwise = B.bimap (emptyWishboneS2M :-) (m :-) (go stalls Nothing m2s s2m)
-  go (st : stalls) (Just rep) (m :- m2s) ~(_ :- s2m)
-    -- need to keep stalling, already got the reply
-    | busCycle m && strobe m && st > 0 =
-        B.bimap
-          -- keep stalling
-          (emptyWishboneS2M :-)
-          -- tell the slave that the cycle is over
-          (emptyWishboneM2S :-)
-          (go (st - 1 : stalls) (Just rep) m2s s2m)
-    -- done stalling, give reply
-    | busCycle m && strobe m && st == 0 =
-        B.bimap
-          (rep :-)
-          (emptyWishboneM2S :-)
-          (go stalls Nothing m2s s2m)
-    -- master cancelled cycle
-    | otherwise = B.bimap (emptyWishboneS2M :-) (m :-) (go stalls Nothing m2s s2m)
+  -- Select the correct implementation of the blocking logic based on earlyBusCycle.
+  block
+    | earlyBusCycle = \m -> m{strobe = False}
+    | otherwise = \m -> m{busCycle = False, strobe = False}
+
+  -- Select the correct implementation of the stalling logic based on earlyBusCycle.
+  nextStall
+    -- Don't decrement the counter if strobe is not set.
+    | earlyBusCycle = \stall stalls m s ->
+        if
+          | m.busCycle && m.strobe && hasTerminateFlag s -> stalls
+          | m.busCycle && m.strobe && stall > 0 -> stall - 1 : stalls
+          | otherwise -> stall : stalls
+    -- Decrement the counter as soon as busCycle is asserted.
+    | otherwise = \stall stalls m s ->
+        if
+          | m.busCycle && m.strobe && hasTerminateFlag s -> stalls
+          | m.busCycle && stall > 0 -> stall - 1 : stalls
+          | otherwise -> stall : stalls
 
 data DriverState addressBits dataBytes
   = -- | State in which the driver still needs to perform N resets
