@@ -42,12 +42,18 @@ delayWishbone = Circuit go
       DelayWishboneState aw n ->
       (WishboneM2S aw n, WishboneS2M n) ->
       DelayWishboneState aw n
-    mooreTransfer WaitingForManager (m2s, _s2m)
+    mooreTransfer state inps@(m2s0, s2m0) = m2s0 `seqX` s2m0 `seqX` transfer state inps
+
+    transfer ::
+      DelayWishboneState aw n ->
+      (WishboneM2S aw n, WishboneS2M n) ->
+      DelayWishboneState aw n
+    transfer WaitingForManager (m2s, _s2m)
       | m2s.busCycle && m2s.strobe = WaitingForSubordinate m2s
-    mooreTransfer (WaitingForSubordinate _) (_m2s, s2m)
+    transfer (WaitingForSubordinate _) (_m2s, s2m)
       | hasTerminateFlag s2m = AcknowledgingManager s2m
-    mooreTransfer (AcknowledgingManager _) _ = WaitingForManager
-    mooreTransfer s _ = s
+    transfer (AcknowledgingManager _) _ = WaitingForManager
+    transfer s _ = s
 
     mooreOut ::
       DelayWishboneState aw n ->
