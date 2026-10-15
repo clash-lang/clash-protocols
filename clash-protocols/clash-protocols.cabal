@@ -91,11 +91,13 @@ library
     clash-prelude-hedgehog,
     clash-protocols-base,
     constraints >=0.9 && <1,
+    containers >=0.6 && <0.8,
     data-default >=0.7 && <0.9,
     deepseq >=1.4.1 && <1.6,
     extra >=1.6.17 && <1.9,
     hashable >=1.4.1 && <1.6,
     hedgehog >=1.0.3 && <1.6,
+    infinite-list >=0.1 && <0.2,
     lifted-async <0.12,
     monad-control <1.1,
     mtl >=2.3.1 && <2.4,
@@ -106,6 +108,7 @@ library
     tasty >=1.2 && <1.6,
     tasty-hedgehog >=1.2 && <1.5,
     template-haskell >=2.20 && <2.24,
+    text >=2.0 && <2.2,
 
   exposed-modules:
     -- 'testProperty' is broken upstream, it reports wrong test names
@@ -133,6 +136,15 @@ library
     Protocols.Experimental.PacketStream
     Protocols.Experimental.ReqResp
     Protocols.Experimental.Simulate
+    Protocols.Experimental.Testbench
+    Protocols.Experimental.Testbench.Coverage
+    Protocols.Experimental.Testbench.Df
+    Protocols.Experimental.Testbench.Hedgehog
+    Protocols.Experimental.Testbench.Internal
+    Protocols.Experimental.Testbench.Run
+    Protocols.Experimental.Testbench.Scoreboard
+    Protocols.Experimental.Testbench.Trace
+    Protocols.Experimental.Testbench.Vcd
     Protocols.Experimental.Wishbone
     Protocols.Experimental.Wishbone.Extra
     Protocols.Experimental.Wishbone.Standard
@@ -199,6 +211,13 @@ test-suite unittests
     Tests.Protocols.Plugin
     Tests.Protocols.ReqResp
     Tests.Protocols.Vec
+    Tests.Protocols.Testbench
+    Tests.Protocols.Testbench.Coverage
+    Tests.Protocols.Testbench.Df.Checks
+    Tests.Protocols.Testbench.Run
+    Tests.Protocols.Testbench.Scoreboard
+    Tests.Protocols.Testbench.Util
+    Tests.Protocols.Testbench.Vcd
     Tests.Protocols.Wishbone
     Tests.Protocols.Wishbone.Extra
     Util
@@ -209,7 +228,9 @@ test-suite unittests
     clash-protocols-base,
     containers,
     deepseq,
+    directory,
     extra,
+    filepath,
     hashable,
     hedgehog,
     strict-tuple,
@@ -218,6 +239,7 @@ test-suite unittests
     tasty-hedgehog >=1.2,
     tasty-hunit,
     tasty-th,
+    text,
     unordered-containers,
 
 test-suite doctests

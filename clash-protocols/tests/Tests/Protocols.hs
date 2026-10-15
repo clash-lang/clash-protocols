@@ -9,6 +9,7 @@ import Tests.Protocols.Df.Extra qualified
 import Tests.Protocols.DfConv qualified
 import Tests.Protocols.PacketStream qualified
 import Tests.Protocols.ReqResp qualified
+import Tests.Protocols.Testbench qualified
 import Tests.Protocols.Vec qualified
 import Tests.Protocols.Wishbone qualified
 import Tests.Protocols.Wishbone.Extra qualified
@@ -25,6 +26,7 @@ tests =
     , Tests.Protocols.Axi4.tests
     , Tests.Protocols.PacketStream.tests
     , Tests.Protocols.ReqResp.tests
+    , Tests.Protocols.Testbench.tests
     , Tests.Protocols.Wishbone.tests
     , Tests.Protocols.Wishbone.Extra.tests
     , Tests.Protocols.Vec.tests
