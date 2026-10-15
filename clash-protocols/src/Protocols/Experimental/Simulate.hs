@@ -7,7 +7,8 @@ Experimental protocol-agnostic simulation support.
 
 This module contains the generic simulation classes and helpers that used to be
 part of the default "Protocols" import surface. New tests should prefer
-protocol-specific drivers and checkers over adding more assumptions here.
+protocol-specific drivers and checkers over adding more assumptions here, see
+"Protocols.Experimental.Testbench".
 -}
 module Protocols.Experimental.Simulate (
   module Protocols.Experimental.Simulate.Types,

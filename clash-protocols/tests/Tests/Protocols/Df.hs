@@ -1,4 +1,6 @@
 {-# LANGUAGE CPP #-}
+-- BitPack PlusInt
+{-# LANGUAGE UndecidableInstances #-}
 -- TODO: Fix warnings introduced by GHC 9.2 w.r.t. incomplete lazy pattern matches
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 -- Hashable (Index n)
@@ -63,7 +65,7 @@ import Util
 newtype PlusInt = PlusInt Int
   deriving stock (C.Generic, Show)
   deriving anyclass (C.ShowX)
-  deriving newtype (NFData, C.NFDataX, Eq)
+  deriving newtype (NFData, C.NFDataX, Eq, C.BitPack)
 
 instance Semigroup PlusInt where
   (<>) :: PlusInt -> PlusInt -> PlusInt

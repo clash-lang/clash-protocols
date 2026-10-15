@@ -3,6 +3,7 @@ module Tests.Protocols.Testbench (tests) where
 
 import Test.Tasty
 import Tests.Protocols.Testbench.Coverage qualified
+import Tests.Protocols.Testbench.Df qualified
 import Tests.Protocols.Testbench.Df.Checks qualified
 import Tests.Protocols.Testbench.Run qualified
 import Tests.Protocols.Testbench.Scoreboard qualified
@@ -17,4 +18,5 @@ tests =
     , Tests.Protocols.Testbench.Coverage.tests
     , Tests.Protocols.Testbench.Scoreboard.tests
     , Tests.Protocols.Testbench.Df.Checks.tests
+    , Tests.Protocols.Testbench.Df.tests
     ]

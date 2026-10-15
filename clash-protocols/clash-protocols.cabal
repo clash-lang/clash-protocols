@@ -213,6 +213,7 @@ test-suite unittests
     Tests.Protocols.Vec
     Tests.Protocols.Testbench
     Tests.Protocols.Testbench.Coverage
+    Tests.Protocols.Testbench.Df
     Tests.Protocols.Testbench.Df.Checks
     Tests.Protocols.Testbench.Run
     Tests.Protocols.Testbench.Scoreboard

@@ -18,6 +18,7 @@ A battery-included library for writing on-chip protocols, such as AMBA AXI and A
   - [Why there is no `Drivable` instance for AXI](#why-there-is-no-drivable-instance-for-axi)
   - [Why `Fwd` cannot be injective](#why-fwd-cannot-be-injective)
   - [Experimental `Simulate` support](#experimental-simulate-support)
+  - [Experimental testbenches](#experimental-testbenches)
   - [Interconnects](#interconnects)
 - [License](#license)
 - [Project goals](#project-goals)
@@ -43,7 +44,7 @@ The basic handshaking of `Df` is heavily inspired by _AMBA AXI_:
 
 ## Invariants
 
-The protocols `Df` imposes a contract each component should follow. These are, where possible, checked by the various test harnesses in `Protocols.Experimental.Hedgehog`.
+The protocols `Df` imposes a contract each component should follow. These are, where possible, checked by the various test harnesses in `Protocols.Experimental.Hedgehog` and by the testbench components in `Protocols.Experimental.Testbench.Df`.
 
 * _Fwd a_ cannot depend on the _Bwd a_. In other words, deciding whether or not to send data cannot depend on the acknowledgment of that same data.
 
@@ -82,7 +83,7 @@ The protocols `Df` imposes a contract each component should follow. These are, w
 
 * When _Fwd a_ does not contain data (i.e., is `Nothing`), its corresponding _Bwd a_ may contain any value, including an error/bottom. When driving a bottom, a component should use `errorX` to make sure it can be evaluated using `seqX`. Test harnesses in `Protocols.Experimental.Hedgehog` occasionally drive `errorX "No defined Ack"` when seeing `Nothing` to test this.
 
-* A circuit driving `Just x` must keep driving the same value until it receives an acknowledgment. This is not yet checked by test harnesses.
+* A circuit driving `Just x` must keep driving the same value until it receives an acknowledgment. This is checked by the monitors in `Protocols.Experimental.Testbench.Df`, but not by the harnesses in `Protocols.Experimental.Hedgehog`.
 
 ### Note [Deasserting resets]
 Care should be taken when deasserting resets. Given the following circuit:
@@ -588,6 +589,49 @@ The type that can be inferred for `go` by GHC is much less precise than when `Fw
 ## Experimental `Simulate` support
 
 The `clash-protocols` features mentioned above are all not suitable to be used with communication bus protocols such as AXI. Generic simulation support is available from `Protocols.Experimental.Simulate`, with protocol-specific instances and helpers in modules such as `Protocols.Experimental.Df`, `Protocols.Experimental.DfConv`, and `Protocols.Experimental.PacketStream`. These modules are experimental because the API and organization are expected to change as protocol-specific drivers, consumers, dashboards, and test infrastructure become more mature. For a protocol `a`, a `Simulate` instance defines conversion functions from types that are easy to use in testcases and manual simulations (usually these are lists), from and to the types that are used by the protocol `a`. Furthermore, a `Simulate` instance provides an unsynthesizable `stallC` function which generates a circuit that stalls the circuit according to a given list of stalls. This function can be used to test the circuit's behaviour under different stalls. It is most useful to define Hedgehog tests that stall the circuit arbitrarily.
+
+## Experimental testbenches
+
+`Protocols.Experimental.Testbench` is an alternative to the `Protocols.Experimental.Hedgehog` harness, see [#144](https://github.com/clash-lang/clash-protocols/issues/144). Instead of relying on type classes to drive and sample arbitrary protocols, you build a testbench from protocol-specific components:
+
+* _Drivers_ send stimuli into the design under test.
+* _Sinks_ consume its output, applying backpressure.
+* _Monitors_ passively check a channel against the protocol's invariants, record coverage, and extract the transactions on it.
+* _Scoreboards_ and _checkers_ compare transactions against a reference model or predicate.
+* _Cover points_ record whether interesting situations, such as a stalled transfer, occurred.
+
+A testbench is a `Circuit () TraceTree`. Every component reports a `Status`: `PreventStop`, `StopOk`, or `Error`. The runner simulates until all components say `StopOk`, one says `Error`, or a timeout (in simulation time) is reached. It evaluates all signals in time order, so testbenches can mix clock domains, and runs in constant memory. Optionally, it writes a waveform (VCD) that can be opened with viewers like GTKWave or Surfer. Writing a waveform only for failing tests (`VcdOnFailure`) reruns the simulation, which means the first run keeps its history in memory; use `NoVcd` or `VcdAlways` for very long simulations.
+
+The harness itself does not generate stimuli: use Hedgehog for that. Components for `Df` live in `Protocols.Experimental.Testbench.Df`. A test for a FIFO looks like:
+
+```haskell
+import qualified Protocols.Experimental.Testbench.Df as TbDf
+
+fifoTb :: [Int] -> TbDf.DriverOptions -> TbDf.ExpectOptions -> Circuit () TraceTree
+fifoTb values driverOpts expectOpts = circuit $ do
+  (driverTrace, fifoIn) <- TbDf.driver "in" clk rst driverOpts values
+  fifoOut <- withClockResetEnable clk rst enableGen (Df.fifo d8) -< fifoIn
+  expectTrace <- TbDf.expect "out" clk rst expectOpts values -< fifoOut
+  traceGroupC "fifo" -< [driverTrace, expectTrace]
+ where
+  clk = clockGen @System
+  rst = resetGenN d10
+
+prop_fifo :: Property
+prop_fifo = property $ do
+  values <- forAll (Gen.list (Range.linear 0 100) (Gen.int Range.linearBounded))
+  driverOpts <- forAll TbDf.genDriverOptions
+  expectOpts <- forAll TbDf.genExpectOptions
+  assertTestbench
+    TestOptions
+      { vcdOutput = VcdOnFailure "fifo.vcd"
+      , timeout = Just (cycles @System 10_000)
+      }
+    [CoverGoal "fifo/out/stall" 10]
+    (fifoTb values driverOpts expectOpts)
+```
+
+`TbDf.expect` checks that the values arrive in order, that no other values arrive, and that the `Df` invariants hold. `assertTestbench` reports every cover point to Hedgehog, which shows a coverage table and fails the property when a `CoverGoal` is not met: here, at least 10% of the runs should stall the FIFO's output. When a test fails, Hedgehog shows which component reported the error, when, and where the waveform of the (shrunk) counterexample was written. For more examples, see the tests in `clash-protocols/tests/Tests/Protocols/Testbench`.
 
 ## Interconnects
 
