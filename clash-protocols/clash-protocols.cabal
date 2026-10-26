@@ -86,6 +86,7 @@ library
   if flag(large-tuples)
     cpp-options: -DLARGE_TUPLES
   build-depends:
+    arrows >= 0.4 && < 0.5,
     -- To be removed; we need 'Test.Tasty.Hedgehog.Extra' to fix upstream issues
     circuit-notation >=0.2 && <0.3,
     clash-prelude-hedgehog,
@@ -99,6 +100,7 @@ library
     lifted-async <0.12,
     monad-control <1.1,
     mtl >=2.3.1 && <2.4,
+    operational >=0.2 && <0.3,
     pretty-show >=1.9 && <2,
     strict-tuple <0.2,
     string-interpolate >=0.3 && <0.4,
@@ -129,6 +131,7 @@ library
     Protocols.Experimental.DfConv
     Protocols.Experimental.FunctorC
     Protocols.Experimental.Hedgehog
+    Protocols.Experimental.Hedgehog.Driver
     Protocols.Experimental.Hedgehog.Internal
     Protocols.Experimental.PacketStream
     Protocols.Experimental.ReqResp
@@ -187,6 +190,7 @@ test-suite unittests
     Tests.Protocols.Df
     Tests.Protocols.Df.Extra
     Tests.Protocols.DfConv
+    Tests.Protocols.Driver
     Tests.Protocols.PacketStream
     Tests.Protocols.PacketStream.AsyncFifo
     Tests.Protocols.PacketStream.Base
@@ -218,6 +222,7 @@ test-suite unittests
     tasty-hedgehog >=1.2,
     tasty-hunit,
     tasty-th,
+    transformers >=0.6 && <0.7,
     unordered-containers,
 
 test-suite doctests

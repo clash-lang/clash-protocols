@@ -7,6 +7,7 @@ import Tests.Protocols.BiDf qualified
 import Tests.Protocols.Df qualified
 import Tests.Protocols.Df.Extra qualified
 import Tests.Protocols.DfConv qualified
+import Tests.Protocols.Driver qualified
 import Tests.Protocols.PacketStream qualified
 import Tests.Protocols.ReqResp qualified
 import Tests.Protocols.Vec qualified
@@ -21,6 +22,7 @@ tests =
     , Tests.Protocols.Df.tests
     , Tests.Protocols.Df.Extra.tests
     , Tests.Protocols.DfConv.tests
+    , Tests.Protocols.Driver.tests
     , Tests.Protocols.Avalon.tests
     , Tests.Protocols.Axi4.tests
     , Tests.Protocols.PacketStream.tests
